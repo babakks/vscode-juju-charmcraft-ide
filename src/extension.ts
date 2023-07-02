@@ -1,11 +1,11 @@
-import * as  vscode from 'vscode';
-import { type ExtensionAPI } from './redhat.vscode-yaml';
+import { readFileSync, watch } from 'fs';
 import { readFile, readdir } from 'fs/promises';
-import path = require('path');
-import { TextDecoder, isObject } from 'util';
 import * as handlebars from 'handlebars';
-import { readFileSync, watch, type FSWatcher } from 'fs';
 import { URL } from 'url';
+import { TextDecoder } from 'util';
+import * as vscode from 'vscode';
+import { type ExtensionAPI } from './redhat.vscode-yaml';
+import path = require('path');
 
 export async function activate(context: vscode.ExtensionContext) {
     await registerSchemas(context.extensionPath);
