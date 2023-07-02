@@ -1,0 +1,169 @@
+{
+    "$schema": "http://json-schema.org/schema",
+    "$id": "charms://schema/config.json",
+    "$defs": {},
+    "properties": {
+        "options": {
+            "$id": "options",
+            "markdownDescription": "{{{include 'options'}}}",
+            "type": "object",
+            "defaultSnippets": [
+                {
+                    "label": "Insert parameter (with default value)",
+                    "markdownDescription": "Inserts a parameter with default value",
+                    "body": {
+                        "${1:parameter}": {
+                            "type": "${2|string,int,float,boolean|}",
+                            "description": "${3:A parameter}",
+                            "default": "${4:\"\"}"
+                        }
+                    }
+                },
+                {
+                    "label": "Insert parameter",
+                    "markdownDescription": "Inserts a parameter",
+                    "body": {
+                        "${1:parameter}": {
+                            "type": "${2|string,int,float,boolean|}",
+                            "description": "${3:A parameter}"
+                        }
+                    }
+                }
+            ],
+            "patternProperties": {
+                ".+": {
+                    "type": "object",
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert parameter (with default value)",
+                            "markdownDescription": "Inserts a parameter",
+                            "body": {
+                                "type": "${1|string,int,float,boolean|}",
+                                "description": "${2:A parameter}",
+                                "default": "${3:\"\"}"
+                            }
+                        },
+                        {
+                            "label": "Insert parameter",
+                            "markdownDescription": "Inserts a parameter",
+                            "body": {
+                                "type": "${1|string,int,float,boolean|}",
+                                "description": "${2:A parameter}"
+                            }
+                        }
+                    ],
+                    "properties": {
+                        "type": {
+                            "$id": "options/element/type",
+                            "enum": [
+                                "string",
+                                "int",
+                                "float",
+                                "boolean"
+                            ],
+                            "markdownDescription": "Specifies the data type of the configuration option. Possible values are: `string`, `int`, `float` and `boolean`."
+                        },
+                        "description": {
+                            "$id": "options/element/description",
+                            "type": "string",
+                            "markdownDescription": "Contains an explanation of the configuration item and the resulting behaviour. Might also include a list of acceptable values."
+                        },
+                        "default": {
+                            "$id": "options/element/default",
+                            "markdownDescription": "Defines the default value for the option. Must be of the appropriate type and a sane default value in the context of the charm."
+                        }
+                    },
+                    "required": [
+                        "type"
+                    ],
+                    "oneOf": [
+                        {
+                            "not": {
+                                "required": [
+                                    "default"
+                                ]
+                            }
+                        },
+                        {
+                            "required": [
+                                "default",
+                                "type"
+                            ],
+                            "allOf": [
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "string"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "properties": {
+                                            "default": {
+                                                "errorMessage": "Should be a string value to match the given type",
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "int"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "properties": {
+                                            "default": {
+                                                "errorMessage": "Should be an integer value to match the given type",
+                                                "type": "integer"
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "float"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "properties": {
+                                            "default": {
+                                                "errorMessage": "Should be a float value to match the given type",
+                                                "type": "number"
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "if": {
+                                        "properties": {
+                                            "type": {
+                                                "const": "boolean"
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "properties": {
+                                            "default": {
+                                                "errorMessage": "Should be a boolean value to match the given type",
+                                                "type": "boolean"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "required": []
+}
