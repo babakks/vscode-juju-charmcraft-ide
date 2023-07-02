@@ -1,0 +1,83 @@
+{
+    "$schema": "http://json-schema.org/schema",
+    "$id": "charms://schema/metadata.json",
+    "$defs": {
+        "assumes-entry": {
+            "type": "string",
+            "pattern": "k8s-api|juju (<|<=|>=|>) \\d+(\\.\\d+)?",
+            "examples": [
+                "k8s-api",
+                "juju >= #.#",
+                "juju < #.#"
+            ]
+        }
+    },
+    "properties": {
+        "assumes": {
+            "$id": "assumes",
+            "type": "array",
+            "items": {
+                "oneOf": [
+                    {
+                        "$id": "assumes/value",
+                        "$ref": "#/$defs/assumes-entry"
+                    },
+                    {
+                        "$id": "assumes/any-of",
+                        "type": "object",
+                        "properties": {
+                            "any-of": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "$ref": "#/$defs/assumes-entry"
+                                }
+                            }
+                        },
+                        "required": [
+                            "any-of"
+                        ],
+                        "examples": [
+                            {
+                                "$id": "asdfasd",
+                                "any-of": [
+                                    "k8s-api",
+                                    "juju >= 2.9"
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "$id": "assumes/all-of",
+                        "type": "object",
+                        "properties": {
+                            "all-of": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "$ref": "#/$defs/assumes-entry"
+                                }
+                            }
+                        },
+                        "required": [
+                            "all-of"
+                        ],
+                        "examples": [
+                            {
+                                "all-of": [
+                                    "k8s-api",
+                                    "juju >= 2.9"
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "markdownDescription": "{{{include 'assumes'}}}"
+        },
+        "containers": {
+            "markdownDescription": "{{{include 'containers'}}}"
+        }
+    },
+    "required": []
+}

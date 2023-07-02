@@ -1,0 +1,8 @@
+<a href="#heading--name"><h2 id="heading--name">`name`</h2></a>
+
+```yaml
+# (Required) The name of the charm. Determines URL in Charmhub and the name administrators
+# will ultimately use to deploy the charm. E.g. `juju deploy <name>`
+name: <name>
+```
+
