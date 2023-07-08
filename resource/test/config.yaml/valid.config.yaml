@@ -1,0 +1,56 @@
+options:
+  # Full params (type, description, default)
+  int-param-full:
+    type: int
+    description: some description
+    default: -1
+  float-param-full:
+    type: float
+    description: some description
+    default: -1e-1
+  string-param-full:
+    type: string
+    description: some description
+    default: hello
+  boolean-param-full:
+    type: boolean
+    description: some description
+    default: false
+
+  # Minimal params (type)
+  int-param-minimal:
+    type: int
+  float-param-minimal:
+    type: float
+  string-param-minimal:
+    type: string
+  boolean-param-minimal:
+    type: boolean
+
+  # Partial params (type, default)
+  int-param-with-default:
+    type: int
+    default: -1
+  float-param-with-default:
+    type: float
+    default: -1e-1
+  string-param-with-default:
+    type: string
+    default: hello
+  boolean-param-with-default:
+    type: boolean
+    default: false
+
+  # Partial params (type, description)
+  int-param-with-description:
+    type: int
+    description: some description
+  float-param-with-description:
+    type: float
+    description: some description
+  string-param-with-description:
+    type: string
+    description: some description
+  boolean-param-with-description:
+    type: boolean
+    description: some description
