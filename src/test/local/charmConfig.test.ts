@@ -1,9 +1,10 @@
-import { describe, suite, test } from "mocha";
-import { CharmConfigParameterProblem, parseCharmConfigYAML } from "../../charmConfig";
-import * as fs from 'fs/promises';
-import path = require("path");
-import { TextDecoder } from "util";
 import { assert } from "chai";
+import * as fs from 'fs/promises';
+import { describe, suite, test } from "mocha";
+import { TextDecoder } from "util";
+import { parseCharmConfigYAML } from "../../charmConfig";
+import { CharmConfigParameterProblem } from "../../charmTypes";
+import path = require("path");
 
 suite('parseCharmConfigYAML', async function () {
     async function parseConfig(relativePath: string): Promise<ReturnType<typeof parseCharmConfigYAML>> {
@@ -11,18 +12,18 @@ suite('parseCharmConfigYAML', async function () {
     }
 
     test('valid', async function () {
-        const [params, problems] = await parseConfig('../../../resource/test/config.yaml/valid.config.yaml');
+        const { parameters, problems } = await parseConfig('../../../resource/test/config.yaml/valid.config.yaml');
         assert.isEmpty(problems, 'expected no file-scope problem');
-        assert.lengthOf(params, 16);
-        assert.isFalse(params.some(x => x.problems.length > 0), 'problem in some parameters');
+        assert.lengthOf(parameters, 16);
+        assert.isFalse(parameters.some(x => x.problems.length > 0), 'problem in some parameters');
     });
 
     test('type/default mismatch', async function () {
-        const [params, problems] = await parseConfig('../../../resource/test/config.yaml/type-default-mismatch.config.yaml');
+        const { parameters, problems } = await parseConfig('../../../resource/test/config.yaml/type-default-mismatch.config.yaml');
         assert.lengthOf(problems, 0, 'expected no file-scope problem');
-        assert.lengthOf(params, 11);
+        assert.lengthOf(parameters, 11);
 
-        const allProblems = params.map(x => x.problems).flat();
+        const allProblems = parameters.map(x => x.problems).flat();
         assert.includeDeepMembers(allProblems, [
             { parameter: 'int-param-with-boolean-default', message: 'Default value for parameter `int-param-with-boolean-default` should be an integer value.' },
             { parameter: 'int-param-with-string-default', message: 'Default value for parameter `int-param-with-string-default` should be an integer value.' },
@@ -39,11 +40,11 @@ suite('parseCharmConfigYAML', async function () {
     });
 
     test('invalid parameter', async function () {
-        const [params, problems] = await parseConfig('../../../resource/test/config.yaml/invalid.config.yaml');
+        const { parameters, problems } = await parseConfig('../../../resource/test/config.yaml/invalid.config.yaml');
         assert.lengthOf(problems, 0, 'expected no file-scope problem');
-        assert.lengthOf(params, 12);
+        assert.lengthOf(parameters, 12);
 
-        const allProblems = params.map(x => x.problems).flat();
+        const allProblems = parameters.map(x => x.problems).flat();
         assert.includeDeepMembers(allProblems, [
             { parameter: 'type-missing', message: 'Parameter `type-missing` must include `type` field.' },
             { parameter: 'type-invalid-string', message: 'Parameter `type-invalid-string` must have a valid type; `bool`, `string`, `int`, or `float`.' },
@@ -107,8 +108,8 @@ suite('parseCharmConfigYAML', async function () {
         for (const t of tests) {
             const tt = t;
             test(tt.name, function () {
-                const [params, problems] = parseCharmConfigYAML(tt.content);
-                const allProblems = problems.concat(params.map(x => x.problems).flat());
+                const { parameters, problems } = parseCharmConfigYAML(tt.content);
+                const allProblems = problems.concat(parameters.map(x => x.problems).flat());
                 assert.includeDeepMembers(allProblems, tt.expectedProblems);
             });
         }

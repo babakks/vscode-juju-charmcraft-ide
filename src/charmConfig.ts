@@ -1,22 +1,5 @@
 import * as yaml from 'js-yaml';
-
-export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
-function isConfigParameterType(value: string): value is CharmConfigParameterType {
-    return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
-}
-
-export interface CharmConfigParameter {
-    name: string;
-    type?: CharmConfigParameterType;
-    description?: string;
-    default?: string | number | boolean;
-    problems: CharmConfigParameterProblem[];
-}
-
-export interface CharmConfigParameterProblem {
-    message: string;
-    parameter?: string;
-}
+import { CharmConfig, CharmConfigParameter, CharmConfigParameterProblem, isConfigParameterType } from './charmTypes';
 
 const _PROBLEMS = {
     invalidYAMLFile: { message: "Invalid YAML file." },
@@ -34,29 +17,29 @@ const _PROBLEMS = {
     paramEntryDescriptionMustBeValid: (key: string) => ({ parameter: key, message: `Description for parameter \`${key}\` should be a string.` }),
 } satisfies Record<string, CharmConfigParameterProblem | ((...args: any[]) => CharmConfigParameterProblem)>;
 
-export function parseCharmConfigYAML(content: string): [CharmConfigParameter[], CharmConfigParameterProblem[]] {
+export function parseCharmConfigYAML(content: string): CharmConfig {
     const problems: CharmConfigParameterProblem[] = [];
     const doc = yaml.load(content);
     if (!doc || typeof doc !== 'object') {
         problems.push(_PROBLEMS.invalidYAMLFile);
-        return [[], problems];
+        return { parameters: [], problems };
     }
     if (!('options' in doc)) {
         problems.push(_PROBLEMS.optionsFieldMissing);
-        return [[], problems];
+        return { parameters: [], problems };
     }
     if (!doc.options || typeof doc.options !== 'object' || Array.isArray(doc.options)) {
         problems.push(_PROBLEMS.optionsFieldMustBeObject);
-        return [[], problems];
+        return { parameters: [], problems };
     }
 
-    const result: CharmConfigParameter[] = [];
+    const parameters: CharmConfigParameter[] = [];
     for (const [name, value] of Object.entries(doc.options)) {
         const entry: CharmConfigParameter = {
             name,
             problems: [],
         };
-        result.push(entry);
+        parameters.push(entry);
 
         if (!value || typeof value !== 'object' || Array.isArray(value)) {
             entry.problems.push(_PROBLEMS.paramEntryMustBeObject(name));
@@ -113,6 +96,5 @@ export function parseCharmConfigYAML(content: string): [CharmConfigParameter[], 
         }
     }
 
-    return [result, problems];
-
+    return { parameters, problems };
 }
