@@ -1,3 +1,4 @@
+import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
 
 const GLOB_METADATA = '**/metadata.yaml';
@@ -27,6 +28,14 @@ async function isCharmDirectory(uri: vscode.Uri): Promise<boolean> {
 
 export interface ChangedEventArgs {
     charmDir: vscode.Uri;
+}
+
+export async function tryReadWorkspaceFileAsText(uri: vscode.Uri): Promise<undefined | string> {
+    try {
+        return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+    } catch {
+        return undefined;
+    }
 }
 
 // /**

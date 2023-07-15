@@ -23,5 +23,23 @@ export interface CharmConfig {
 
 export interface CharmEvent {
     name: string;
+    symbol: string;
     description?: string;
+}
+
+export interface CharmAction {
+    name: string;
+    symbol: string;
+    description?: string;
+    problems: CharmActionProblem[];
+}
+
+export interface CharmActionProblem {
+    message: string;
+    action?: string;
+}
+
+export interface CharmActions {
+    actions: CharmAction[];
+    problems: CharmActionProblem[];
 }

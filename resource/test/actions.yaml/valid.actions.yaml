@@ -1,0 +1,5 @@
+action-empty: {}
+action-with-description-empty:
+  description: ""
+action-with-description:
+  description: description

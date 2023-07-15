@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import { CompletionItem, CompletionItemProvider, Uri } from 'vscode';
-import { Charm } from './charm';
-import { CharmConfigParameter, CharmEvent } from './charmTypes';
+import { CharmConfigParameter } from './charmTypes';
+import { getConfigParamDocumentation, getEventDocumentation } from './extension.common';
+import { CharmProvider } from './extension.type';
 
-export type CharmProvider = (uri: Uri) => Charm | undefined;
-
-const REGEX_SELF_CONFIG = /self\.config\[(?<quote>["']?)$/;
-const REGEX_SELF_CONFIG_GET = /self\.config.get\((?<quote>["']?)$/;
-export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['[', '(', '"', "'"];
+export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['"', "'"];
 
 export class CharmConfigParametersCompletionProvider implements CompletionItemProvider<CompletionItem> {
+    private readonly _regexSelfConfigBracket = /self(?:\.model)?\.config\[(?<quote>["'])$/;
+    private readonly _regexSelfConfigGetSet = /self(?:\.model)?\.config\.(?<method>get|set)\((?<quote>["'])$/;
+
     constructor(readonly charmProvider: CharmProvider) { }
 
     provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext): vscode.ProviderResult<vscode.CompletionItem[] | vscode.CompletionList<vscode.CompletionItem>> {
@@ -19,26 +19,44 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         }
 
         const leadingTextToCursor = document.getText(new vscode.Range(new vscode.Position(position.line, 0), position));
-        const match = leadingTextToCursor.match(REGEX_SELF_CONFIG) || leadingTextToCursor.match(REGEX_SELF_CONFIG_GET);
+        let match: ReturnType<string['match']> | undefined;
+        let matchType: 'indexer' | 'get' | 'set' | undefined;
+
+        if (match = leadingTextToCursor.match(this._regexSelfConfigBracket)) {
+            matchType = 'indexer';
+        } else if (match = leadingTextToCursor.match(this._regexSelfConfigGetSet)) {
+            matchType = match.groups!.method === 'set' ? 'set' : 'get';
+        }
+
         if (!match) {
             return;
         }
 
         const openQuote = match.groups!['quote'];
-        const nextChar = document.getText(new vscode.Range(position, new vscode.Position(position.line, 1 + position.character)));
-        const hasMatchingCloseQuote = nextChar === openQuote;
+        const trailingText = document.getText(new vscode.Range(position, new vscode.Position(1 + position.line, 0)));
+        const needsCloseQuote = openQuote && !trailingText.startsWith(openQuote);
 
         const result: CompletionItem[] = [];
         for (const p of charm.config.parameters) {
-            result.push({
+            const completion: CompletionItem = {
                 label: p.name,
-                insertText: openQuote
-                    ? (p.name + (hasMatchingCloseQuote ? '' : openQuote))
-                    : `"${p.name}"`,
                 sortText: "0",
                 detail: p.name,
-                documentation: this.formatDocumentation(p),
-            });
+                documentation: getConfigParamDocumentation(p),
+            };
+            result.push(completion);
+
+            if (matchType === 'set') {
+                completion.insertText = `${p.name}${openQuote}, ${this.getParameterDefaultValueAsString(p)}`;
+                if (!needsCloseQuote) {
+                    // To delete the closing quote and insert the second argument to `self.config.set` method.
+                    completion.additionalTextEdits = [
+                        vscode.TextEdit.delete(new vscode.Range(position, new vscode.Position(position.line, 1 + position.character))),
+                    ];
+                }
+            } else {
+                completion.insertText = p.name + (needsCloseQuote ? openQuote : '');
+            }
         }
         return result;
 
@@ -47,22 +65,19 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         return;
     }
 
-    formatDocumentation(param: CharmConfigParameter): vscode.MarkdownString {
-        const result = new vscode.MarkdownString();
-        result.supportHtml = true;
-        if (param.type !== undefined) {
-            result.appendMarkdown(`**Type:** ${param.type}<br/>`);
+    getParameterDefaultValueAsString(param: CharmConfigParameter): string {
+        switch (param.type) {
+            case undefined:
+                return '""';
+            case 'string':
+                return param.default !== undefined && typeof param.default === 'string' ? JSON.stringify(param.default) : '""';
+            case 'boolean':
+                return param.default !== undefined && typeof param.default === 'boolean' ? (param.default ? 'True' : 'False') : 'False';
+            case 'int':
+                return param.default !== undefined && typeof param.default === 'number' && Number.isInteger(param.default) ? param.default.toString() : '0';
+            case 'float':
+                return param.default !== undefined && typeof param.default === 'number' ? param.default.toString() : '0';
         }
-        if (param.default !== undefined) {
-            result.appendMarkdown(`(default: \`${JSON.stringify(param.default)}\`)`);
-        }
-        if (param.description) {
-            if (result.value !== '') {
-                result.appendText('\n\n');
-            }
-            result.appendMarkdown(param.description);
-        }
-        return result;
     }
 }
 
@@ -70,8 +85,6 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
 const SELF_ON = 'self.on.';
 const SELF_FRAMEWORK_OBSERVE = 'self.framework.observe(';
 const SELF_FRAMEWORK_OBSERVE_SELF_ON = 'self.framework.observe(self.on.';
-
-const TRAILING_CLOSE_BRACKET = ')';
 export const CHARM_EVENT_COMPLETION_TRIGGER_CHARS = ['.', '('];
 
 export class CharmEventCompletionProvider implements CompletionItemProvider<CompletionItem> {
@@ -93,23 +106,23 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
         }
 
         const remainingLineText = document.getText(new vscode.Range(position, new vscode.Position(1 + position.line, 0)));
-        const isNextCharClosedBracket = (isFullEventSubscription || isPartialEventSubscription) && remainingLineText.endsWith(')');
+        const isNextCharClosedBracket = (isFullEventSubscription || isPartialEventSubscription) && remainingLineText.startsWith(')');
 
         const result: CompletionItem[] = [];
         for (const e of charm.events) {
             const item: CompletionItem = {
-                label: e.name,
-                insertText: e.name,
+                label: e.symbol,
+                insertText: e.symbol,
                 sortText: '0',
                 detail: e.name,
-                documentation: this.formatDocumentation(e),
+                documentation: getEventDocumentation(e),
             };
 
             if (isFullEventSubscription) {
-                item.insertText = `${e.name}, self._on_${e.name}${isNextCharClosedBracket ? '' : ')'}`;
+                item.insertText = `${e.symbol}, self._on_${e.symbol}${isNextCharClosedBracket ? '' : ')'}`;
             } else if (isPartialEventSubscription) {
-                item.label = `self.on.${e.name}`;
-                item.insertText = `self.on.${e.name}, self._on_${e.name}${isNextCharClosedBracket ? '' : ')'}`;
+                item.label = `self.on.${e.symbol}`;
+                item.insertText = `self.on.${e.symbol}, self._on_${e.symbol}${isNextCharClosedBracket ? '' : ')'}`;
             }
             if (typeof item.insertText === 'string' && remainingLineText.startsWith(item.insertText)) {
                 item.insertText = '';
@@ -121,14 +134,5 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
     }
     resolveCompletionItem?(item: vscode.CompletionItem, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CompletionItem> {
         return;
-    }
-
-    formatDocumentation(e: CharmEvent): vscode.MarkdownString {
-        const result = new vscode.MarkdownString();
-        result.supportHtml = true;
-        if (e.description) {
-            result.appendMarkdown(e.description);
-        }
-        return result;
     }
 }

@@ -1,26 +1,20 @@
-import * as yaml from 'js-yaml';
-import * as vscode from 'vscode';
-import { Disposable, Uri } from 'vscode';
-import { CharmConfig, CharmConfigParameter, CharmConfigParameterProblem, CharmEvent } from './charmTypes';
+import { parseCharmActionsYAML } from './charmActions';
 import { parseCharmConfigYAML } from './charmConfig';
-import { CHARM_FILE_CONFIG_YAML, CHARM_FILE_METADATA_YAML } from './constant';
-import { tryReadWorkspaceFileAsText } from './util';
-
-const WATCH_GLOB_PATTERN = `{${CHARM_FILE_CONFIG_YAML},${CHARM_FILE_METADATA_YAML}}`;
+import { CharmAction, CharmActions, CharmConfig, CharmConfigParameter, CharmConfigParameterProblem, CharmEvent } from './charmTypes';
 
 const CHARM_LIFECYCLE_EVENTS: CharmEvent[] = [
-    Object.freeze({ name: 'start', description: 'fired as soon as the unit initialization is complete.' }),
-    Object.freeze({ name: 'config_changed', description: 'fired whenever the cloud admin changes the charm configuration *.' }),
-    Object.freeze({ name: 'install', description: 'fired when juju is done provisioning the unit.' }),
-    Object.freeze({ name: 'leader_elected', description: 'fired on the new leader when juju elects one.' }),
-    Object.freeze({ name: 'leader_settings_changed', description: 'fired on all follower units when a new leader is chosen.' }),
-    Object.freeze({ name: 'pre_series_upgrade', description: 'fired before the series upgrade takes place.' }),
-    Object.freeze({ name: 'post_series_upgrade', description: 'fired after the series upgrade has taken place.' }),
-    Object.freeze({ name: 'stop', description: 'fired before the unit begins deprovisioning.' }),
-    Object.freeze({ name: 'remove', description: 'fired just before the unit is deprovisioned.' }),
-    Object.freeze({ name: 'update_status', description: 'fired automatically at regular intervals by juju.' }),
-    Object.freeze({ name: 'upgrade_charm', description: 'fired when the cloud admin upgrades the charm.' }),
-    Object.freeze({ name: 'collect_metrics', description: '(deprecated, will be removed soon)' }),
+    Object.freeze({ name: 'start', symbol: 'start', description: 'Fired as soon as the unit initialization is complete.' }),
+    Object.freeze({ name: 'config-changed', symbol: 'config_changed', description: 'Fired whenever the cloud admin changes the charm configuration *.' }),
+    Object.freeze({ name: 'install', symbol: 'install', description: 'Fired when juju is done provisioning the unit.' }),
+    Object.freeze({ name: 'leader-elected', symbol: 'leader_elected', description: 'Fired on the new leader when juju elects one.' }),
+    Object.freeze({ name: 'leader-settings-changed', symbol: 'leader_settings_changed', description: 'Fired on all follower units when a new leader is chosen.' }),
+    Object.freeze({ name: 'pre-series-upgrade', symbol: 'pre_series_upgrade', description: 'Fired before the series upgrade takes place.' }),
+    Object.freeze({ name: 'post-series-upgrade', symbol: 'post_series_upgrade', description: 'Fired after the series upgrade has taken place.' }),
+    Object.freeze({ name: 'stop', symbol: 'stop', description: 'Fired before the unit begins deprovisioning.' }),
+    Object.freeze({ name: 'remove', symbol: 'remove', description: 'Fired just before the unit is deprovisioned.' }),
+    Object.freeze({ name: 'update-status', symbol: 'update_status', description: 'Fired automatically at regular intervals by juju.' }),
+    Object.freeze({ name: 'upgrade-charm', symbol: 'upgrade_charm', description: 'Fired when the cloud admin upgrades the charm.' }),
+    Object.freeze({ name: 'collect-metrics', symbol: 'collect_metrics', description: '(deprecated, will be removed soon)' }),
 ];
 
 const CHARM_SECRET_EVENTS = [
@@ -47,77 +41,75 @@ const CHARM_CONTAINER_EVENT_SUFFIX = [
     '_pebble_ready',
 ];
 
-const CHARM_ACTION_EVENT_SUFFIX = [
-    '_action'
-];
+const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
+    return [
+        {
+            name: `${action.name}-action`,
+            symbol: `${action.symbol}_action`,
+            description: action.description || `Fired when \`${action.name}\` action is called.`,
+        }
+    ];
+};
 
-export class Charm implements Disposable {
-    private _disposables: Disposable[] = [];
-    private readonly watcher: vscode.FileSystemWatcher;
-    private _config: CharmConfig = { parameters: [], problems: [] };
+function _emptyActions() {
+    return { actions: [], problems: [] };
+}
 
-    readonly configURI: vscode.Uri;
-    readonly metadataURI: vscode.Uri;
+function _emptyConfig() {
+    return { parameters: [], problems: [] };
+}
 
-    private readonly _onConfigChanged = new vscode.EventEmitter<void>();
-    readonly onConfigChanged = this._onConfigChanged.event;
+export class Charm {
+    private _config: CharmConfig = _emptyConfig();
+    private _configMap = new Map<string, CharmConfigParameter>();
 
-    private readonly _onMetadataChanged = new vscode.EventEmitter<void>();
-    readonly onMetadataChanged = this._onMetadataChanged.event;
+    private _actions: CharmActions = _emptyActions();
+    private _eventSymbolMap = new Map<string, CharmEvent>();
 
-    constructor(readonly home: Uri) {
-        this._disposables.push(
-            this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(home, WATCH_GLOB_PATTERN)),
-            this.watcher.onDidChange(async e => await this._onFileSystemEvent('change', e)),
-            this.watcher.onDidCreate(async e => await this._onFileSystemEvent('create', e)),
-            this.watcher.onDidDelete(async e => await this._onFileSystemEvent('delete', e)),
-        );
+    private _events: CharmEvent[] = [];
 
-        this.configURI = vscode.Uri.joinPath(home, CHARM_FILE_CONFIG_YAML);
-        this.metadataURI = vscode.Uri.joinPath(home, CHARM_FILE_METADATA_YAML);
-    }
+    constructor() { }
 
-    dispose() {
-        this._disposables.forEach(x => x.dispose());
-    }
-
-    get config() {
+    get config(): CharmConfig {
         return this._config;
     }
 
-    get events() {
+    getConfigParameterByName(name: string): CharmConfigParameter | undefined {
+        return this._configMap.get(name);
+    }
+
+    get events(): CharmEvent[] {
+        return Array.from(this._events);
+    }
+
+    getEventBySymbol(symbol: string): CharmEvent | undefined {
+        return this._eventSymbolMap.get(symbol);
+    }
+
+    async updateActions(content: string) {
+        this._actions = content ? parseCharmActionsYAML(content) : _emptyActions();
+        this._repopulateEvents();
+    }
+
+    async updateConfig(content: string) {
+        this._config = content ? parseCharmConfigYAML(content) : _emptyConfig();
+        this._configMap.clear();
+        for (const p of this._config.parameters) {
+            this._configMap.set(p.name, p);
+        }
+    }
+
+    private _repopulateEvents() {
         // TODO include other events
-        return Array.from(CHARM_LIFECYCLE_EVENTS);
-    }
+        this._events = [
+            ...Array.from(CHARM_LIFECYCLE_EVENTS),
+            ...this._actions.actions.map(action => CHARM_ACTION_EVENT_TEMPLATE(action)).flat(1),
+        ];
 
-    private async _onFileSystemEvent(kind: 'change' | 'create' | 'delete', uri: vscode.Uri) {
-        if (uri.path.endsWith(CHARM_FILE_CONFIG_YAML)) {
-            await this._refreshConfig();
-        } else if (uri.path.endsWith(CHARM_FILE_METADATA_YAML)) {
-            await this._refreshMetadata();
+        this._eventSymbolMap.clear();
+        for (const e of this._events) {
+            this._eventSymbolMap.set(e.symbol, e);
         }
-    }
-
-    async refresh() {
-        await Promise.allSettled([
-            this._refreshConfig(),
-            this._refreshMetadata(),
-        ]);
-    }
-
-    private async _refreshConfig() {
-        const uri = vscode.Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
-        const content = await tryReadWorkspaceFileAsText(uri);
-        if (content === undefined) {
-            this._config = { parameters: [], problems: [] };
-            return;
-        }
-        this._config = await parseCharmConfigYAML(content);
-        this._onConfigChanged.fire();
-    }
-
-    private async _refreshMetadata() {
-        this._onMetadataChanged.fire();
     }
 }
 
