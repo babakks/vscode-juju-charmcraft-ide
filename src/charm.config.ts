@@ -1,5 +1,5 @@
 import * as yaml from 'js-yaml';
-import { CharmConfig, CharmConfigParameter, CharmConfigParameterProblem, isConfigParameterType } from './charmTypes';
+import { CharmConfig, CharmConfigParameter, CharmConfigParameterProblem, isConfigParameterType } from './charm.type';
 import { toValidSymbol } from './util';
 
 const _PROBLEMS = {

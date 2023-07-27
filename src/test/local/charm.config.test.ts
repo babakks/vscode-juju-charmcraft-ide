@@ -2,11 +2,11 @@ import { assert } from "chai";
 import * as fs from 'fs/promises';
 import { describe, suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { parseCharmConfigYAML } from "../../charmConfig";
-import { CharmConfigParameterProblem } from "../../charmTypes";
+import { parseCharmConfigYAML } from "../../charm.config";
+import { CharmConfigParameterProblem } from "../../charm.type";
 import path = require("path");
 
-suite('parseCharmConfigYAML', async function () {
+suite(parseCharmConfigYAML.name, async function () {
     async function parseConfig(relativePath: string): Promise<ReturnType<typeof parseCharmConfigYAML>> {
         return parseCharmConfigYAML(new TextDecoder().decode(await fs.readFile(path.join(__dirname, relativePath))));
     }

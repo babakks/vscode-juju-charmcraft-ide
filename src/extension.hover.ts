@@ -1,15 +1,23 @@
-import { CancellationToken, Hover, HoverProvider, Position, ProviderResult, Range, TextDocument } from 'vscode';
-import { CharmProvider } from './extension.type';
+import {
+    CancellationToken,
+    Hover,
+    HoverProvider,
+    Position,
+    ProviderResult,
+    Range,
+    TextDocument
+} from 'vscode';
 import { getConfigParamDocumentation, getEventDocumentation } from './extension.common';
+import { CharmDataProvider } from './extension.type';
 
 const REGEX_SELF_CONFIG_BRACKET = /self(?:\.model)?\.config\[(['"])(?<name>.*?)\1/;
 const REGEX_SELF_CONFIG_GET_SET = /self(?:\.model)?\.config\.(?:get|set)\((['"])(?<name>.*?)\1/;
 export class CharmConfigHoverProvider implements HoverProvider {
-    constructor(readonly charmProvider: CharmProvider) { }
+    constructor(readonly cdp: CharmDataProvider) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const charm = this.charmProvider(document.uri);
-        if (!charm || token.isCancellationRequested) {
+        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        if (!located || token.isCancellationRequested) {
             return;
         }
 
@@ -27,7 +35,7 @@ export class CharmConfigHoverProvider implements HoverProvider {
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
-        const parameter = charm.getConfigParameterByName(name);
+        const parameter = located.charm.model.getConfigParameterByName(name);
         if (!parameter) {
             return;
         }
@@ -38,11 +46,11 @@ export class CharmConfigHoverProvider implements HoverProvider {
 
 const REGEX_SELF_ON = /self\.on\.(?<symbol>\w*)/;
 export class CharmEventHoverProvider implements HoverProvider {
-    constructor(readonly charmProvider: CharmProvider) { }
+    constructor(readonly cdp: CharmDataProvider) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const charm = this.charmProvider(document.uri);
-        if (!charm || token.isCancellationRequested) {
+        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        if (!located || token.isCancellationRequested) {
             return;
         }
 
@@ -54,7 +62,7 @@ export class CharmEventHoverProvider implements HoverProvider {
         const matchText = document.getText(new Range(match.start, match.end));
         const symbol = matchText.match(REGEX_SELF_ON)!.groups!['symbol'];
 
-        const event = charm.getEventBySymbol(symbol);
+        const event = located.charm.model.getEventBySymbol(symbol);
         if (!event) {
             return;
         }

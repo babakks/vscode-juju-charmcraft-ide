@@ -1,8 +1,22 @@
-import * as vscode from 'vscode';
-import { CompletionItem, CompletionItemProvider, Uri } from 'vscode';
-import { CharmConfigParameter } from './charmTypes';
+import {
+    CancellationToken,
+    CompletionContext,
+    CompletionItem,
+    CompletionItemKind,
+    CompletionItemProvider,
+    CompletionList,
+    Position,
+    ProviderResult,
+    Range,
+    TextDocument,
+    TextEdit,
+    Uri,
+    window
+} from 'vscode';
+import { CharmConfigParameter } from './charm.type';
 import { getConfigParamDocumentation, getEventDocumentation } from './extension.common';
-import { CharmProvider } from './extension.type';
+import { CharmDataProvider } from './extension.type';
+import { isInRange } from './charm.util';
 
 export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['"', "'"];
 
@@ -10,15 +24,38 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     private readonly _regexSelfConfigBracket = /self(?:\.model)?\.config\[(?<quote>["'])$/;
     private readonly _regexSelfConfigGetSet = /self(?:\.model)?\.config\.(?<method>get|set)\((?<quote>["'])$/;
 
-    constructor(readonly charmProvider: CharmProvider) { }
+    constructor(readonly cdp: CharmDataProvider) { }
 
-    provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext): vscode.ProviderResult<vscode.CompletionItem[] | vscode.CompletionList<vscode.CompletionItem>> {
-        const charm = this.charmProvider(document.uri);
-        if (!charm || token.isCancellationRequested) {
+    async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): Promise<CompletionItem[] | CompletionList<CompletionItem> | undefined> {
+        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        if (!located || token.isCancellationRequested) {
             return;
         }
 
-        const leadingTextToCursor = document.getText(new vscode.Range(new vscode.Position(position.line, 0), position));
+        if (!located.charm.model.src.isMain(located.relativePath)) {
+            return;
+        }
+
+        const file = located.charm.getLatestCachedLiveSourceCodeFile(document.uri);
+        if (!file) {
+            return;
+        }
+
+
+        if (!file.analyzer.mainCharmClass) {
+            return;
+        }
+
+        if (!isInRange({ line: position.line, character: position.character }, file.analyzer.mainCharmClass.extendedRange)) {
+            return;
+        }
+
+        const currentMethod = file.analyzer.mainCharmClass.methods.find(x => isInRange({ line: position.line, character: position.character }, x.extendedRange));
+        if (!currentMethod || currentMethod.isStatic) {
+            return;
+        }
+
+        const leadingTextToCursor = document.getText(new Range(new Position(position.line, 0), position));
         let match: ReturnType<string['match']> | undefined;
         let matchType: 'indexer' | 'get' | 'set' | undefined;
 
@@ -33,11 +70,11 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         }
 
         const openQuote = match.groups!['quote'];
-        const trailingText = document.getText(new vscode.Range(position, new vscode.Position(1 + position.line, 0)));
+        const trailingText = document.getText(new Range(position, new Position(1 + position.line, 0)));
         const needsCloseQuote = openQuote && !trailingText.startsWith(openQuote);
 
         const result: CompletionItem[] = [];
-        for (const p of charm.config.parameters) {
+        for (const p of located.charm.model.config.parameters) {
             const completion: CompletionItem = {
                 label: p.name,
                 sortText: "0",
@@ -51,7 +88,7 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
                 if (!needsCloseQuote) {
                     // To delete the closing quote and insert the second argument to `self.config.set` method.
                     completion.additionalTextEdits = [
-                        vscode.TextEdit.delete(new vscode.Range(position, new vscode.Position(position.line, 1 + position.character))),
+                        TextEdit.delete(new Range(position, new Position(position.line, 1 + position.character))),
                     ];
                 }
             } else {
@@ -61,7 +98,8 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         return result;
 
     }
-    resolveCompletionItem?(item: vscode.CompletionItem, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CompletionItem> {
+
+    resolveCompletionItem?(item: CompletionItem, token: CancellationToken): ProviderResult<CompletionItem> {
         return;
     }
 
@@ -88,15 +126,38 @@ const SELF_FRAMEWORK_OBSERVE_SELF_ON = 'self.framework.observe(self.on.';
 export const CHARM_EVENT_COMPLETION_TRIGGER_CHARS = ['.', '('];
 
 export class CharmEventCompletionProvider implements CompletionItemProvider<CompletionItem> {
-    constructor(readonly charmProvider: CharmProvider) { }
+    constructor(readonly cdp: CharmDataProvider) { }
 
-    provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext): vscode.ProviderResult<vscode.CompletionItem[] | vscode.CompletionList<vscode.CompletionItem>> {
-        const charm = this.charmProvider(document.uri);
-        if (!charm || token.isCancellationRequested) {
+    provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): ProviderResult<CompletionItem[] | CompletionList<CompletionItem>> {
+        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        if (!located || token.isCancellationRequested) {
             return;
         }
 
-        const leadingTextToCursor = document.getText(new vscode.Range(new vscode.Position(position.line, 0), position));
+        if (!located.charm.model.src.isMain(located.relativePath)) {
+            return;
+        }
+
+        const file = located.charm.getLatestCachedLiveSourceCodeFile(document.uri);
+        if (!file) {
+            return;
+        }
+
+
+        if (!file.analyzer.mainCharmClass) {
+            return;
+        }
+
+        if (!isInRange({ line: position.line, character: position.character }, file.analyzer.mainCharmClass.extendedRange)) {
+            return;
+        }
+
+        const currentMethod = file.analyzer.mainCharmClass.methods.find(x => isInRange({ line: position.line, character: position.character }, x.extendedRange));
+        if (!currentMethod || currentMethod.isStatic) {
+            return;
+        }
+
+        const leadingTextToCursor = document.getText(new Range(new Position(position.line, 0), position));
 
         const isFullEventSubscription = leadingTextToCursor.endsWith(SELF_FRAMEWORK_OBSERVE_SELF_ON);
         const isPartialEventSubscription = !isFullEventSubscription && leadingTextToCursor.endsWith(SELF_FRAMEWORK_OBSERVE);
@@ -105,11 +166,11 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
             return;
         }
 
-        const remainingLineText = document.getText(new vscode.Range(position, new vscode.Position(1 + position.line, 0)));
+        const remainingLineText = document.getText(new Range(position, new Position(1 + position.line, 0)));
         const isNextCharClosedBracket = (isFullEventSubscription || isPartialEventSubscription) && remainingLineText.startsWith(')');
 
         const result: CompletionItem[] = [];
-        for (const e of charm.events) {
+        for (const e of located.charm.model.events) {
             const item: CompletionItem = {
                 label: e.symbol,
                 insertText: e.symbol,
@@ -119,10 +180,10 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
             };
 
             if (isFullEventSubscription) {
-                item.insertText = `${e.symbol}, self._on_${e.symbol}${isNextCharClosedBracket ? '' : ')'}`;
+                item.insertText = `${e.symbol}, self.${e.preferredHandlerSymbol}${isNextCharClosedBracket ? '' : ')'}`;
             } else if (isPartialEventSubscription) {
                 item.label = `self.on.${e.symbol}`;
-                item.insertText = `self.on.${e.symbol}, self._on_${e.symbol}${isNextCharClosedBracket ? '' : ')'}`;
+                item.insertText = `self.on.${e.symbol}, self.${e.preferredHandlerSymbol}${isNextCharClosedBracket ? '' : ')'}`;
             }
             if (typeof item.insertText === 'string' && remainingLineText.startsWith(item.insertText)) {
                 item.insertText = '';
@@ -132,7 +193,8 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
         return result;
 
     }
-    resolveCompletionItem?(item: vscode.CompletionItem, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CompletionItem> {
+
+    resolveCompletionItem?(item: CompletionItem, token: CancellationToken): ProviderResult<CompletionItem> {
         return;
     }
 }

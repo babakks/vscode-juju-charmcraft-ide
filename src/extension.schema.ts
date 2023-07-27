@@ -4,7 +4,7 @@ import * as handlebars from 'handlebars';
 import { URL } from 'url';
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
-import { type ExtensionAPI } from './redhat.vscode-yaml';
+import { type ExtensionAPI } from './external/redhat.vscode-yaml';
 import path = require('path');
 
 type Schema = { uri: string, filename: string; content: string };
@@ -14,17 +14,12 @@ type SchemaMapByFilename = Map<string, Schema>;
 const SCHEMA_FILE = 'schema.json';
 const SCHEMA_INCLUDE_SUBDIR = 'include';
 
-export async function registerSchemas(schemaDataDir: string): Promise<vscode.Disposable> {
-    const yaml = vscode.extensions.getExtension("redhat.vscode-yaml")?.exports as ExtensionAPI;
-    if (!yaml) {
-        throw new Error('Failed to retrieve `redhat.vscode-yaml` extension API');
-    }
-
+export async function registerSchemas(schemaDataDir: string, yamlExtensionAPI: ExtensionAPI): Promise<vscode.Disposable> {
     let [byURI, byFilename] = await loadSchemas(schemaDataDir);
     const protocols = new Set(Array.from(byURI.keys()).map(x => new URL(x).protocol).map(x => x.substring(0, -1 + x.length)));
 
     for (const p of protocols) {
-        yaml.registerContributor(
+        yamlExtensionAPI.registerContributor(
             p,
             resource => {
                 const filename = path.basename(resource);

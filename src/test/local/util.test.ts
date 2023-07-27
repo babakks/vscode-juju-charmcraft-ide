@@ -3,7 +3,7 @@ import { toValidSymbol } from "../../util";
 import { assert } from "chai";
 
 
-test('toValidSymbol', function () {
+test(toValidSymbol.name, function () {
     assert.equal(toValidSymbol(''), '');
     assert.equal(toValidSymbol('abc'), 'abc');
     assert.equal(toValidSymbol('AbC'), 'AbC');

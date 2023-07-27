@@ -1,5 +1,5 @@
 import { MarkdownString } from 'vscode';
-import { CharmConfigParameter, CharmEvent } from './charmTypes';
+import { CharmConfigParameter, CharmEvent } from './charm.type';
 
 const SEPARATOR = '\n<hr/>\n\n';
 

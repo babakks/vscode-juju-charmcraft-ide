@@ -1,20 +1,21 @@
-import { parseCharmActionsYAML } from './charmActions';
-import { parseCharmConfigYAML } from './charmConfig';
-import { CharmAction, CharmActions, CharmConfig, CharmConfigParameter, CharmConfigParameterProblem, CharmEvent } from './charmTypes';
+import { parseCharmActionsYAML } from './charm.actions';
+import { parseCharmConfigYAML } from './charm.config';
+import { CharmSourceCode } from './charm.src';
+import { CharmAction, CharmActions, CharmConfig, CharmConfigParameter, CharmEvent } from './charm.type';
 
 const CHARM_LIFECYCLE_EVENTS: CharmEvent[] = [
-    Object.freeze({ name: 'start', symbol: 'start', description: 'Fired as soon as the unit initialization is complete.' }),
-    Object.freeze({ name: 'config-changed', symbol: 'config_changed', description: 'Fired whenever the cloud admin changes the charm configuration *.' }),
-    Object.freeze({ name: 'install', symbol: 'install', description: 'Fired when juju is done provisioning the unit.' }),
-    Object.freeze({ name: 'leader-elected', symbol: 'leader_elected', description: 'Fired on the new leader when juju elects one.' }),
-    Object.freeze({ name: 'leader-settings-changed', symbol: 'leader_settings_changed', description: 'Fired on all follower units when a new leader is chosen.' }),
-    Object.freeze({ name: 'pre-series-upgrade', symbol: 'pre_series_upgrade', description: 'Fired before the series upgrade takes place.' }),
-    Object.freeze({ name: 'post-series-upgrade', symbol: 'post_series_upgrade', description: 'Fired after the series upgrade has taken place.' }),
-    Object.freeze({ name: 'stop', symbol: 'stop', description: 'Fired before the unit begins deprovisioning.' }),
-    Object.freeze({ name: 'remove', symbol: 'remove', description: 'Fired just before the unit is deprovisioned.' }),
-    Object.freeze({ name: 'update-status', symbol: 'update_status', description: 'Fired automatically at regular intervals by juju.' }),
-    Object.freeze({ name: 'upgrade-charm', symbol: 'upgrade_charm', description: 'Fired when the cloud admin upgrades the charm.' }),
-    Object.freeze({ name: 'collect-metrics', symbol: 'collect_metrics', description: '(deprecated, will be removed soon)' }),
+    Object.freeze({ name: 'start', symbol: 'start', preferredHandlerSymbol: '_on_start', description: 'Fired as soon as the unit initialization is complete.' }),
+    Object.freeze({ name: 'config-changed', symbol: 'config_changed', preferredHandlerSymbol: '_on_config_changed', description: 'Fired whenever the cloud admin changes the charm configuration *.' }),
+    Object.freeze({ name: 'install', symbol: 'install', preferredHandlerSymbol: '_on_install', description: 'Fired when juju is done provisioning the unit.' }),
+    Object.freeze({ name: 'leader-elected', symbol: 'leader_elected', preferredHandlerSymbol: '_on_leader_elected', description: 'Fired on the new leader when juju elects one.' }),
+    Object.freeze({ name: 'leader-settings-changed', symbol: 'leader_settings_changed', preferredHandlerSymbol: '_on_leader_settings_changed', description: 'Fired on all follower units when a new leader is chosen.' }),
+    Object.freeze({ name: 'pre-series-upgrade', symbol: 'pre_series_upgrade', preferredHandlerSymbol: '_on_pre_series_upgrade', description: 'Fired before the series upgrade takes place.' }),
+    Object.freeze({ name: 'post-series-upgrade', symbol: 'post_series_upgrade', preferredHandlerSymbol: '_on_post_series_upgrade', description: 'Fired after the series upgrade has taken place.' }),
+    Object.freeze({ name: 'stop', symbol: 'stop', preferredHandlerSymbol: '_on_stop', description: 'Fired before the unit begins deprovisioning.' }),
+    Object.freeze({ name: 'remove', symbol: 'remove', preferredHandlerSymbol: '_on_remove', description: 'Fired just before the unit is deprovisioned.' }),
+    Object.freeze({ name: 'update-status', symbol: 'update_status', preferredHandlerSymbol: '_on_update_status', description: 'Fired automatically at regular intervals by juju.' }),
+    Object.freeze({ name: 'upgrade-charm', symbol: 'upgrade_charm', preferredHandlerSymbol: '_on_upgrade_charm', description: 'Fired when the cloud admin upgrades the charm.' }),
+    Object.freeze({ name: 'collect-metrics', symbol: 'collect_metrics', preferredHandlerSymbol: '_on_collect_metrics', description: '(deprecated, will be removed soon)' }),
 ];
 
 const CHARM_SECRET_EVENTS = [
@@ -46,6 +47,7 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
         {
             name: `${action.name}-action`,
             symbol: `${action.symbol}_action`,
+            preferredHandlerSymbol: `_on_${action.symbol}_action`,
             description: action.description || `Fired when \`${action.name}\` action is called.`,
         }
     ];
@@ -67,6 +69,7 @@ export class Charm {
     private _eventSymbolMap = new Map<string, CharmEvent>();
 
     private _events: CharmEvent[] = [];
+    private _src: CharmSourceCode = new CharmSourceCode({});
 
     constructor() { }
 
@@ -86,6 +89,10 @@ export class Charm {
         return this._eventSymbolMap.get(symbol);
     }
 
+    get src(): CharmSourceCode {
+        return this._src;
+    }
+
     async updateActions(content: string) {
         this._actions = content ? parseCharmActionsYAML(content) : _emptyActions();
         this._repopulateEvents();
@@ -97,6 +104,10 @@ export class Charm {
         for (const p of this._config.parameters) {
             this._configMap.set(p.name, p);
         }
+    }
+
+    async updateSourceCode(src: CharmSourceCode) {
+        this._src = src;
     }
 
     private _repopulateEvents() {
