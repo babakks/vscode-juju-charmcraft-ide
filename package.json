@@ -18,6 +18,7 @@
     "activationEvents": [
         "onStartupFinished"
     ],
+    "icon": "image/juju-128x128.png",
     "main": "./out/extension.js",
     "extensionDependencies": [
         "redhat.vscode-yaml",
@@ -29,7 +30,26 @@
                 "command": "vscode-juju-charms-ide.helloWorld",
                 "title": "Hello World"
             }
-        ]
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "charms",
+                    "title": "Charms",
+                    "icon": "image/juju.svg"
+                }
+            ]
+        },
+        "views": {
+            "charms": [
+                {
+                    "id": "charms",
+                    "name": "Charms",
+                    "icon": "${terminal}",
+                    "type": "tree"
+                }
+            ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
@@ -38,7 +58,7 @@
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
         "test": "node ./out/test/runTest.js",
-        "test-local": "npm run compile && mocha ./out/test/local"
+        "test-local": "npm run compile && mocha ./out/**/*.test.js --ignore ./out/**/*.vscode.test.js --ui tdd"
     },
     "devDependencies": {
         "@types/chai": "^4.3.5",

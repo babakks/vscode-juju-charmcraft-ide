@@ -1,34 +1,29 @@
 import {
     CancellationToken,
     CodeAction,
-    CodeActionContext,
-    CodeActionKind,
-    CodeActionProvider,
+    CodeActionContext, CodeActionProvider,
     Command,
     ProviderResult,
     Range,
     Selection,
-    TextDocument,
-    window
+    TextDocument
 } from 'vscode';
-import { CharmDataProvider } from './extension.type';
-import { CharmSourceCodeFileAnalyzer } from './charm.src';
-import { isInRange } from './charm.util';
+import { CharmRegistry } from './registry';
 
 export class EventHandlerCodeActionProvider implements CodeActionProvider {
-    constructor(readonly cdp: CharmDataProvider) { }
+    constructor(readonly registry: CharmRegistry) { }
 
     async provideCodeActions(document: TextDocument, range: Range | Selection, context: CodeActionContext, token: CancellationToken): Promise<(CodeAction | Command)[] | undefined> {
         if (!(range instanceof Selection)) {
             return;
         }
 
-        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        const located = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!located) {
             return;
         }
 
-        if (!located.charm.model.src.isMain(located.relativePath)) {
+        if (!located.charm.model.src.isMain(located.relativeSourcePath)) {
             return;
         }
 

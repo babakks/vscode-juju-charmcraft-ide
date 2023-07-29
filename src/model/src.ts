@@ -1,7 +1,19 @@
-import { escapeRegex, getNodeExtendedRange, getNodeRange, getTextOverRange, unquoteSymbol } from "./charm.src.util";
-import { CharmSourceCodeFile, CharmSourceCodeTree, CharmSourceCodeTreeDirectoryEntry, CharmSourceCodeTreeFileEntry, Position, Range } from "./charm.type";
-import { comparePositions } from "./charm.util";
 import { CHARM_DIR_SRC_MAIN, CHARM_SOURCE_CODE_CHARM_BASE_CLASS } from "./constant";
+import {
+    CharmSourceCodeFile,
+    CharmSourceCodeTree,
+    CharmSourceCodeTreeDirectoryEntry,
+    CharmSourceCodeTreeFileEntry,
+    Range
+} from "./type";
+import {
+    comparePositions,
+    escapeRegex,
+    getNodeExtendedRange,
+    getNodeRange,
+    getTextOverRange,
+    unquoteSymbol
+} from "./util";
 
 export class CharmSourceCode {
     constructor(readonly tree: CharmSourceCodeTree) { }

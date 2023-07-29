@@ -1,5 +1,5 @@
 import * as yaml from 'js-yaml';
-import { CharmAction, CharmActionProblem, CharmActions } from './charm.type';
+import { CharmAction, CharmActionProblem, CharmActions } from './type';
 import { toValidSymbol } from './util';
 
 const _PROBLEMS = {

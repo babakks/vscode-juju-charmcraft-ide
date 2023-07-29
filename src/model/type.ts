@@ -1,4 +1,4 @@
-import { CharmSourceCodeFileAnalyzer } from "./charm.src";
+import { CharmSourceCodeFileAnalyzer } from "./src";
 
 export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
 export function isConfigParameterType(value: string): value is CharmConfigParameterType {

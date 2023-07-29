@@ -2,8 +2,8 @@ import { assert } from "chai";
 import * as fs from 'fs/promises';
 import { describe, suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { parseCharmActionsYAML } from "../../charm.actions";
-import { CharmConfigParameterProblem } from "../../charm.type";
+import { parseCharmActionsYAML } from "../actions";
+import { CharmConfigParameterProblem } from "../type";
 import path = require("path");
 
 suite(parseCharmActionsYAML.name, async function () {

@@ -1,126 +1,188 @@
-import { parseCharmActionsYAML } from './charm.actions';
-import { parseCharmConfigYAML } from './charm.config';
-import { CharmSourceCode } from './charm.src';
-import { CharmAction, CharmActions, CharmConfig, CharmConfigParameter, CharmEvent } from './charm.type';
+import * as vscode from 'vscode';
+import { Disposable, Uri } from 'vscode';
+import { Charm } from './model/charm';
+import * as constant from './model/constant';
+import { CharmSourceCode } from './model/src';
+import { CharmSourceCodeFile, DefaultCharmSourceCodeFile } from './model/type';
+import {
+    createCharmSourceCodeFile,
+    createCharmSourceCodeFileFromContent,
+    getCharmSourceCodeTree,
+    tryReadWorkspaceFileAsText
+} from './workspace';
 
-const CHARM_LIFECYCLE_EVENTS: CharmEvent[] = [
-    Object.freeze({ name: 'start', symbol: 'start', preferredHandlerSymbol: '_on_start', description: 'Fired as soon as the unit initialization is complete.' }),
-    Object.freeze({ name: 'config-changed', symbol: 'config_changed', preferredHandlerSymbol: '_on_config_changed', description: 'Fired whenever the cloud admin changes the charm configuration *.' }),
-    Object.freeze({ name: 'install', symbol: 'install', preferredHandlerSymbol: '_on_install', description: 'Fired when juju is done provisioning the unit.' }),
-    Object.freeze({ name: 'leader-elected', symbol: 'leader_elected', preferredHandlerSymbol: '_on_leader_elected', description: 'Fired on the new leader when juju elects one.' }),
-    Object.freeze({ name: 'leader-settings-changed', symbol: 'leader_settings_changed', preferredHandlerSymbol: '_on_leader_settings_changed', description: 'Fired on all follower units when a new leader is chosen.' }),
-    Object.freeze({ name: 'pre-series-upgrade', symbol: 'pre_series_upgrade', preferredHandlerSymbol: '_on_pre_series_upgrade', description: 'Fired before the series upgrade takes place.' }),
-    Object.freeze({ name: 'post-series-upgrade', symbol: 'post_series_upgrade', preferredHandlerSymbol: '_on_post_series_upgrade', description: 'Fired after the series upgrade has taken place.' }),
-    Object.freeze({ name: 'stop', symbol: 'stop', preferredHandlerSymbol: '_on_stop', description: 'Fired before the unit begins deprovisioning.' }),
-    Object.freeze({ name: 'remove', symbol: 'remove', preferredHandlerSymbol: '_on_remove', description: 'Fired just before the unit is deprovisioned.' }),
-    Object.freeze({ name: 'update-status', symbol: 'update_status', preferredHandlerSymbol: '_on_update_status', description: 'Fired automatically at regular intervals by juju.' }),
-    Object.freeze({ name: 'upgrade-charm', symbol: 'upgrade_charm', preferredHandlerSymbol: '_on_upgrade_charm', description: 'Fired when the cloud admin upgrades the charm.' }),
-    Object.freeze({ name: 'collect-metrics', symbol: 'collect_metrics', preferredHandlerSymbol: '_on_collect_metrics', description: '(deprecated, will be removed soon)' }),
-];
+const WATCH_GLOB_PATTERN = `{${constant.CHARM_FILE_CONFIG_YAML},${constant.CHARM_FILE_METADATA_YAML},${constant.CHARM_FILE_ACTIONS_YAML},${constant.CHARM_DIR_SRC}/**/*.py}`;
 
-const CHARM_SECRET_EVENTS = [
-    'secret_changed',
-    'secret_expired',
-    'secret_remove',
-    'secret_rotate',
-];
+export class ExtensionCharm implements vscode.Disposable {
+    private _disposables: Disposable[] = [];
+    private _liveFileCache = new Map<string, CharmSourceCodeFile>();
 
-const CHARM_RELATION_EVENTS_SUFFIX = [
-    `_relation_broken`,
-    `_relation_changed`,
-    `_relation_created`,
-    `_relation_departed`,
-    `_relation_joined`,
-];
+    readonly model: Charm;
+    private readonly _srcDir: Uri;
 
-const CHARM_STORAGE_EVENTS_SUFFIX = [
-    `_storage_attached`,
-    `_storage_detaching`,
-];
+    private readonly watcher: vscode.FileSystemWatcher;
 
-const CHARM_CONTAINER_EVENT_SUFFIX = [
-    '_pebble_ready',
-];
+    constructor(readonly home: Uri, readonly output: vscode.OutputChannel) {
+        this.model = new Charm();
+        this._srcDir = Uri.joinPath(this.home, constant.CHARM_DIR_SRC);
+        this._disposables.push(
+            this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(home, WATCH_GLOB_PATTERN)),
+            this.watcher.onDidChange(async e => await this._onFileSystemEvent('change', e)),
+            this.watcher.onDidCreate(async e => await this._onFileSystemEvent('create', e)),
+            this.watcher.onDidDelete(async e => await this._onFileSystemEvent('delete', e)),
+        );
+    }
 
-const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
-    return [
-        {
-            name: `${action.name}-action`,
-            symbol: `${action.symbol}_action`,
-            preferredHandlerSymbol: `_on_${action.symbol}_action`,
-            description: action.description || `Fired when \`${action.name}\` action is called.`,
+    dispose() {
+        this._disposables.forEach(x => x.dispose());
+    }
+
+    private _getRelativePathToSrc(uri: Uri): string | undefined {
+        const prefix = this._srcDir.path + '/';
+        return uri.path.startsWith(prefix) ? uri.path.replace(prefix, '') : undefined;
+    }
+
+    private _getRelativePath(uri: Uri): string | undefined {
+        const prefix = this.home.path + '/';
+        return uri.path.startsWith(prefix) ? uri.path.replace(prefix, '') : undefined;
+    }
+
+    private async _onFileSystemEvent(kind: 'change' | 'create' | 'delete', uri: vscode.Uri) {
+        if (uri.path.endsWith(constant.CHARM_FILE_ACTIONS_YAML)) {
+            await this._refreshActions();
+        } else if (uri.path.endsWith(constant.CHARM_FILE_CONFIG_YAML)) {
+            await this._refreshConfig();
+        } else if (uri.path.endsWith(constant.CHARM_FILE_METADATA_YAML)) {
+            await this._refreshMetadata();
         }
-    ];
-};
 
-function _emptyActions() {
-    return { actions: [], problems: [] };
-}
-
-function _emptyConfig() {
-    return { parameters: [], problems: [] };
-}
-
-export class Charm {
-    private _config: CharmConfig = _emptyConfig();
-    private _configMap = new Map<string, CharmConfigParameter>();
-
-    private _actions: CharmActions = _emptyActions();
-    private _eventSymbolMap = new Map<string, CharmEvent>();
-
-    private _events: CharmEvent[] = [];
-    private _src: CharmSourceCode = new CharmSourceCode({});
-
-    constructor() { }
-
-    get config(): CharmConfig {
-        return this._config;
-    }
-
-    getConfigParameterByName(name: string): CharmConfigParameter | undefined {
-        return this._configMap.get(name);
-    }
-
-    get events(): CharmEvent[] {
-        return Array.from(this._events);
-    }
-
-    getEventBySymbol(symbol: string): CharmEvent | undefined {
-        return this._eventSymbolMap.get(symbol);
-    }
-
-    get src(): CharmSourceCode {
-        return this._src;
-    }
-
-    async updateActions(content: string) {
-        this._actions = content ? parseCharmActionsYAML(content) : _emptyActions();
-        this._repopulateEvents();
-    }
-
-    async updateConfig(content: string) {
-        this._config = content ? parseCharmConfigYAML(content) : _emptyConfig();
-        this._configMap.clear();
-        for (const p of this._config.parameters) {
-            this._configMap.set(p.name, p);
+        if (this._getRelativePathToSrc(uri)) {
+            if (kind === 'change') {
+                await this._refreshSourceCodeFile(uri);
+            } else {
+                await this._refreshSourceCodeTree();
+            }
         }
     }
 
-    async updateSourceCode(src: CharmSourceCode) {
-        this._src = src;
+    async refresh() {
+        await Promise.allSettled([
+            this._refreshActions(),
+            this._refreshConfig(),
+            this._refreshMetadata(),
+            this._refreshSourceCodeTree(),
+        ]);
     }
 
-    private _repopulateEvents() {
-        // TODO include other events
-        this._events = [
-            ...Array.from(CHARM_LIFECYCLE_EVENTS),
-            ...this._actions.actions.map(action => CHARM_ACTION_EVENT_TEMPLATE(action)).flat(1),
-        ];
+    private async _refreshActions() {
+        const uri = vscode.Uri.joinPath(this.home, constant.CHARM_FILE_ACTIONS_YAML);
+        const content = await tryReadWorkspaceFileAsText(uri) || "";
+        this.model.updateActions(content);
+    }
 
-        this._eventSymbolMap.clear();
-        for (const e of this._events) {
-            this._eventSymbolMap.set(e.symbol, e);
+    private async _refreshConfig() {
+        const uri = vscode.Uri.joinPath(this.home, constant.CHARM_FILE_CONFIG_YAML);
+        const content = await tryReadWorkspaceFileAsText(uri) || "";
+        this.model.updateConfig(content);
+    }
+
+    private async _refreshMetadata() {
+    }
+
+    private async _refreshSourceCodeFile(uri: Uri) {
+        let file = await createCharmSourceCodeFile(uri);
+        const relativePath = this._getRelativePathToSrc(uri);
+        if (!relativePath) {
+            return;
         }
+
+        // Keeping old AST data if there's no AST available (e.g., due to Python parser error in the middle of
+        // incomplete changes).
+        if (!file.ast) {
+            const unhealthyFile = this._makeFileWithOldAST(relativePath, file);
+            if (unhealthyFile) {
+                file = unhealthyFile;
+                this._log(`failed to generate AST; keeping old AST data: ${relativePath}`);
+            }
+        }
+
+        this.model.src.updateFile(relativePath, file);
+        this._liveFileCache.delete(relativePath);
+    }
+
+    private _makeFileWithOldAST(relativePath: string, newFile: CharmSourceCodeFile): CharmSourceCodeFile | undefined {
+        const oldFile = this.model.src.getFile(relativePath);
+        if (oldFile) {
+            return new DefaultCharmSourceCodeFile(newFile.content, oldFile.ast, false);
+        }
+        return undefined;
+    }
+
+    private async _refreshSourceCodeTree() {
+        const tree = await getCharmSourceCodeTree(this._srcDir);
+        if (!tree) {
+            return;
+        }
+        this.model.updateSourceCode(new CharmSourceCode(tree));
+        this._liveFileCache.clear();
+    }
+
+    getLatestCachedLiveSourceCodeFile(uri: Uri): CharmSourceCodeFile | undefined {
+        const relativePath = this._getRelativePathToSrc(uri);
+        if (!relativePath) {
+            return undefined;
+        }
+        return this._liveFileCache.get(relativePath) ?? this.model.src.getFile(relativePath);
+    }
+
+    async updateLiveSourceCodeFile(uri: Uri): Promise<CharmSourceCodeFile | undefined> {
+        const relativePath = this._getRelativePathToSrc(uri);
+        if (!relativePath) {
+            return undefined;
+        }
+
+        let content: string | undefined;
+        const docs = Array.from(vscode.workspace.textDocuments);
+        for (const doc of docs) {
+            if (doc.isClosed) {
+                continue;
+            }
+            if (doc.uri.toString() === uri.toString()) {
+                if (doc.isDirty) {
+                    content = doc.getText();
+                }
+                break;
+            }
+        }
+
+        if (content === undefined) {
+            return this.model.src.getFile(relativePath);
+        }
+
+        // using cached data to avoid unnecessary running of python AST parser.
+        const cached = this._liveFileCache.get(relativePath);
+        if (cached?.content === content) {
+            return cached;
+        }
+
+        this._log(`content refreshed: ${relativePath}`);
+        let file = await createCharmSourceCodeFileFromContent(content);
+
+        // Keeping old AST data if there's no AST available (e.g., due to Python parser error in the middle of
+        // incomplete changes).
+        if (!file.ast) {
+            const unhealthyFile = this._makeFileWithOldAST(relativePath, file);
+            if (unhealthyFile) {
+                file = unhealthyFile;
+                this._log(`failed to generate AST; keeping old AST data: ${relativePath}`);
+            }
+        }
+
+        this._liveFileCache.set(relativePath, file);
+        return file;
+    }
+
+    private _log(s: string) {
+        this.output.appendLine(`${new Date().toISOString()} ${this.home.path} ${s}`);
     }
 }
-

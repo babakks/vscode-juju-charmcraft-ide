@@ -1,15 +1,13 @@
 import { spawn } from 'child_process';
-import { mkdtemp, rm, rmdir, writeFile } from 'fs/promises';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
-import { CharmSourceCodeFile, CharmSourceCodeTree, DefaultCharmSourceCodeFile } from './charm.type';
+import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/constant';
+import { CharmSourceCodeFile, CharmSourceCodeTree, DefaultCharmSourceCodeFile } from './model/type';
 import path = require('path');
-import { CharmSourceCodeFileAnalyzer } from './charm.src';
 
-const GLOB_METADATA = '**/metadata.yaml';
-const FILE_METADATA_YAML = 'metadata.yaml';
-const FILE_CHARMCRAFT_YAML = 'charmcraft.yaml';
+const GLOB_METADATA = `**/${CHARM_FILE_METADATA_YAML}}`;
 
 export async function findCharms(token?: vscode.CancellationToken): Promise<vscode.Uri[]> {
     const matches = await vscode.workspace.findFiles(GLOB_METADATA, undefined, undefined, token);
@@ -91,8 +89,8 @@ async function getPythonAST(content: string): Promise<any | undefined> {
 
 async function isCharmDirectory(uri: vscode.Uri): Promise<boolean> {
     return (await Promise.allSettled([
-        vscode.workspace.fs.stat(vscode.Uri.joinPath(uri, FILE_CHARMCRAFT_YAML)),
-        vscode.workspace.fs.stat(vscode.Uri.joinPath(uri, FILE_METADATA_YAML)),
+        vscode.workspace.fs.stat(vscode.Uri.joinPath(uri, CHARM_FILE_CHARMCRAFT_YAML)),
+        vscode.workspace.fs.stat(vscode.Uri.joinPath(uri, CHARM_FILE_METADATA_YAML)),
     ])).every(x => x.status === 'fulfilled' && x.value.type === vscode.FileType.File);
 }
 

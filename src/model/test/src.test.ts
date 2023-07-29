@@ -2,7 +2,7 @@ import { assert } from "chai";
 import * as fs from 'fs/promises';
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { CharmClassMethod, CharmSourceCodeFileAnalyzer } from "../../charm.src";
+import { CharmClassMethod, CharmSourceCodeFileAnalyzer } from "../src";
 import path = require('path');
 
 suite(CharmSourceCodeFileAnalyzer.name, async function () {
@@ -12,7 +12,6 @@ suite(CharmSourceCodeFileAnalyzer.name, async function () {
         const ast = JSON.parse(new TextDecoder().decode(await fs.readFile(path.join(base, fixtureName + '.json'))));
         return new CharmSourceCodeFileAnalyzer(content, ast);
     }
-
     test('charm-01', async function () {
         const sut = await makeSUT('charm-01');
 

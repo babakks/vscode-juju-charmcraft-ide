@@ -7,16 +7,16 @@ import {
     Range,
     TextDocument
 } from 'vscode';
-import { getConfigParamDocumentation, getEventDocumentation } from './extension.common';
-import { CharmDataProvider } from './extension.type';
+import { CharmRegistry } from './registry';
+import { getConfigParamDocumentation, getEventDocumentation } from './util';
 
 const REGEX_SELF_CONFIG_BRACKET = /self(?:\.model)?\.config\[(['"])(?<name>.*?)\1/;
 const REGEX_SELF_CONFIG_GET_SET = /self(?:\.model)?\.config\.(?:get|set)\((['"])(?<name>.*?)\1/;
 export class CharmConfigHoverProvider implements HoverProvider {
-    constructor(readonly cdp: CharmDataProvider) { }
+    constructor(readonly registry: CharmRegistry) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        const located = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!located || token.isCancellationRequested) {
             return;
         }
@@ -46,10 +46,10 @@ export class CharmConfigHoverProvider implements HoverProvider {
 
 const REGEX_SELF_ON = /self\.on\.(?<symbol>\w*)/;
 export class CharmEventHoverProvider implements HoverProvider {
-    constructor(readonly cdp: CharmDataProvider) { }
+    constructor(readonly registry: CharmRegistry) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        const located = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!located || token.isCancellationRequested) {
             return;
         }

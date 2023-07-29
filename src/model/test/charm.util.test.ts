@@ -1,7 +1,7 @@
 import { suite, test } from "mocha";
 import { assert } from 'chai';
-import { comparePositions, isInRange } from "../../charm.util";
-import { Position, Range } from "../../charm.type";
+import { comparePositions, isInRange } from "../util";
+import { Position, Range } from "../type";
 
 suite(comparePositions.name, function () {
     type TestCase = {

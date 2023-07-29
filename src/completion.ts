@@ -1,22 +1,18 @@
 import {
     CancellationToken,
     CompletionContext,
-    CompletionItem,
-    CompletionItemKind,
-    CompletionItemProvider,
+    CompletionItem, CompletionItemProvider,
     CompletionList,
     Position,
     ProviderResult,
     Range,
     TextDocument,
-    TextEdit,
-    Uri,
-    window
+    TextEdit
 } from 'vscode';
-import { CharmConfigParameter } from './charm.type';
-import { getConfigParamDocumentation, getEventDocumentation } from './extension.common';
-import { CharmDataProvider } from './extension.type';
-import { isInRange } from './charm.util';
+import { CharmConfigParameter } from './model/type';
+import { isInRange } from './model/util';
+import { CharmRegistry } from './registry';
+import { getConfigParamDocumentation, getEventDocumentation } from './util';
 
 export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['"', "'"];
 
@@ -24,15 +20,15 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     private readonly _regexSelfConfigBracket = /self(?:\.model)?\.config\[(?<quote>["'])$/;
     private readonly _regexSelfConfigGetSet = /self(?:\.model)?\.config\.(?<method>get|set)\((?<quote>["'])$/;
 
-    constructor(readonly cdp: CharmDataProvider) { }
+    constructor(readonly registry: CharmRegistry) { }
 
     async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): Promise<CompletionItem[] | CompletionList<CompletionItem> | undefined> {
-        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        const located = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!located || token.isCancellationRequested) {
             return;
         }
 
-        if (!located.charm.model.src.isMain(located.relativePath)) {
+        if (!located.charm.model.src.isMain(located.relativeSourcePath)) {
             return;
         }
 
@@ -126,15 +122,15 @@ const SELF_FRAMEWORK_OBSERVE_SELF_ON = 'self.framework.observe(self.on.';
 export const CHARM_EVENT_COMPLETION_TRIGGER_CHARS = ['.', '('];
 
 export class CharmEventCompletionProvider implements CompletionItemProvider<CompletionItem> {
-    constructor(readonly cdp: CharmDataProvider) { }
+    constructor(readonly registry: CharmRegistry) { }
 
     provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): ProviderResult<CompletionItem[] | CompletionList<CompletionItem>> {
-        const located = this.cdp.getCharmBySourceCodeFile(document.uri);
+        const located = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!located || token.isCancellationRequested) {
             return;
         }
 
-        if (!located.charm.model.src.isMain(located.relativePath)) {
+        if (!located.charm.model.src.isMain(located.relativeSourcePath)) {
             return;
         }
 

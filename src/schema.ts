@@ -4,7 +4,7 @@ import * as handlebars from 'handlebars';
 import { URL } from 'url';
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
-import { type ExtensionAPI } from './external/redhat.vscode-yaml';
+import { type ExtensionAPI } from './include/redhat.vscode-yaml';
 import path = require('path');
 
 type Schema = { uri: string, filename: string; content: string };
