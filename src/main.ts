@@ -14,7 +14,7 @@ import { CharmRegistry } from './registry';
 import { registerSchemas } from './schema';
 import path = require('path');
 
-const EXTENSION_SCHEMA_DATA_DIR = ['schema', 'data']; // "[ROOT]/schema/data"
+const EXTENSION_SCHEMA_DATA_DIR = 'schema/data';
 
 export async function activate(context: ExtensionContext) {
     const python = extensions.getExtension('ms-python.python')?.exports as PythonExtension;
@@ -26,7 +26,7 @@ export async function activate(context: ExtensionContext) {
     if (!yaml) {
         throw new Error('Failed to retrieve `redhat.vscode-yaml` extension API');
     }
-    await registerSchemas(path.join(context.extensionPath, ...EXTENSION_SCHEMA_DATA_DIR), yaml);
+    await registerSchemas(path.join(context.extensionPath, EXTENSION_SCHEMA_DATA_DIR), yaml);
 
     const output = window.createOutputChannel('Charms IDE');
     context.subscriptions.push(output);
