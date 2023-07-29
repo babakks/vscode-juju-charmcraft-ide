@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import { Disposable, Uri } from 'vscode';
+import * as constant from './model/common';
+import { CharmSourceCode, CharmSourceCodeFile, emptyActions, emptyConfig } from './model/charm';
 import { Charm } from './model/charm';
-import * as constant from './model/constant';
-import { CharmSourceCode } from './model/src';
-import { CharmSourceCodeFile, DefaultCharmSourceCodeFile } from './model/type';
 import {
     createCharmSourceCodeFile,
     createCharmSourceCodeFileFromContent,
     getCharmSourceCodeTree,
     tryReadWorkspaceFileAsText
 } from './workspace';
+import { parseCharmActionsYAML, parseCharmConfigYAML } from './parser';
 
 const WATCH_GLOB_PATTERN = `{${constant.CHARM_FILE_CONFIG_YAML},${constant.CHARM_FILE_METADATA_YAML},${constant.CHARM_FILE_ACTIONS_YAML},${constant.CHARM_DIR_SRC}/**/*.py}`;
 
@@ -77,13 +77,15 @@ export class ExtensionCharm implements vscode.Disposable {
     private async _refreshActions() {
         const uri = vscode.Uri.joinPath(this.home, constant.CHARM_FILE_ACTIONS_YAML);
         const content = await tryReadWorkspaceFileAsText(uri) || "";
-        this.model.updateActions(content);
+        const actions = (content ? parseCharmActionsYAML(content) : undefined) || emptyActions();
+        this.model.updateActions(actions);
     }
 
     private async _refreshConfig() {
         const uri = vscode.Uri.joinPath(this.home, constant.CHARM_FILE_CONFIG_YAML);
         const content = await tryReadWorkspaceFileAsText(uri) || "";
-        this.model.updateConfig(content);
+        const config = (content ? parseCharmConfigYAML(content) : undefined) || emptyConfig();
+        this.model.updateConfig(config);
     }
 
     private async _refreshMetadata() {
@@ -113,7 +115,7 @@ export class ExtensionCharm implements vscode.Disposable {
     private _makeFileWithOldAST(relativePath: string, newFile: CharmSourceCodeFile): CharmSourceCodeFile | undefined {
         const oldFile = this.model.src.getFile(relativePath);
         if (oldFile) {
-            return new DefaultCharmSourceCodeFile(newFile.content, oldFile.ast, false);
+            return new CharmSourceCodeFile(newFile.content, oldFile.ast, false);
         }
         return undefined;
     }

@@ -1,7 +1,517 @@
-import { parseCharmActionsYAML } from './actions';
-import { parseCharmConfigYAML } from './config';
-import { CharmSourceCode } from './src';
-import { CharmAction, CharmActions, CharmConfig, CharmConfigParameter, CharmEvent } from './type';
+import {
+    CHARM_DIR_SRC_MAIN,
+    CHARM_SOURCE_CODE_CHARM_BASE_CLASS,
+    Position,
+    Range,
+    comparePositions
+} from "./common";
+
+export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
+export function isConfigParameterType(value: string): value is CharmConfigParameterType {
+    return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
+}
+
+export interface CharmConfigParameter {
+    name: string;
+    type?: CharmConfigParameterType;
+    description?: string;
+    default?: string | number | boolean;
+    problems: CharmConfigParameterProblem[];
+}
+
+export interface CharmConfigParameterProblem {
+    message: string;
+    parameter?: string;
+}
+
+export interface CharmConfig {
+    parameters: CharmConfigParameter[];
+    problems: CharmConfigParameterProblem[];
+}
+
+export interface CharmEvent {
+    name: string;
+    symbol: string;
+    preferredHandlerSymbol: string;
+    description?: string;
+}
+
+export interface CharmAction {
+    name: string;
+    symbol: string;
+    description?: string;
+    problems: CharmActionProblem[];
+}
+
+export interface CharmActionProblem {
+    message: string;
+    action?: string;
+}
+
+export interface CharmActions {
+    actions: CharmAction[];
+    problems: CharmActionProblem[];
+}
+
+export class CharmSourceCodeFile {
+    private _analyzer: CharmSourceCodeFileAnalyzer | undefined;
+    constructor(public content: string, public ast: any, public healthy: boolean) { }
+    get analyzer() {
+        if (!this._analyzer) {
+            this._analyzer = new CharmSourceCodeFileAnalyzer(this.content, this.ast);
+        }
+        return this._analyzer;
+    }
+}
+
+export interface CharmSourceCodeTree {
+    [key: string]: CharmSourceCodeTreeDirectoryEntry | CharmSourceCodeTreeFileEntry;
+}
+
+export interface CharmSourceCodeTreeDirectoryEntry {
+    kind: 'directory';
+    data: CharmSourceCodeTree;
+}
+
+export interface CharmSourceCodeTreeFileEntry {
+    kind: 'file';
+    data: CharmSourceCodeFile;
+}
+
+export interface CharmClass {
+    range: Range;
+    /**
+     * Extended (greedy) range of the node that covers trailing whitespace or empty lines. 
+     */
+    extendedRange: Range;
+    name: string;
+    base: string;
+    /**
+     * Charm methods, ordered by their lexical position.
+     */
+    methods: CharmClassMethod[];
+    subscribedEvents: CharmClassSubscribedEvent[];
+};
+
+export type CharmClassMethodKind = 'method' | 'getter' | 'setter';
+export interface CharmClassMethod {
+    range: Range;
+    /**
+     * Extended (greedy) range of the node that covers trailing whitespace or empty lines. 
+     */
+    extendedRange: Range;
+    kind: CharmClassMethodKind;
+    isStatic: boolean;
+    name: string;
+    positionalParameters: string[];
+};
+
+export interface CharmClassSubscribedEvent {
+    event: string;
+    handler: string;
+};
+
+export class CharmSourceCode {
+    constructor(readonly tree: CharmSourceCodeTree) { }
+
+    private _getEntryAt(relativePath: string): CharmSourceCodeTreeFileEntry | CharmSourceCodeTreeDirectoryEntry | undefined {
+        const components = relativePath.split('/');
+        let dir = this.tree;
+        for (let i = 0; i < components.length; i++) {
+            const current = dir[components[i]];
+            if (!current) {
+                return undefined;
+            }
+            const isLast = i === -1 + components.length;
+            if (isLast) {
+                return current;
+            }
+            if (current.kind !== 'directory') {
+                return undefined;
+            }
+            dir = current.data;
+        }
+        return undefined;
+    }
+
+    getFile(relativePath: string): CharmSourceCodeFile | undefined {
+        const entry = this._getEntryAt(relativePath);
+        return entry?.kind === 'file' ? entry.data : undefined;
+    }
+
+    updateFile(relativePath: string, file: CharmSourceCodeFile) {
+        const entry = this._getEntryAt(relativePath);
+        if (entry?.kind === 'file') {
+            entry.data = file;
+        }
+    }
+
+    isMain(relativePath: string): boolean {
+        // TODO: This may not be the exact criteria for the main charm file. 
+        return relativePath === CHARM_DIR_SRC_MAIN;
+    }
+}
+
+const NODE_TYPE_NAME = 'Name';
+const NODE_TYPE_CLASS_DEF = 'ClassDef';
+const NODE_TYPE_FUNCTION_DEF = 'FunctionDef';
+const NODE_TYPE_ARGUMENTS = 'arguments';
+const NODE_TYPE_ARG = 'arg';
+const NODE_TYPE_ATTRIBUTE = 'Attribute';
+const NODE_TYPE_IF = 'If';
+const NODE_TYPE_COMPARE = 'If';
+const NODE_TYPE_EQ = 'Eq';
+const NODE_TYPE_CONSTANT = 'Constant';
+const NODE_NAME_FUNCTION_INIT = '__init__';
+
+const CONSTANT_VALUE_PROPERTY = 'property';
+const CONSTANT_VALUE_NAME = '__name__';
+const CONSTANT_VALUE_MAIN = '__main__';
+const CONSTANT_VALUE_SETTER = 'setter';
+const CONSTANT_VALUE_STATIC_METHOD = 'staticmethod';
+
+export class CharmSourceCodeFileAnalyzer {
+    private _charmClasses: CharmClass[] | undefined | null = null;
+    private _mainCharmClass: CharmClass | undefined | null = null;
+    private readonly _lines: string[];
+
+    constructor(readonly content: string, readonly ast: any | undefined) {
+        this._lines = content.split('\n').map(x => x.endsWith('\r') ? x.substring(0, -1 + x.length) : x);
+    }
+
+    /**
+     * Resets analyses' results.
+     */
+    reset() {
+        this._charmClasses = null;
+        this._mainCharmClass = null;
+    }
+
+    /**
+     * Charm-based classes, ordered by their lexical position.
+     */
+    get charmClasses(): CharmClass[] | undefined {
+        if (this._charmClasses !== null) {
+            return this._charmClasses;
+        }
+        return this._charmClasses = this._getCharmClasses();
+    }
+
+    get mainCharmClass(): CharmClass | undefined {
+        if (this._mainCharmClass !== null) {
+            return this._mainCharmClass;
+        }
+        return this._mainCharmClass = this._getMainCharmClass();
+    }
+
+    private _getCharmClasses(): CharmClass[] | undefined {
+        const body = this.ast?.['body'];
+        if (!body || !Array.isArray(body)) {
+            return undefined;
+        }
+
+        const result: CharmClass[] = [];
+        for (let i = 0; i < body.length; i++) {
+            const cls = body[i];
+            if (cls['$type'] !== NODE_TYPE_CLASS_DEF) {
+                continue;
+            }
+
+            const bases = cls['bases'];
+            if (!bases || !Array.isArray(bases)) {
+                continue;
+            }
+
+            const baseClass = this._findAppropriateCharmBaseClass(bases);
+            if (!baseClass) {
+                continue;
+            }
+
+            const range = getNodeRange(cls);
+            const extendedRange = getNodeExtendedRange(cls, body[1 + i]);
+
+            result.push({
+                name: unquoteSymbol(cls['name'] as string),
+                base: baseClass,
+                methods: this._getClassMethods(cls, extendedRange) ?? [],
+                subscribedEvents: this._getClassSubscribedEvents(cls) ?? [],
+                range,
+                extendedRange,
+            });
+        }
+        return result;
+    }
+
+    private _findAppropriateCharmBaseClass(bases: any[]): string | undefined {
+        for (const b of bases) {
+            if (b['$type'] === NODE_TYPE_NAME && b['id']) {
+                // Cases: `class MyCharm(CharmBase)`
+                const id = unquoteSymbol(b['id']);
+                if (id === CHARM_SOURCE_CODE_CHARM_BASE_CLASS) {
+                    return id;
+                }
+            } else if (b['$type'] === NODE_TYPE_ATTRIBUTE && b['attr']) {
+                // Cases: `class MyCharm(ops.CharmBase)`
+                const id = unquoteSymbol(b['attr']);
+                if (id === CHARM_SOURCE_CODE_CHARM_BASE_CLASS) {
+                    return id;
+                }
+            }
+        }
+        return undefined;
+    }
+
+    private _getMainCharmClass(): CharmClass | undefined {
+        const classes = this.charmClasses;
+        if (!classes) {
+            return undefined;
+        }
+
+        const body = this.ast?.['body'];
+        if (!body || !Array.isArray(body)) {
+            return undefined;
+        }
+
+        const ifs = body.filter(x => x['$type'] === NODE_TYPE_IF).reverse();
+        for (const x of ifs) {
+            /*
+             * Looking for:
+             *
+             *     if __name__=="__main__":
+             */
+            const isEntrypointIf =
+                x['$type'] === NODE_TYPE_COMPARE
+                && x['test']?.['left']?.['$type'] === NODE_TYPE_NAME
+                && x['test']['left']['id'] && unquoteSymbol(x['test']['left']['id']) === CONSTANT_VALUE_NAME
+                && x['test']['ops'] && x['test']['ops'].length && x['test']['ops'][0]?.['$type'] === NODE_TYPE_EQ
+                && x['test']['comparators']?.[0]?.['$type'] === NODE_TYPE_CONSTANT
+                && x['test']['comparators'][0]['value']
+                && unquoteSymbol(x['test']['comparators'][0]['value']) === CONSTANT_VALUE_MAIN;
+            if (!isEntrypointIf) {
+                continue;
+            }
+
+            const nodeText = getTextOverRange(this._lines, getNodeRange(x));
+            const charmClass = classes.find(x => nodeText.match(new RegExp(`(^\\s*|\\W)${escapeRegex(x.name)}(\\W|\\s*$)`)));
+            if (charmClass) {
+                return charmClass;
+            }
+        }
+        return undefined;
+    }
+
+    private _getClassMethods(cls: any, clsExtendedRange: Range): CharmClassMethod[] | undefined {
+        const body = cls['body'];
+        if (!body || !Array.isArray(body)) {
+            return undefined;
+        }
+
+        const result: CharmClassMethod[] = [];
+        for (let i = 0; i < body.length; i++) {
+            const method = body[i];
+            if (method['$type'] !== NODE_TYPE_FUNCTION_DEF) {
+                continue;
+            }
+
+            const positionalParameters = (method['args']?.['args'] as Array<any> ?? []).filter(x => x['$type'] === NODE_TYPE_ARG && x['arg']).map(x => unquoteSymbol(x['arg']));
+            const range = getNodeRange(method);
+            const isLast = i === -1 + body.length;
+            const extendedRange = !isLast ? getNodeExtendedRange(method, body[1 + i]) : { start: range.start, end: clsExtendedRange.end };
+            result.push({
+                name: unquoteSymbol(method['name'] as string),
+                kind: this._getMethodKind(method),
+                isStatic: this._isClassMethodStatic(method),
+                range,
+                extendedRange,
+                positionalParameters,
+            });
+        }
+        result.sort((a, b) => comparePositions(a.range.start, b.range.start));
+        return result;
+    }
+
+    private _getMethodKind(node: any): CharmClassMethodKind {
+        const decorators = node['decorator_list'] as Array<any> ?? [];
+        for (const d of decorators) {
+            if (d['$type'] === NODE_TYPE_NAME && d['id']) {
+                const id = unquoteSymbol(d['id']);
+                if (id === CONSTANT_VALUE_PROPERTY) {
+                    /*
+                     * Property getters:
+                     *
+                     *    @property
+                     *    def my_property(self):
+                     */
+                    return 'getter';
+                }
+            } else if (d['$type'] === NODE_TYPE_ATTRIBUTE && d['attr']) {
+                const attr = unquoteSymbol(d['attr']);
+                if (attr === CONSTANT_VALUE_SETTER) {
+                    /*
+                     * Property setters:
+                     *
+                     *    @my_property.setter
+                     *    def my_property(self, value):
+                     */
+                    return 'setter';
+                }
+            }
+        }
+        return 'method';
+    }
+
+    private _isClassMethodStatic(node: any): boolean {
+        if (node['args']?.['$type'] === NODE_TYPE_ARGUMENTS
+            && Array.isArray(node['args']['args'])
+            && node['args']['args'].length === 0) {
+            /*
+             * Class method with no parameters:
+             *
+             *    def my_method():
+             */
+            return true;
+        }
+
+        const decorators = node['decorator_list'] as Array<any> ?? [];
+        for (const d of decorators) {
+            if (d['$type'] === NODE_TYPE_NAME && d['id']) {
+                const id = unquoteSymbol(d['id']);
+                if (id === CONSTANT_VALUE_STATIC_METHOD) {
+                    /*
+                     * Static method:
+                     *
+                     *    @staticmethod
+                     *    def my_method(param):
+                     */
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private _getClassSubscribedEvents(cls: any): CharmClassSubscribedEvent[] | undefined {
+        // const body = cls.body;
+        // if (!body || !Array.isArray(body)) {
+        //     return undefined;
+        // }
+
+        // const result: CharmClassMethod[] = [];
+        // const methods = body.filter(x => x.$type === NODE_TYPE_FUNCTION_DEF && unquoteSymbol(x.name) === NODE_NAME_FUNCTION_INIT);
+        // for (const method of methods) {
+        //     result.push({
+        //         name: unquoteSymbol(method.name as string),
+        //         range: getNodeRange(method),
+        //     });
+        // }
+        // return result;
+        return undefined;
+    }
+}
+
+export function getNodeRange(node: any): Range {
+    return {
+        start: { line: -1 + Number.parseInt(node.lineno), character: Number.parseInt(node.col_offset) },
+        end: { line: -1 + Number.parseInt(node.end_lineno), character: Number.parseInt(node.end_col_offset) },
+    };
+}
+
+export function getNodeExtendedRange(node: any, nextNode: any): Range {
+    const range = getNodeRange(node);
+    if (!nextNode) {
+        return getNodeRange(node);
+    }
+    const nextNodeRange = getNodeRange(nextNode);
+    const firstDecorator = nextNode['decorator_list']?.[0];
+    const nextNodeStart = firstDecorator ? getNodeRange(firstDecorator).start : nextNodeRange.start;
+    return nextNodeStart.line === range.end.line
+        ? { start: range.start, end: nextNodeStart }
+        : { start: range.start, end: { line: nextNodeStart.line, character: 0 } };
+}
+
+export function unquoteSymbol(s: string): string {
+    if (s.length < 2) {
+        return s;
+    }
+    const quote = s.charAt(0);
+    if (quote !== '"' && quote !== "'") {
+        return s;
+    }
+    if (s.charAt(-1 + s.length) !== quote) {
+        return s;
+    }
+    return s.substring(1, -1 + s.length);
+}
+
+const POSITION_ZERO = { line: 0, character: 0 };
+export function getTextOverRange(lines: string[], range: Range): string {
+    if (!lines.length) {
+        return '';
+    }
+
+    const start = comparePositions(range.start, POSITION_ZERO) === -1 ? POSITION_ZERO : range.start;
+    const max: Position = { line: -1 + lines.length, character: lines[-1 + lines.length].length };
+    const end = comparePositions(range.end, max) === 1 ? max : range.end;
+
+    if (comparePositions(start, end) === 1) {
+        return '';
+    }
+
+    const portion = lines.slice(start.line, 1 + end.line);
+    portion[-1 + portion.length] = portion[-1 + portion.length].substring(0, end.character);
+    portion[0] = portion[0].substring(start.character);
+    return portion.join('\n');
+}
+
+const REGEXP_SPECIAL_CHARS = /[/\-\\^$*+?.()|[\]{}]/g;
+export function escapeRegex(s: string): string {
+    return s.replace(REGEXP_SPECIAL_CHARS, '\\$&');
+}
+
+export type DeepSearchCallbackNode = { kind: 'object'; value: object } | { kind: 'array'; value: Array<any> };
+export type DeepSearchCallback = (key: any, node: DeepSearchCallbackNode) => boolean | DeepSearchCallback;
+
+export function deepSearch(node: any, callback: DeepSearchCallback) {
+    _deepSearch([node], callback);
+    function _deepSearch(node: any, callback: DeepSearchCallback) {
+        if (typeof node !== 'object') {
+            return;
+        }
+        if (Array.isArray(node)) {
+            for (let i = 0; i < node.length; i++) {
+                const element = node[i];
+                if (typeof element !== 'object') {
+                    continue;
+                }
+                const arg: DeepSearchCallbackNode = Array.isArray(element) ? { kind: 'array', value: element } : { kind: 'object', value: element };
+                const dig = callback(i, arg);
+                if (dig === false) {
+                    continue;
+                }
+                const nextCallback = dig === true ? callback : dig;
+                _deepSearch(element, nextCallback);
+            }
+        } else {
+            for (const key in node) {
+                const value = node[key];
+                if (typeof value !== 'object') {
+                    continue;
+                }
+                const arg: DeepSearchCallbackNode = Array.isArray(value) ? { kind: 'array', value: value } : { kind: 'object', value: value };
+                const dig = callback(key, arg);
+                if (dig === false) {
+                    continue;
+                }
+                const nextCallback = dig === true ? callback : dig;
+                _deepSearch(value, nextCallback);
+            }
+        }
+    }
+}
+
+export function deepSearchForPattern(node: any, pattern: any): any | undefined {
+
+}
 
 const CHARM_LIFECYCLE_EVENTS: CharmEvent[] = [
     Object.freeze({ name: 'start', symbol: 'start', preferredHandlerSymbol: '_on_start', description: 'Fired as soon as the unit initialization is complete.' }),
@@ -53,19 +563,19 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
     ];
 };
 
-function _emptyActions() {
+export function emptyActions() {
     return { actions: [], problems: [] };
 }
 
-function _emptyConfig() {
+export function emptyConfig() {
     return { parameters: [], problems: [] };
 }
 
 export class Charm {
-    private _config: CharmConfig = _emptyConfig();
+    private _config: CharmConfig = emptyConfig();
     private _configMap = new Map<string, CharmConfigParameter>();
 
-    private _actions: CharmActions = _emptyActions();
+    private _actions: CharmActions = emptyActions();
     private _eventSymbolMap = new Map<string, CharmEvent>();
 
     private _events: CharmEvent[] = [];
@@ -93,13 +603,13 @@ export class Charm {
         return this._src;
     }
 
-    async updateActions(content: string) {
-        this._actions = content ? parseCharmActionsYAML(content) : _emptyActions();
+    async updateActions(actions: CharmActions) {
+        this._actions = actions;
         this._repopulateEvents();
     }
 
-    async updateConfig(content: string) {
-        this._config = content ? parseCharmConfigYAML(content) : _emptyConfig();
+    async updateConfig(config: CharmConfig) {
+        this._config = config;
         this._configMap.clear();
         for (const p of this._config.parameters) {
             this._configMap.set(p.name, p);

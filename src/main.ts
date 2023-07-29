@@ -10,10 +10,11 @@ import { DocumentWatcher } from './documentWatcher';
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
 import { PythonExtension } from './include/ms-python.python';
 import { ExtensionAPI } from './include/redhat.vscode-yaml';
-import { EXTENSION_SCHEMA_DATA_DIR } from './model/constant';
 import { CharmRegistry } from './registry';
 import { registerSchemas } from './schema';
 import path = require('path');
+
+const EXTENSION_SCHEMA_DATA_DIR = ['schema', 'data']; // "[ROOT]/schema/data"
 
 export async function activate(context: ExtensionContext) {
     const python = extensions.getExtension('ms-python.python')?.exports as PythonExtension;

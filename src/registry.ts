@@ -1,6 +1,6 @@
 import { Disposable, EventEmitter, OutputChannel, Uri } from 'vscode';
 import { ExtensionCharm } from './charm';
-import * as constant from './model/constant';
+import * as constant from './model/common';
 import { findCharms } from './workspace';
 
 export class CharmRegistry implements Disposable {

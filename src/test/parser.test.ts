@@ -1,25 +1,90 @@
 import { assert } from "chai";
-import * as fs from 'fs/promises';
-import { describe, suite, test } from "mocha";
+import { suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { parseCharmConfigYAML } from "../config";
-import { CharmConfigParameterProblem } from "../type";
+import { CharmActionProblem, CharmConfigParameterProblem } from "../model/charm";
+import { parseCharmActionsYAML, parseCharmConfigYAML, toValidSymbol } from "../parser";
 import path = require("path");
+import { readFileSync } from "fs";
 
-suite(parseCharmConfigYAML.name, async function () {
-    async function parseConfig(relativePath: string): Promise<ReturnType<typeof parseCharmConfigYAML>> {
-        return parseCharmConfigYAML(new TextDecoder().decode(await fs.readFile(path.join(__dirname, relativePath))));
+test(toValidSymbol.name, function () {
+    assert.equal(toValidSymbol(''), '');
+    assert.equal(toValidSymbol('abc'), 'abc');
+    assert.equal(toValidSymbol('AbC'), 'AbC');
+    assert.equal(toValidSymbol('a-b'), 'a_b');
+    assert.equal(toValidSymbol('-a-b'), '_a_b');
+});
+
+suite(parseCharmActionsYAML.name, function () {
+    const RESOURCE_ACTIONS_PATH = '../../resource/test/actions.yaml';
+    function parseActions(resource: string): ReturnType<typeof parseCharmActionsYAML> {
+        return parseCharmActionsYAML(new TextDecoder().decode(readFileSync(path.join(__dirname, RESOURCE_ACTIONS_PATH, resource))));
     }
 
-    test('valid', async function () {
-        const { parameters, problems } = await parseConfig('../../../resource/test/config.yaml/valid.config.yaml');
+    test('valid', function () {
+        const { actions, problems } = parseActions('valid.actions.yaml');
+        assert.isEmpty(problems, 'expected no file-scope problem');
+        assert.lengthOf(actions, 3);
+        assert.isFalse(actions.some(x => x.problems.length > 0), 'problem in some parameters');
+    });
+
+    test('invalid', function () {
+        const { actions, problems } = parseActions('invalid.actions.yaml');
+        assert.lengthOf(problems, 0, 'expected no file-scope problem');
+        assert.lengthOf(actions, 7);
+
+        const allProblems = actions.map(x => x.problems).flat();
+        assert.includeDeepMembers(allProblems, [
+            { action: 'action-array-empty', message: 'Action entry `action-array-empty` must be an object.' },
+            { action: 'action-array', message: 'Action entry `action-array` must be an object.' },
+            { action: 'action-string', message: 'Action entry `action-string` must be an object.' },
+            { action: 'action-number', message: 'Action entry `action-number` must be an object.' },
+            { action: 'action-invalid-description-array-empty', message: 'Description for action `action-invalid-description-array-empty` should be a string.' },
+            { action: 'action-invalid-description-array', message: 'Description for action `action-invalid-description-array` should be a string.' },
+            { action: 'action-invalid-description-number', message: 'Description for action `action-invalid-description-number` should be a string.' },
+        ]);
+    });
+
+    suite('invalid yaml structure', function () {
+        const tests: { name: string; content: string; expectedProblems: CharmActionProblem[] }[] = [
+            {
+                name: 'invalid yaml',
+                content: '123',
+                expectedProblems: [{ message: "Invalid YAML file." }],
+            },
+            {
+                name: 'empty',
+                content: '',
+                expectedProblems: [{ message: 'Invalid YAML file.' }],
+            },
+        ];
+
+        for (const t of tests) {
+            const tt = t;
+            test(tt.name, function () {
+                const { actions, problems } = parseCharmActionsYAML(tt.content);
+                const allProblems = problems.concat(actions.map(x => x.problems).flat());
+                assert.includeDeepMembers(allProblems, tt.expectedProblems);
+            });
+        }
+    });
+});
+
+
+suite(parseCharmConfigYAML.name, function () {
+    const RESOURCE_CONFIG_PATH = '../../resource/test/config.yaml';
+    function parseConfig(resource: string): ReturnType<typeof parseCharmConfigYAML> {
+        return parseCharmConfigYAML(new TextDecoder().decode(readFileSync(path.join(__dirname, RESOURCE_CONFIG_PATH, resource))));
+    }
+
+    test('valid', function () {
+        const { parameters, problems } = parseConfig('valid.config.yaml');
         assert.isEmpty(problems, 'expected no file-scope problem');
         assert.lengthOf(parameters, 16);
         assert.isFalse(parameters.some(x => x.problems.length > 0), 'problem in some parameters');
     });
 
-    test('type/default mismatch', async function () {
-        const { parameters, problems } = await parseConfig('../../../resource/test/config.yaml/type-default-mismatch.config.yaml');
+    test('type/default mismatch', function () {
+        const { parameters, problems } = parseConfig('type-default-mismatch.config.yaml');
         assert.lengthOf(problems, 0, 'expected no file-scope problem');
         assert.lengthOf(parameters, 11);
 
@@ -39,8 +104,8 @@ suite(parseCharmConfigYAML.name, async function () {
         ]);
     });
 
-    test('invalid parameter', async function () {
-        const { parameters, problems } = await parseConfig('../../../resource/test/config.yaml/invalid.config.yaml');
+    test('invalid parameter', function () {
+        const { parameters, problems } = parseConfig('invalid.config.yaml');
         assert.lengthOf(problems, 0, 'expected no file-scope problem');
         assert.lengthOf(parameters, 12);
 

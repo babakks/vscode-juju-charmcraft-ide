@@ -19,7 +19,7 @@
         "onStartupFinished"
     ],
     "icon": "image/juju-128x128.png",
-    "main": "./out/extension.js",
+    "main": "./out/main.js",
     "extensionDependencies": [
         "redhat.vscode-yaml",
         "ms-python.python"
@@ -53,12 +53,13 @@
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
+        "clean": "rm -rf out",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
         "test": "node ./out/test/runTest.js",
-        "test-local": "npm run compile && mocha ./out/**/*.test.js --ignore ./out/**/*.vscode.test.js --ui tdd"
+        "test-local": "npm run clean && npm run compile && mocha 'out/**/*.test.js' --ignore 'out/**/*.vscode.test.js' --ui tdd"
     },
     "devDependencies": {
         "@types/chai": "^4.3.5",

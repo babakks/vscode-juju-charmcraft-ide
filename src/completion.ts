@@ -9,10 +9,10 @@ import {
     TextDocument,
     TextEdit
 } from 'vscode';
-import { CharmConfigParameter } from './model/type';
-import { isInRange } from './model/util';
 import { CharmRegistry } from './registry';
 import { getConfigParamDocumentation, getEventDocumentation } from './util';
+import { CharmConfigParameter } from './model/charm';
+import { isInRange } from './model/common';
 
 export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['"', "'"];
 

@@ -1,7 +1,60 @@
 import * as yaml from 'js-yaml';
-import { CharmConfig, CharmConfigParameter, CharmConfigParameterProblem, isConfigParameterType } from './type';
+import {
+    CharmAction,
+    CharmActionProblem,
+    CharmActions,
+    CharmConfig,
+    CharmConfigParameter,
+    CharmConfigParameterProblem,
+    isConfigParameterType
+} from './model/charm';
 
-const _PROBLEMS = {
+const _ACTION_PROBLEMS = {
+    invalidYAMLFile: { message: "Invalid YAML file." },
+    entryMustBeObject: (key: string) => ({ action: key, message: `Action entry \`${key}\` must be an object.` }),
+    entryDescriptionMustBeValid: (key: string) => ({ action: key, message: `Description for action \`${key}\` should be a string.` }),
+} satisfies Record<string, CharmActionProblem | ((...args: any[]) => CharmActionProblem)>;
+
+export function parseCharmActionsYAML(content: string): CharmActions {
+    const problems: CharmActionProblem[] = [];
+    const doc = yaml.load(content);
+    if (!doc || typeof doc !== 'object') {
+        problems.push(_ACTION_PROBLEMS.invalidYAMLFile);
+        return { actions: [], problems };
+    }
+
+    const actions: CharmAction[] = [];
+    for (const [name, value] of Object.entries(doc)) {
+        const entry: CharmAction = {
+            name,
+            symbol: toValidSymbol(name),
+            problems: [],
+        };
+        actions.push(entry);
+
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            entry.problems.push(_ACTION_PROBLEMS.entryMustBeObject(name));
+            continue;
+        }
+
+        if ('description' in value) {
+            if (typeof value.description !== 'string') {
+                entry.problems.push(_ACTION_PROBLEMS.entryDescriptionMustBeValid(name));
+            } else {
+                entry.description = value.description;
+            }
+        }
+    }
+
+    return { actions, problems };
+}
+
+export function toValidSymbol(value: string): string {
+    return value.replace(/-/g, '_');
+}
+
+
+const _CONFIG_PROBLEMS = {
     invalidYAMLFile: { message: "Invalid YAML file." },
     optionsFieldMissing: { message: "Missing `options` field." },
     optionsFieldMustBeObject: { message: "The `options` field must be an object." },
@@ -21,15 +74,15 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
     const problems: CharmConfigParameterProblem[] = [];
     const doc = yaml.load(content);
     if (!doc || typeof doc !== 'object') {
-        problems.push(_PROBLEMS.invalidYAMLFile);
+        problems.push(_CONFIG_PROBLEMS.invalidYAMLFile);
         return { parameters: [], problems };
     }
     if (!('options' in doc)) {
-        problems.push(_PROBLEMS.optionsFieldMissing);
+        problems.push(_CONFIG_PROBLEMS.optionsFieldMissing);
         return { parameters: [], problems };
     }
     if (!doc.options || typeof doc.options !== 'object' || Array.isArray(doc.options)) {
-        problems.push(_PROBLEMS.optionsFieldMustBeObject);
+        problems.push(_CONFIG_PROBLEMS.optionsFieldMustBeObject);
         return { parameters: [], problems };
     }
 
@@ -42,14 +95,14 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
         parameters.push(entry);
 
         if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            entry.problems.push(_PROBLEMS.paramEntryMustBeObject(name));
+            entry.problems.push(_CONFIG_PROBLEMS.paramEntryMustBeObject(name));
             continue;
         }
 
         if (!('type' in value)) {
-            entry.problems.push(_PROBLEMS.paramEntryMustIncludeType(name));
+            entry.problems.push(_CONFIG_PROBLEMS.paramEntryMustIncludeType(name));
         } else if (!value.type || typeof value.type !== 'string' || !isConfigParameterType(value.type)) {
-            entry.problems.push(_PROBLEMS.paramEntryTypeMustBeValid(name));
+            entry.problems.push(_CONFIG_PROBLEMS.paramEntryTypeMustBeValid(name));
         } else {
             entry.type = value.type;
         }
@@ -60,16 +113,16 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
                 let problem: CharmConfigParameterProblem | undefined;
 
                 if (entry.type === 'string' && typeof defaultValue !== 'string') {
-                    problem = _PROBLEMS.paramEntryDefaultMustMatchTypeString(name);
+                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeString(name);
                 }
                 else if (entry.type === 'boolean' && typeof defaultValue !== 'boolean') {
-                    problem = _PROBLEMS.paramEntryDefaultMustMatchTypeBoolean(name);
+                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeBoolean(name);
                 }
                 else if (entry.type === 'int' && (typeof defaultValue !== 'number' || !Number.isInteger(defaultValue))) {
-                    problem = _PROBLEMS.paramEntryDefaultMustMatchTypeInteger(name);
+                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeInteger(name);
                 }
                 else if (entry.type === 'float' && typeof defaultValue !== 'number') {
-                    problem = _PROBLEMS.paramEntryDefaultMustMatchTypeFloat(name);
+                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeFloat(name);
                 }
 
                 if (problem) {
@@ -80,7 +133,7 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
             } else {
                 // There's no valid type for the parameter, so we should check if the default value is not essentially invalid.
                 if (!(typeof defaultValue === 'string' || typeof defaultValue === 'boolean' || typeof defaultValue === 'number')) {
-                    entry.problems.push(_PROBLEMS.paramEntryDefaultMustBeValid(name));
+                    entry.problems.push(_CONFIG_PROBLEMS.paramEntryDefaultMustBeValid(name));
                 } else {
                     entry.default = defaultValue;
                 }
@@ -89,7 +142,7 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
 
         if ('description' in value) {
             if (typeof value.description !== 'string') {
-                entry.problems.push(_PROBLEMS.paramEntryDescriptionMustBeValid(name));
+                entry.problems.push(_CONFIG_PROBLEMS.paramEntryDescriptionMustBeValid(name));
             } else {
                 entry.description = value.description;
             }

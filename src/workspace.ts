@@ -3,8 +3,8 @@ import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
-import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/constant';
-import { CharmSourceCodeFile, CharmSourceCodeTree, DefaultCharmSourceCodeFile } from './model/type';
+import { CharmSourceCodeFile, CharmSourceCodeTree } from './model/charm';
+import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
 import path = require('path');
 
 const GLOB_METADATA = `**/${CHARM_FILE_METADATA_YAML}}`;
@@ -59,7 +59,7 @@ export async function createCharmSourceCodeFile(uri: vscode.Uri): Promise<CharmS
 
 export async function createCharmSourceCodeFileFromContent(content: string): Promise<CharmSourceCodeFile> {
     const ast = await getPythonAST(content)
-    return new DefaultCharmSourceCodeFile(content, ast, ast !== undefined);
+    return new CharmSourceCodeFile(content, ast, ast !== undefined);
 }
 
 async function getPythonAST(content: string): Promise<any | undefined> {
