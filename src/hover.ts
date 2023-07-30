@@ -7,17 +7,17 @@ import {
     Range,
     TextDocument
 } from 'vscode';
-import { CharmRegistry } from './registry';
+import { Registry } from './registry';
 import { getConfigParamDocumentation, getEventDocumentation } from './util';
 
 const REGEX_SELF_CONFIG_BRACKET = /self(?:\.model)?\.config\[(['"])(?<name>.*?)\1/;
 const REGEX_SELF_CONFIG_GET_SET = /self(?:\.model)?\.config\.(?:get|set)\((['"])(?<name>.*?)\1/;
 export class CharmConfigHoverProvider implements HoverProvider {
-    constructor(readonly registry: CharmRegistry) { }
+    constructor(readonly registry: Registry) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const located = this.registry.getCharmBySourceCodeFile(document.uri);
-        if (!located || token.isCancellationRequested) {
+        const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
+        if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
 
@@ -35,7 +35,7 @@ export class CharmConfigHoverProvider implements HoverProvider {
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
-        const parameter = located.charm.model.getConfigParameterByName(name);
+        const parameter = workspaceCharm.model.getConfigParameterByName(name);
         if (!parameter) {
             return;
         }
@@ -46,11 +46,11 @@ export class CharmConfigHoverProvider implements HoverProvider {
 
 const REGEX_SELF_ON = /self\.on\.(?<symbol>\w*)/;
 export class CharmEventHoverProvider implements HoverProvider {
-    constructor(readonly registry: CharmRegistry) { }
+    constructor(readonly registry: Registry) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const located = this.registry.getCharmBySourceCodeFile(document.uri);
-        if (!located || token.isCancellationRequested) {
+        const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
+        if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
 
@@ -62,7 +62,7 @@ export class CharmEventHoverProvider implements HoverProvider {
         const matchText = document.getText(new Range(match.start, match.end));
         const symbol = matchText.match(REGEX_SELF_ON)!.groups!['symbol'];
 
-        const event = located.charm.model.getEventBySymbol(symbol);
+        const event = workspaceCharm.model.getEventBySymbol(symbol);
         if (!event) {
             return;
         }

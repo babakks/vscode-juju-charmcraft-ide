@@ -8,6 +8,10 @@ import {
     CharmConfigParameterProblem,
     isConfigParameterType
 } from './model/charm';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import path = require('path');
+import { spawn } from 'child_process';
 
 const _ACTION_PROBLEMS = {
     invalidYAMLFile: { message: "Invalid YAML file." },
@@ -150,4 +154,29 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
     }
 
     return { parameters, problems };
+}
+
+export async function getPythonAST(content: string): Promise<any | undefined> {
+    const tmp = await mkdtemp(path.join(tmpdir(), 'juju-charms-ide'));
+    try {
+        const tmpfile = path.join(tmp, 'temp.py');
+        const scriptPath = path.join(__dirname, '../resource/ast/python-ast-to-json.py');
+        await writeFile(tmpfile, content);
+
+        const [exitCode, ast] = await new Promise<[number, string]>(function (resolve, reject) {
+            let data = '';
+            const process = spawn('python3', [scriptPath, tmpfile]);
+            process.on('close', function (code) {
+                resolve([code || 0, data]);
+            });
+            process.stdout.on('data', chunk => {
+                data += chunk.toString();
+            });
+        });
+        return exitCode === 0 ? JSON.parse(ast) : undefined;
+    } catch {
+        return undefined;
+    } finally {
+        await rm(tmp, { recursive: true, force: true });
+    }
 }

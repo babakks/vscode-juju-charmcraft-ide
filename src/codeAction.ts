@@ -8,26 +8,26 @@ import {
     Selection,
     TextDocument
 } from 'vscode';
-import { CharmRegistry } from './registry';
+import { Registry } from './registry';
 
 export class EventHandlerCodeActionProvider implements CodeActionProvider {
-    constructor(readonly registry: CharmRegistry) { }
+    constructor(readonly registry: Registry) { }
 
     async provideCodeActions(document: TextDocument, range: Range | Selection, context: CodeActionContext, token: CancellationToken): Promise<(CodeAction | Command)[] | undefined> {
         if (!(range instanceof Selection)) {
             return;
         }
 
-        const located = this.registry.getCharmBySourceCodeFile(document.uri);
-        if (!located) {
+        const { workspaceCharm, relativeSourcePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        if (!workspaceCharm) {
             return;
         }
 
-        if (!located.charm.model.src.isMain(located.relativeSourcePath)) {
+        if (!workspaceCharm.model.src.isMain(relativeSourcePath)) {
             return;
         }
 
-        const file = await located.charm.getLatestCachedLiveSourceCodeFile(document.uri);
+        const file = workspaceCharm.getLatestCachedLiveSourceCodeFile(document.uri);
         if (!file) {
             return;
         }

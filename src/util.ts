@@ -1,4 +1,5 @@
-import { MarkdownString } from 'vscode';
+import { TextDecoder } from 'util';
+import { MarkdownString, Uri, workspace } from 'vscode';
 import { CharmConfigParameter, CharmEvent } from './model/charm';
 
 const SEPARATOR = '\n<hr/>\n\n';
@@ -36,4 +37,12 @@ export function getEventDocumentation(event: CharmEvent, includeTitle?: boolean)
         result.appendMarkdown(event.description);
     }
     return result;
+}
+
+export async function tryReadWorkspaceFileAsText(uri: Uri): Promise<undefined | string> {
+    try {
+        return new TextDecoder().decode(await workspace.fs.readFile(uri));
+    } catch {
+        return undefined;
+    }
 }

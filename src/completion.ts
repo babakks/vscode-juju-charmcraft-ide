@@ -9,7 +9,7 @@ import {
     TextDocument,
     TextEdit
 } from 'vscode';
-import { CharmRegistry } from './registry';
+import { Registry } from './registry';
 import { getConfigParamDocumentation, getEventDocumentation } from './util';
 import { CharmConfigParameter } from './model/charm';
 import { isInRange } from './model/common';
@@ -20,19 +20,19 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     private readonly _regexSelfConfigBracket = /self(?:\.model)?\.config\[(?<quote>["'])$/;
     private readonly _regexSelfConfigGetSet = /self(?:\.model)?\.config\.(?<method>get|set)\((?<quote>["'])$/;
 
-    constructor(readonly registry: CharmRegistry) { }
+    constructor(readonly registry: Registry) { }
 
     async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): Promise<CompletionItem[] | CompletionList<CompletionItem> | undefined> {
-        const located = this.registry.getCharmBySourceCodeFile(document.uri);
-        if (!located || token.isCancellationRequested) {
+        const { workspaceCharm, relativeSourcePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
 
-        if (!located.charm.model.src.isMain(located.relativeSourcePath)) {
+        if (!workspaceCharm.model.src.isMain(relativeSourcePath)) {
             return;
         }
 
-        const file = located.charm.getLatestCachedLiveSourceCodeFile(document.uri);
+        const file = workspaceCharm.getLatestCachedLiveSourceCodeFile(document.uri);
         if (!file) {
             return;
         }
@@ -70,7 +70,7 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         const needsCloseQuote = openQuote && !trailingText.startsWith(openQuote);
 
         const result: CompletionItem[] = [];
-        for (const p of located.charm.model.config.parameters) {
+        for (const p of workspaceCharm.model.config.parameters) {
             const completion: CompletionItem = {
                 label: p.name,
                 sortText: "0",
@@ -122,19 +122,19 @@ const SELF_FRAMEWORK_OBSERVE_SELF_ON = 'self.framework.observe(self.on.';
 export const CHARM_EVENT_COMPLETION_TRIGGER_CHARS = ['.', '('];
 
 export class CharmEventCompletionProvider implements CompletionItemProvider<CompletionItem> {
-    constructor(readonly registry: CharmRegistry) { }
+    constructor(readonly registry: Registry) { }
 
     provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): ProviderResult<CompletionItem[] | CompletionList<CompletionItem>> {
-        const located = this.registry.getCharmBySourceCodeFile(document.uri);
-        if (!located || token.isCancellationRequested) {
+        const { workspaceCharm, relativeSourcePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
 
-        if (!located.charm.model.src.isMain(located.relativeSourcePath)) {
+        if (!workspaceCharm.model.src.isMain(relativeSourcePath)) {
             return;
         }
 
-        const file = located.charm.getLatestCachedLiveSourceCodeFile(document.uri);
+        const file = workspaceCharm.getLatestCachedLiveSourceCodeFile(document.uri);
         if (!file) {
             return;
         }
@@ -166,7 +166,7 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
         const isNextCharClosedBracket = (isFullEventSubscription || isPartialEventSubscription) && remainingLineText.startsWith(')');
 
         const result: CompletionItem[] = [];
-        for (const e of located.charm.model.events) {
+        for (const e of workspaceCharm.model.events) {
             const item: CompletionItem = {
                 label: e.symbol,
                 insertText: e.symbol,

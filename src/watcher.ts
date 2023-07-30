@@ -1,7 +1,7 @@
 import { clearInterval, setInterval } from 'timers';
 import * as vscode from 'vscode';
 import { Disposable, Uri } from 'vscode';
-import { CharmRegistry } from './registry';
+import { Registry } from './registry';
 
 const DIRTY_DOCUMENT_REFRESH_INTERVAL = 1500; // (ms)
 
@@ -15,7 +15,7 @@ export class DocumentWatcher implements Disposable {
     private readonly _dirties = new Map<string, Uri>();
     private _liveContentRefreshInterval: NodeJS.Timeout | undefined;
 
-    constructor(readonly registry: CharmRegistry) { }
+    constructor(readonly registry: Registry) { }
 
     dispose() {
         this.disable();
@@ -54,7 +54,7 @@ export class DocumentWatcher implements Disposable {
         this._dirties.clear();
         const dirtyKeys = Array.from(dirties.keys());
 
-        for (const charm of this.registry.getCharms()) {
+        for (const charm of this.registry.getWorkspaceCharms()) {
             const home = charm.home.path + '/';
             const keys = dirtyKeys.filter(x => x.startsWith(home));
             for (const k of keys) {

@@ -10,7 +10,7 @@ import { DocumentWatcher } from './documentWatcher';
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
 import { PythonExtension } from './include/ms-python.python';
 import { ExtensionAPI } from './include/redhat.vscode-yaml';
-import { CharmRegistry } from './registry';
+import { Registry } from './registry';
 import { registerSchemas } from './schema';
 import path = require('path');
 
@@ -31,7 +31,7 @@ export async function activate(context: ExtensionContext) {
     const output = window.createOutputChannel('Charms IDE');
     context.subscriptions.push(output);
 
-    const registry = new CharmRegistry(output);
+    const registry = new Registry(output);
     context.subscriptions.push(registry);
     await registry.refresh();
 
@@ -48,7 +48,7 @@ export async function activate(context: ExtensionContext) {
 
 export function deactivate() { }
 
-function registerCompletionProviders(registry: CharmRegistry): Disposable[] {
+function registerCompletionProviders(registry: Registry): Disposable[] {
     return [
         languages.registerCompletionItemProvider(
             { scheme: 'file', language: 'python' },
@@ -63,7 +63,7 @@ function registerCompletionProviders(registry: CharmRegistry): Disposable[] {
     ];
 }
 
-function registerHoverProviders(registry: CharmRegistry): Disposable[] {
+function registerHoverProviders(registry: Registry): Disposable[] {
     return [
         languages.registerHoverProvider(
             { scheme: 'file', language: 'python' },
@@ -76,7 +76,7 @@ function registerHoverProviders(registry: CharmRegistry): Disposable[] {
     ];
 }
 
-function registerCodeActionProviders(registry: CharmRegistry): Disposable[] {
+function registerCodeActionProviders(registry: Registry): Disposable[] {
     return [
         languages.registerCodeActionsProvider(
             { scheme: 'file', language: 'python' },
