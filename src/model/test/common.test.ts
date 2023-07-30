@@ -1,6 +1,6 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
-import { Position, Range, comparePositions, isInRange } from "../common";
+import { Position, Range, comparePositions, isInRange, toValidSymbol } from "../common";
 
 suite(comparePositions.name, function () {
     type TestCase = {
@@ -103,6 +103,47 @@ suite(isInRange.name, function () {
         const tt = t;
         test(tt.name, function () {
             assert.equal(isInRange(tt.position, tt.range), tt.expected);
+        });
+    }
+});
+
+suite(toValidSymbol.name, function () {
+    type TestCase = {
+        name: string;
+        arg: string;
+        expected: string;
+    };
+    const tests: TestCase[] = [
+        {
+            name: 'empty',
+            arg: '',
+            expected: '',
+        }, {
+            name: 'small caps',
+            arg: 'abc',
+            expected: 'abc',
+        }, {
+            name: 'mixed cases',
+            arg: 'AbC',
+            expected: 'AbC',
+        }, {
+            name: 'with dash',
+            arg: 'a-b',
+            expected: 'a_b',
+        }, {
+            name: 'with leading dash',
+            arg: '-a-b',
+            expected: '_a_b',
+        }, {
+            name: 'with trailing dash',
+            arg: 'a-b-',
+            expected: 'a_b_',
+        },
+    ];
+    for (const t of tests) {
+        const tt = t;
+        test(tt.name, function () {
+            assert.equal(toValidSymbol(tt.arg), tt.expected);
         });
     }
 });

@@ -49,5 +49,4 @@ export class EventHandlerCodeActionProvider implements CodeActionProvider {
     resolveCodeAction?(codeAction: CodeAction, token: CancellationToken): ProviderResult<CodeAction> {
         throw new Error('Method not implemented.');
     }
-
 }

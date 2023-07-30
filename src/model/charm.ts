@@ -3,7 +3,8 @@ import {
     CHARM_SOURCE_CODE_CHARM_BASE_CLASS,
     Position,
     Range,
-    comparePositions
+    comparePositions,
+    toValidSymbol
 } from "./common";
 
 export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
@@ -27,6 +28,120 @@ export interface CharmConfigParameterProblem {
 export interface CharmConfig {
     parameters: CharmConfigParameter[];
     problems: CharmConfigParameterProblem[];
+}
+
+export type CharmEndpointScope = 'global' | 'container';
+
+export interface CharmEndpoint {
+    name: string;
+    interface: string;
+    limit?: number;
+    optional?: boolean;
+    scope?: CharmEndpointScope;
+    problems: CharmMetadataProblem[];
+}
+
+export type CharmResourceType = 'file' | 'oci-image' | 'unknown';
+
+export interface CharmResource {
+    name: string;
+    type: CharmResourceType;
+    description?: string;
+    filename?: string;
+    problems: CharmMetadataProblem[];
+}
+
+
+export type CharmDeviceType = 'gpu' | 'nvidia.com/gpu' | 'amd.com/gpu' | 'unknown';
+export interface CharmDevice {
+    name: string;
+    type: CharmDeviceType;
+    description?: string;
+    countMin?: number;
+    countMax?: number;
+    problems: CharmMetadataProblem[];
+}
+
+export type CharmStorageType = 'filesystem' | 'block' | 'unknown';
+
+export type CharmStorageProperty = 'transient' | 'unknown';
+
+export interface CharmStorage {
+    name: string;
+    type: CharmStorageType;
+    description?: string;
+    location?: string;
+    shared?: boolean;
+    readOnly?: boolean;
+    multiple?: string;
+    minimumSize?: string;
+    properties?: CharmStorageProperty[];
+    problems: CharmMetadataProblem[];
+}
+
+export interface CharmExtraBinding {
+    name: string;
+    problems: CharmMetadataProblem[];
+}
+
+export interface CharmContainerBase {
+    name: string;
+    channel: string;
+    architectures: string[];
+    problems: CharmMetadataProblem[];
+}
+
+export interface CharmContainerMount {
+    storage: string;
+    location: string;
+    problems: CharmMetadataProblem[];
+}
+
+export interface CharmContainer {
+    name: string;
+    resource?: string;
+    bases?: CharmContainerBase[];
+    mounts?: CharmContainerMount[];
+    problems: CharmMetadataProblem[];
+}
+
+export interface CharmAssumptions {
+    singles?: string[];
+    allOf?: string[];
+    anyOf?: string[];
+    problems: CharmMetadataProblem[];
+}
+
+export interface CharmMetadataProblem {
+    message: string;
+    key?: string;
+    index?: number;
+}
+
+export interface CharmMetadata {
+    name: string;
+    displayName: string
+    description: string
+    summary: string;
+    source?: string | string[];
+    issues?: string | string[];
+    website?: string | string[];
+    maintainers?: string[];
+    tags?: string[];
+    terms?: string[];
+    docs?: string;
+    subordinate?: boolean;
+    requires?: CharmEndpoint[];
+    provides?: CharmEndpoint[];
+    peer?: CharmEndpoint[];
+    resources?: CharmResource[];
+    devices?: CharmDevice[];
+    storage?: CharmStorage[];
+    extraBindings?: CharmExtraBinding[];
+    containers?: CharmContainer[];
+    assumes?: CharmAssumptions;
+    customFields: { [key: string]: any };
+    problems: CharmMetadataProblem[];
 }
 
 export interface CharmEvent {
@@ -513,35 +628,50 @@ export function deepSearchForPattern(node: any, pattern: any): any | undefined {
 
 }
 
+function withReference(text: string, ...urls: string[]): string {
+    return `${text}\n\n*Reference(s):*\n${urls.map(x => `  - ${x}`).join('\n')}`;
+}
+
 const CHARM_LIFECYCLE_EVENTS: CharmEvent[] = [
-    Object.freeze({ name: 'start', symbol: 'start', preferredHandlerSymbol: '_on_start', description: 'Fired as soon as the unit initialization is complete.' }),
-    Object.freeze({ name: 'config-changed', symbol: 'config_changed', preferredHandlerSymbol: '_on_config_changed', description: 'Fired whenever the cloud admin changes the charm configuration *.' }),
-    Object.freeze({ name: 'install', symbol: 'install', preferredHandlerSymbol: '_on_install', description: 'Fired when juju is done provisioning the unit.' }),
-    Object.freeze({ name: 'leader-elected', symbol: 'leader_elected', preferredHandlerSymbol: '_on_leader_elected', description: 'Fired on the new leader when juju elects one.' }),
-    Object.freeze({ name: 'leader-settings-changed', symbol: 'leader_settings_changed', preferredHandlerSymbol: '_on_leader_settings_changed', description: 'Fired on all follower units when a new leader is chosen.' }),
-    Object.freeze({ name: 'pre-series-upgrade', symbol: 'pre_series_upgrade', preferredHandlerSymbol: '_on_pre_series_upgrade', description: 'Fired before the series upgrade takes place.' }),
-    Object.freeze({ name: 'post-series-upgrade', symbol: 'post_series_upgrade', preferredHandlerSymbol: '_on_post_series_upgrade', description: 'Fired after the series upgrade has taken place.' }),
-    Object.freeze({ name: 'stop', symbol: 'stop', preferredHandlerSymbol: '_on_stop', description: 'Fired before the unit begins deprovisioning.' }),
-    Object.freeze({ name: 'remove', symbol: 'remove', preferredHandlerSymbol: '_on_remove', description: 'Fired just before the unit is deprovisioned.' }),
-    Object.freeze({ name: 'update-status', symbol: 'update_status', preferredHandlerSymbol: '_on_update_status', description: 'Fired automatically at regular intervals by juju.' }),
-    Object.freeze({ name: 'upgrade-charm', symbol: 'upgrade_charm', preferredHandlerSymbol: '_on_upgrade_charm', description: 'Fired when the cloud admin upgrades the charm.' }),
-    Object.freeze({ name: 'collect-metrics', symbol: 'collect_metrics', preferredHandlerSymbol: '_on_collect_metrics', description: '(deprecated, will be removed soon)' }),
+    Object.freeze({ name: 'start', symbol: 'start', preferredHandlerSymbol: '_on_start', description: withReference('Fired as soon as the unit initialization is complete.', 'https://juju.is/docs/sdk/start-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'config-changed', symbol: 'config_changed', preferredHandlerSymbol: '_on_config_changed', description: withReference('Fired whenever the cloud admin changes the charm configuration *.', 'https://juju.is/docs/sdk/config-changed-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'install', symbol: 'install', preferredHandlerSymbol: '_on_install', description: withReference('Fired when juju is done provisioning the unit.', 'https://juju.is/docs/sdk/install-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'leader-elected', symbol: 'leader_elected', preferredHandlerSymbol: '_on_leader_elected', description: withReference('Fired on the new leader when juju elects one.', 'https://juju.is/docs/sdk/leader-elected-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'leader-settings-changed', symbol: 'leader_settings_changed', preferredHandlerSymbol: '_on_leader_settings_changed', description: withReference('Fired on all follower units when a new leader is chosen.', 'https://juju.is/docs/sdk/leader-settings-changed-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'pre-series-upgrade', symbol: 'pre_series_upgrade', preferredHandlerSymbol: '_on_pre_series_upgrade', description: withReference('Fired before the series upgrade takes place.', 'https://juju.is/docs/sdk/pre-series-upgrade-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'post-series-upgrade', symbol: 'post_series_upgrade', preferredHandlerSymbol: '_on_post_series_upgrade', description: withReference('Fired after the series upgrade has taken place.', 'https://juju.is/docs/sdk/post-series-upgrade-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'stop', symbol: 'stop', preferredHandlerSymbol: '_on_stop', description: withReference('Fired before the unit begins deprovisioning.', 'https://juju.is/docs/sdk/stop-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'remove', symbol: 'remove', preferredHandlerSymbol: '_on_remove', description: withReference('Fired just before the unit is deprovisioned.', 'https://juju.is/docs/sdk/remove-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'update-status', symbol: 'update_status', preferredHandlerSymbol: '_on_update_status', description: withReference('Fired automatically at regular intervals by juju.', 'https://juju.is/docs/sdk/update-status-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'upgrade-charm', symbol: 'upgrade_charm', preferredHandlerSymbol: '_on_upgrade_charm', description: withReference('Fired when the cloud admin upgrades the charm.', 'https://juju.is/docs/sdk/upgrade-charm-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'collect-metrics', symbol: 'collect_metrics', preferredHandlerSymbol: '_on_collect_metrics', description: withReference('(deprecated, will be removed soon)', 'https://juju.is/docs/sdk/collect-metrics-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
 ];
 
-const CHARM_SECRET_EVENTS = [
-    'secret_changed',
-    'secret_expired',
-    'secret_remove',
-    'secret_rotate',
+const CHARM_SECRET_EVENTS: CharmEvent[] = [
+    Object.freeze({ name: 'secret-changed', symbol: 'secret_changed', preferredHandlerSymbol: '_on_secret_changed', description: withReference('The `secret-changed` event is fired on all units observing a secret after the owner of a secret has published a new revision for it.', 'https://juju.is/docs/sdk/event-secret-changed', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'secret-expired', symbol: 'secret_expired', preferredHandlerSymbol: '_on_secret_expired', description: withReference('If a secret was added with the expire argument set to some future time, when that time elapses, Juju will notify the owner charm that the expiration time has been reached by firing a `secret-expired` event on the owner unit.', 'https://juju.is/docs/sdk/event-secret-expired', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'secret-remove', symbol: 'secret_remove', preferredHandlerSymbol: '_on_secret_remove', description: withReference('The `secret-remove` event is fired on the owner of a secret when either:\n  - All observers tracking a now-outdated revision have updated to tracking a newer one, so the old revision can be removed.\n  - No observer is tracking an intermediate revision, and a newer one has already been created. So there is a orphaned revision which no observer will ever be able to peek or update to, because there is already a newer one the observer would get instead.', 'https://juju.is/docs/sdk/event-secret-remove', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ name: 'secret-rotate', symbol: 'secret_rotate', preferredHandlerSymbol: '_on_secret_rotate', description: withReference('The `secret-rotate` event is fired on the owner of a secret every time the rotation period elapses (and the event will keep firing until the owner rotates the secret).', 'https://juju.is/docs/sdk/event-secret-rotate', 'https://juju.is/docs/sdk/a-charms-life',) }),
 ];
 
-const CHARM_RELATION_EVENTS_SUFFIX = [
-    `_relation_broken`,
-    `_relation_changed`,
-    `_relation_created`,
-    `_relation_departed`,
-    `_relation_joined`,
-];
+const CHARM_RELATION_EVENTS_TEMPLATE = (endpoint: CharmEndpoint): CharmEvent[] => {
+    return [
+        { suffix: '-relation-broken', description: withReference('`relation-broken` is a "teardown" event and is emitted when an existing relation between two applications is fully terminated.', 'https://juju.is/docs/sdk/relation-name-relation-broken-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
+        { suffix: '-relation-changed', description: withReference('`relation-changed` is emitted when another unit involved in the relation (from either side) touches the relation data.', 'https://juju.is/docs/sdk/relation-name-relation-changed-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
+        { suffix: '-relation-created', description: withReference('`relation-created` is a "setup" event and, emitted when an application is related to another. Its purpose is to inform the newly related charms that they are entering the relation.', 'https://juju.is/docs/sdk/relation-name-relation-created-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
+        { suffix: '-relation-departed', description: withReference('`relation-departed` is a "teardown" event, emitted when a remote unit departs a relation. This event is the exact inverse of `relation-joined`.', 'https://juju.is/docs/sdk/relation-name-relation-departed-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
+        { suffix: '-relation-joined', description: withReference('`relation-joined` is emitted when a unit joins in an existing relation. The unit will be a local one in the case of peer relations, a remote one otherwise.', 'https://juju.is/docs/sdk/relation-name-relation-joined-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
+    ].map(({ suffix, description }) => {
+        const name = endpoint.name + suffix;
+        const symbol = toValidSymbol(name);
+        return {
+            name,
+            symbol,
+            preferredHandlerSymbol: '_on_' + symbol,
+            description,
+        };
+    });
+};
 
 const CHARM_STORAGE_EVENTS_SUFFIX = [
     `_storage_attached`,
@@ -558,7 +688,7 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
             name: `${action.name}-action`,
             symbol: `${action.symbol}_action`,
             preferredHandlerSymbol: `_on_${action.symbol}_action`,
-            description: action.description || `Fired when \`${action.name}\` action is called.`,
+            description: (action.description ? action.description + '\n\n' : '') + `Fired when \`${action.name}\` action is called.`,
         }
     ];
 };

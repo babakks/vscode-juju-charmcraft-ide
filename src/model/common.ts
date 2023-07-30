@@ -43,3 +43,7 @@ export function isInRange(position: Position, range: Range): boolean {
     return (position.line > range.start.line || position.line === range.start.line && position.character >= range.start.character)
         && (position.line < range.end.line || position.line === range.end.line && position.character < range.end.character);
 }
+
+export function toValidSymbol(value: string): string {
+    return value.replace(/-/g, '_');
+}
