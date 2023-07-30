@@ -79,13 +79,21 @@ suite(getNodeRange.name, function () {
 });
 
 suite(getNodeExtendedRange.name, function () {
-    const defaultNode = { lineno: "1", col_offset: "0", end_lineno: "2", end_col_offset: "10" };
+    const defaultNode = {
+        /* eslint-disable */
+        lineno: "1",
+        col_offset: "0",
+        end_lineno: "2",
+        end_col_offset: "10"
+        /* eslint-enable */
+    };
     type TestCase = {
         name: string;
         node: any;
         nextNode: any;
         expected: Range;
     };
+    /* eslint-disable */
     const tests: TestCase[] = [
         {
             name: 'undefined nextNode',
@@ -134,6 +142,7 @@ suite(getNodeExtendedRange.name, function () {
             expected: { start: { line: 0, character: 0 }, end: { line: 3, character: 0 } },
         },
     ];
+    /* eslint-enable */
 
     for (const t of tests) {
         const tt = t;

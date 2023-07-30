@@ -58,8 +58,8 @@
         "watch": "tsc -watch -p ./",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
-        "test": "node ./out/test/runTest.js",
-        "test-local": "npm run clean && npm run compile && mocha 'out/**/*.test.js' --ignore 'out/**/*.vscode.test.js' --ui tdd"
+        "test-vscode": "node ./out/test/vscode/runTest.js",
+        "test": "npm run clean && npm run compile && mocha 'out/**/*.test.js' --ignore 'out/test/vscode/**/*' --ui tdd"
     },
     "devDependencies": {
         "@types/chai": "^4.3.5",
