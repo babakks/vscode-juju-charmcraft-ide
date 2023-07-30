@@ -6,7 +6,7 @@ import {
     CharmConfigParametersCompletionProvider,
     CharmEventCompletionProvider
 } from './completion';
-import { DocumentWatcher } from './documentWatcher';
+import { DocumentWatcher } from './watcher';
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
 import { PythonExtension } from './include/ms-python.python';
 import { ExtensionAPI } from './include/redhat.vscode-yaml';
