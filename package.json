@@ -56,10 +56,10 @@
         "clean": "rm -rf out",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
-        "pretest": "npm run compile && npm run lint",
+        "pretest": "npm run clean && npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
         "test-vscode": "node ./out/test/vscode/runTest.js",
-        "test": "npm run clean && npm run compile && mocha 'out/**/*.test.js' --ignore 'out/test/vscode/**/*' --ui tdd"
+        "test": "mocha 'out/**/*.test.js' --ignore 'out/test/vscode/**/*' --ui tdd"
     },
     "devDependencies": {
         "@types/chai": "^4.3.5",

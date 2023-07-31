@@ -276,7 +276,6 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
     _optionalValueOrArray(doc, result, 'string', 'website', 'website', _METADATA_PROBLEMS.websiteFieldInvalid, result.problems);
 
     _optionalArray(doc, result, 'string', 'maintainers', 'maintainers', _METADATA_PROBLEMS.maintainersFieldInvalid, result.problems);
-    _optionalArray(doc, result, 'string', 'tags', 'tags', _METADATA_PROBLEMS.tagsFieldInvalid, result.problems);
     _optionalArray(doc, result, 'string', 'terms', 'terms', _METADATA_PROBLEMS.termsFieldInvalid, result.problems);
 
     _optional(doc, result, 'string', 'docs', 'docs', _METADATA_PROBLEMS.docsFieldInvalid, result.problems);
@@ -294,7 +293,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
     _optionalExtraBindings(doc, result, 'extra-bindings', 'extraBindings', _METADATA_PROBLEMS.extraBindingsFieldInvalid, result.problems);
     _optionalContainers(doc, result, 'containers', 'containers', _METADATA_PROBLEMS.containersFieldInvalid, result.problems);
 
-    result.customFields = Object.fromEntries(Object.entries(doc).filter(([x]) => !(x in [
+    result.customFields = Object.fromEntries(Object.entries(doc).filter(([x]) => ![
         'name',
         'display-name',
         'description',
@@ -303,7 +302,6 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         'issues',
         'website',
         'maintainers',
-        'tags',
         'terms',
         'docs',
         'subordinate',
@@ -316,7 +314,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         'storage',
         'extra-bindings',
         'containers',
-    ])));
+    ].includes(x)));
 
     if (result.containers) {
         for (const container of result.containers) {
@@ -342,7 +340,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
     function _required<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number' | 'int', key: string, mapToKey: keyof T, missing: CharmMetadataProblem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
         if (!(key in doc)) {
             problems.push(missing);
-        } else if (doc[key] && t === 'int' && typeof doc[key] === 'number' && Number.isInteger(doc[key])) {
+        } else if (doc[key] !== undefined && doc[key] !== null && doc[key] && t === 'int' && typeof doc[key] === 'number' && Number.isInteger(doc[key])) {
             (result as any)[mapToKey] = doc[key];
         } else if (doc[key] === undefined || doc[key] === null || typeof doc[key] !== t) {
             problems.push(invalid);
@@ -355,9 +353,9 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         if (!(key in doc)) {
             return;
         }
-        if (doc[key] && t === 'int' && typeof doc[key] === 'number' && Number.isInteger(doc[key])) {
+        if (doc[key] !== undefined && doc[key] !== null && t === 'int' && typeof doc[key] === 'number' && Number.isInteger(doc[key])) {
             (result as any)[mapToKey] = doc[key];
-        } else if (doc[key] && typeof doc[key] === t) {
+        } else if (doc[key] !== undefined && doc[key] !== null && typeof doc[key] === t) {
             (result as any)[mapToKey] = doc[key];
         } else {
             problems.push(invalid);
@@ -368,9 +366,9 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         if (!(key in doc)) {
             return;
         }
-        if (doc[key] && typeof doc[key] === t) {
+        if (doc[key] !== undefined && doc[key] !== null && doc[key] && typeof doc[key] === t) {
             (result as any)[mapToKey] = doc[key];
-        } else if (doc[key] && typeof doc[key] === 'object' && Array.isArray(doc[key]) && (doc[key] as Array<any>).every(x => typeof x === t)) {
+        } else if (doc[key] !== undefined && doc[key] !== null && typeof doc[key] === 'object' && Array.isArray(doc[key]) && (doc[key] as Array<any>).every(x => typeof x === t)) {
             (result as any)[mapToKey] = doc[key];
         } else {
             problems.push(invalid);
@@ -389,7 +387,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         if (!(key in doc)) {
             return;
         }
-        if (doc[key] && typeof doc[key] === 'object' && Array.isArray(doc[key]) && (doc[key] as Array<any>).every(x => typeof x === t)) {
+        if (doc[key] !== undefined && doc[key] !== null && typeof doc[key] === 'object' && Array.isArray(doc[key]) && (doc[key] as Array<any>).every(x => typeof x === t)) {
             (result as any)[mapToKey] = doc[key];
         } else {
             problems.push(invalid);
@@ -400,7 +398,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         if (!(key in doc)) {
             return;
         }
-        if (typeof doc[key] === 'string' && doc[key] in enumValues) {
+        if (typeof doc[key] === 'string' && enumValues.includes(doc[key])) {
             (result as any)[mapToKey] = doc[key];
         } else {
             problems.push(invalid);
@@ -553,7 +551,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
 
             if (v['properties']) {
                 const props = v['properties'];
-                if (!props || typeof props !== 'object' || !Array.isArray(props) || !props.every(x => typeof x === 'string' && x in ['transient'])) {
+                if (!props || typeof props !== 'object' || !Array.isArray(props) || !props.every(x => typeof x === 'string' && ['transient'].includes(x))) {
                     entry.problems.push(_METADATA_PROBLEMS.storagePropertiesFieldInvalid(key));
                 } else {
                     entry.properties = props;
@@ -612,7 +610,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
             };
             extraBindings.push(entry);
 
-            if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            if (value !== null) {
                 entry.problems.push(_METADATA_PROBLEMS.extraBindingEntryInvalid(key));
                 continue;
             }

@@ -1,0 +1,152 @@
+# Here:
+# - Keys are ordered alphabetically.
+# - Values are valid.
+# - All fields (both optional or required) are assigned.
+# - Fields that accept an array of values or a map of key/value pairs, are
+#   assigned with more than one element/pair.
+
+assumes:
+  - juju >= 2.9
+  - k8s-api
+  - all-of:
+      - juju >= 2.9
+      - k8s-api
+  - any-of:
+      - juju >= 2.9
+      - k8s-api
+containers:
+  container-one:
+    resource: resource-one
+    mounts:
+      - storage: storage-one
+        location: /some/location
+      - storage: storage-two
+        location: /some/location
+  container-two:
+    bases:
+      - name: base-one
+        channel: channel-one
+        architectures:
+          - architecture-one
+          - architecture-two
+      - name: base-two
+        channel: channel-two
+        architectures:
+          - architecture-one
+          - architecture-two
+    mounts:
+      - storage: storage-one
+        location: /some/location
+      - storage: storage-two
+        location: /some/location
+description: my-charm-description
+devices:
+  device-one:
+    type: gpu
+    description: device-one-description
+    countmin: 1
+    countmax: 2
+  device-two:
+    type: nvidia.com/gpu
+    description: device-two-description
+    countmin: 1
+    countmax: 2
+  device-three:
+    type: amd.com/gpu
+    description: device-three-description
+    countmin: 1
+    countmax: 2
+display-name: my-charm-display-name
+docs: https://docs.url
+extra-bindings:
+  binding-one:
+  binding-two:
+issues:
+  - https://one.issues.url
+  - https://two.issues.url
+maintainers:
+  - John Doe <john.doe@company.com>
+  - Jane Doe <jane.doe@company.com>
+name: my-charm
+peer:
+  peer-one:
+    interface: interface-one
+    limit: 1
+    optional: false
+    scope: global
+  peer-two:
+    interface: interface-two
+    limit: 2
+    optional: true
+    scope: container
+provides:
+  provides-one:
+    interface: interface-one
+    limit: 1
+    optional: false
+    scope: global
+  provides-two:
+    interface: interface-two
+    limit: 2
+    optional: true
+    scope: container
+requires:
+  requires-one:
+    interface: interface-one
+    limit: 1
+    optional: false
+    scope: global
+  requires-two:
+    interface: interface-two
+    limit: 2
+    optional: true
+    scope: container
+resources:
+  resource-one:
+    type: oci-image
+    description: resource-one-description
+  resource-two:
+    type: file
+    description: resource-two-description
+    filename: some-file-name
+source:
+  - https://one.source.url
+  - https://two.source.url
+storage:
+  storage-one:
+    type: filesystem
+    description: storage-one-description
+    location: /some/location
+    shared: false
+    read-only: false
+    multiple: 1
+    minimum-size: 1
+    properties:
+      - transient
+  storage-two:
+    type: block
+    description: storage-two-description
+    location: /some/location
+    shared: true
+    read-only: true
+    multiple: 1+
+    minimum-size: 1G
+    properties:
+      - transient
+subordinate: false
+summary: my-charm-summary
+terms:
+  - term-one
+  - term-two
+website:
+  - https://one.website.url
+  - https://two.website.url
+z-custom-field-array:
+  - custom-value-one
+  - custom-value-two
+z-custom-field-boolean: true
+z-custom-field-map:
+  key-one: value-one
+  key-two: value-two
+z-custom-field-number: 0
+z-custom-field-string: some-string-value

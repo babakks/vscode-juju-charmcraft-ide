@@ -127,7 +127,6 @@ export interface CharmMetadata {
     issues?: string | string[];
     website?: string | string[];
     maintainers?: string[];
-    tags?: string[];
     terms?: string[];
     docs?: string;
     subordinate?: boolean;

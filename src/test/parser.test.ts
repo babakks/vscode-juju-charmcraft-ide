@@ -1,8 +1,8 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { CharmActionProblem, CharmConfigParameterProblem } from "../model/charm";
-import { parseCharmActionsYAML, parseCharmConfigYAML} from "../parser";
+import { CharmActionProblem, CharmConfigParameterProblem, CharmMetadata } from "../model/charm";
+import { parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from "../parser";
 import path = require("path");
 import { readFileSync } from "fs";
 
@@ -172,4 +172,214 @@ suite(parseCharmConfigYAML.name, function () {
         }
     });
 });
+
+suite(parseCharmMetadataYAML.name, function () {
+    const RESOURCE_ACTIONS_PATH = '../../resource/test/metadata.yaml';
+    function parseMetadata(resource: string): ReturnType<typeof parseCharmMetadataYAML> {
+        return parseCharmMetadataYAML(new TextDecoder().decode(readFileSync(path.join(__dirname, RESOURCE_ACTIONS_PATH, resource))));
+    }
+
+    test('valid-complete', function () {
+        const metadata = parseMetadata('valid-complete.metadata.yaml');
+        assert.isEmpty(metadata.problems, 'expected no file-scope problem');
+        /* eslint-disable */
+        assert.deepStrictEqual(metadata, {
+            problems: [],
+            assumes: {
+                problems: [],
+                singles: ['juju >= 2.9', 'k8s-api'],
+                allOf: ['juju >= 2.9', 'k8s-api'],
+                anyOf: ['juju >= 2.9', 'k8s-api'],
+            },
+            containers: [{
+                problems: [],
+                name: 'container-one',
+                resource: 'resource-one',
+                mounts: [{
+                    problems: [],
+                    storage: 'storage-one',
+                    location: '/some/location'
+                },
+                {
+                    problems: [],
+                    storage: 'storage-two',
+                    location: '/some/location'
+                }]
+            }, {
+                problems: [],
+                name: 'container-two',
+                bases: [{
+                    problems: [],
+                    name: 'base-one',
+                    channel: 'channel-one',
+                    architectures: [
+                        'architecture-one',
+                        'architecture-two'
+                    ]
+                }, {
+                    problems: [],
+                    name: 'base-two',
+                    channel: 'channel-two',
+                    architectures: [
+                        'architecture-one',
+                        'architecture-two'
+                    ]
+                }
+                ],
+                mounts: [{
+                    problems: [],
+                    storage: 'storage-one',
+                    location: '/some/location'
+                },
+                {
+                    problems: [],
+                    storage: 'storage-two',
+                    location: '/some/location'
+                }]
+            }],
+            customFields: {
+                'z-custom-field-array': ['custom-value-one', 'custom-value-two'],
+                'z-custom-field-boolean': true,
+                'z-custom-field-map': {
+                    'key-one': 'value-one',
+                    'key-two': 'value-two'
+                },
+                'z-custom-field-number': 0,
+                'z-custom-field-string': 'some-string-value'
+            },
+            description: 'my-charm-description',
+            devices: [
+                {
+                    problems: [],
+                    name: 'device-one',
+                    type: 'gpu',
+                    description: 'device-one-description',
+                    countMin: 1,
+                    countMax: 2
+                },
+                {
+                    problems: [],
+                    name: 'device-two',
+                    type: 'nvidia.com/gpu',
+                    description: 'device-two-description',
+                    countMin: 1,
+                    countMax: 2
+                },
+                {
+                    problems: [],
+                    name: 'device-three',
+                    type: 'amd.com/gpu',
+                    description: 'device-three-description',
+                    countMin: 1,
+                    countMax: 2
+                }
+            ],
+            displayName: 'my-charm-display-name',
+            docs: 'https://docs.url',
+            extraBindings: [
+                {
+                    problems: [],
+                    name: 'binding-one'
+                },
+                {
+                    problems: [],
+                    name: 'binding-two'
+                }
+            ],
+            issues: ['https://one.issues.url', 'https://two.issues.url'],
+            maintainers: ['John Doe <john.doe@company.com>', 'Jane Doe <jane.doe@company.com>'],
+            name: 'my-charm',
+            peer: [{
+                problems: [],
+                name: 'peer-one',
+                interface: 'interface-one',
+                limit: 1,
+                optional: false,
+                scope: 'global'
+            }, {
+                problems: [],
+                name: 'peer-two',
+                interface: 'interface-two',
+                limit: 2,
+                optional: true,
+                scope: 'container'
+            }],
+            provides: [{
+                problems: [],
+                name: 'provides-one',
+                interface: 'interface-one',
+                limit: 1,
+                optional: false,
+                scope: 'global'
+            }, {
+                problems: [],
+                name: 'provides-two',
+                interface: 'interface-two',
+                limit: 2,
+                optional: true,
+                scope: 'container'
+            }],
+            requires: [{
+                problems: [],
+                name: 'requires-one',
+                interface: 'interface-one',
+                limit: 1,
+                optional: false,
+                scope: 'global'
+            }, {
+                problems: [],
+                name: 'requires-two',
+                interface: 'interface-two',
+                limit: 2,
+                optional: true,
+                scope: 'container'
+            }],
+            resources: [
+                {
+                    problems: [],
+                    name: 'resource-one',
+                    type: 'oci-image',
+                    description: 'resource-one-description'
+                }, {
+                    problems: [],
+                    name: 'resource-two',
+                    type: 'file',
+                    description: 'resource-two-description',
+                    filename: 'some-file-name'
+                }
+            ],
+            source: ['https://one.source.url', 'https://two.source.url'],
+            storage: [{
+                problems: [],
+                name: 'storage-one',
+                type: 'filesystem',
+                description: 'storage-one-description',
+                location: '/some/location',
+                shared: false,
+                readOnly: false,
+                multiple: '1',
+                minimumSize: '1',
+                properties: ['transient']
+            }, {
+                problems: [],
+                name: 'storage-two',
+                type: 'block',
+                description: 'storage-two-description',
+                location: '/some/location',
+                shared: true,
+                readOnly: true,
+                multiple: '1+',
+                minimumSize: '1G',
+                properties: ['transient']
+            }],
+            subordinate: false,
+            summary: 'my-charm-summary',
+            terms: ['term-one', 'term-two'],
+            website: ['https://one.website.url', 'https://two.website.url'],
+        } satisfies CharmMetadata);
+        /* eslint-enable */
+    });
+});
+
+
 
