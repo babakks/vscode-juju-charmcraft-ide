@@ -9,7 +9,7 @@ export function getConfigParamDocumentation(param: CharmConfigParameter, include
     result.supportHtml = true;
 
     if (includeTitle) {
-        result.appendMarkdown(`\`${param.name}\` *(charm configuration parameter)* ${SEPARATOR}`);
+        result.appendMarkdown(`\`${param.name}\` *[charm configuration]* ${SEPARATOR}`);
     }
 
     if (param.type && param.default !== undefined) {
@@ -34,14 +34,16 @@ export function getEventDocumentation(event: CharmEvent, includeTitle?: boolean)
         let source: string = '';
         switch (event.source) {
             case 'action': source = 'action'; break;
+            case 'storage': source = 'storage'; break;
+            case 'container': source = 'container'; break;
             case 'endpoints/peer': source = 'peer'; break;
             case 'endpoints/provides': source = 'provides'; break;
             case 'endpoints/requires': source = 'requires'; break;
         }
         if (source) {
-            result.appendMarkdown(`\`${event.name}\` *(charm event: ${source}* ${SEPARATOR}`);
+            result.appendMarkdown(`\`${event.name}\` *[charm event: ${source}]* ${SEPARATOR}`);
         } else {
-            result.appendMarkdown(`\`${event.name}\` *(charm event)* ${SEPARATOR}`);
+            result.appendMarkdown(`\`${event.name}\` *[charm event]* ${SEPARATOR}`);
         }
     }
     if (event.description) {

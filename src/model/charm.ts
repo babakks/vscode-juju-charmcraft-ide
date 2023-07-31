@@ -143,7 +143,7 @@ export interface CharmMetadata {
     problems: CharmMetadataProblem[];
 }
 
-export type CharmEventSource = 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides' | 'action' | 'built-in';
+export type CharmEventSource = 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides' | 'storage' | 'container' | 'action' | 'built-in';
 
 export interface CharmEvent {
     name: string;
@@ -676,14 +676,38 @@ const CHARM_RELATION_EVENTS_TEMPLATE = (endpoint: CharmEndpoint, source: CharmEv
     });
 };
 
-const CHARM_STORAGE_EVENTS_SUFFIX = [
-    `_storage_attached`,
-    `_storage_detaching`,
-];
+const CHARM_STORAGE_EVENTS_TEMPLATE = (storage: CharmStorage): CharmEvent[] => {
+    return [
+        { suffix: '-storage-attached', description: withReference('The event informs a charm that a storage volume has been attached, and is ready to interact with.', 'https://juju.is/docs/sdk/storage-name-storage-attached-event', 'https://juju.is/docs/sdk/a-charms-life',) },
+        { suffix: '-storage-detaching', description: withReference('The event allows a charm to perform cleanup tasks on a storage volume before that storage is dismounted and possibly destroyed.', 'https://juju.is/docs/sdk/storage-name-storage-detaching-event', 'https://juju.is/docs/sdk/a-charms-life',) },
+    ].map(({ suffix, description }) => {
+        const name = storage.name + suffix;
+        const symbol = toValidSymbol(name);
+        return {
+            name,
+            source: 'storage',
+            symbol,
+            preferredHandlerSymbol: '_on_' + symbol,
+            description,
+        };
+    });
+};
 
-const CHARM_CONTAINER_EVENT_SUFFIX = [
-    '_pebble_ready',
-];
+const CHARM_CONTAINER_EVENTS_TEMPLATE = (container: CharmContainer): CharmEvent[] => {
+    return [
+        { suffix: '-pebble-ready', description: withReference('The event is emitted once the Pebble sidecar container has started and a socket is available.', 'https://juju.is/docs/sdk/container-name-pebble-ready-event', 'https://juju.is/docs/sdk/a-charms-life',) },
+    ].map(({ suffix, description }) => {
+        const name = container.name + suffix;
+        const symbol = toValidSymbol(name);
+        return {
+            name,
+            source: 'container',
+            symbol,
+            preferredHandlerSymbol: '_on_' + symbol,
+            description,
+        };
+    });
+};
 
 const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
     return [
@@ -782,14 +806,15 @@ export class Charm {
     }
 
     private _repopulateEvents() {
-        // TODO include other events
         this._events = [
             ...Array.from(CHARM_LIFECYCLE_EVENTS),
             ...Array.from(CHARM_SECRET_EVENTS),
             ...this._actions.actions.map(action => CHARM_ACTION_EVENT_TEMPLATE(action)).flat(1),
-            ...this.metadata.peer?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/peer')).flat(1) ?? [],
-            ...this.metadata.provides?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/provides')).flat(1) ?? [],
-            ...this.metadata.requires?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/requires')).flat(1) ?? [],
+            ...this._metadata.storage?.map(storage => CHARM_STORAGE_EVENTS_TEMPLATE(storage)).flat(1) ?? [],
+            ...this._metadata.containers?.map(container => CHARM_CONTAINER_EVENTS_TEMPLATE(container)).flat(1) ?? [],
+            ...this._metadata.peer?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/peer')).flat(1) ?? [],
+            ...this._metadata.provides?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/provides')).flat(1) ?? [],
+            ...this._metadata.requires?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/requires')).flat(1) ?? [],
         ];
 
         this._eventSymbolMap.clear();
