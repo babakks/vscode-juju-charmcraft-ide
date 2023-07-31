@@ -1,9 +1,9 @@
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
 import { Disposable, Uri } from 'vscode';
-import { Charm, CharmSourceCode, CharmSourceCodeFile, CharmSourceCodeTree, emptyActions, emptyConfig } from './model/charm';
+import { Charm, CharmSourceCode, CharmSourceCodeFile, CharmSourceCodeTree, emptyActions, emptyConfig, emptyMetadata } from './model/charm';
 import * as constant from './model/common';
-import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML } from './parser';
+import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from './parser';
 import { tryReadWorkspaceFileAsText } from './util';
 import path = require('path');
 
@@ -124,6 +124,10 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     private async _refreshMetadata() {
+        const uri = vscode.Uri.joinPath(this.home, constant.CHARM_FILE_METADATA_YAML);
+        const content = await tryReadWorkspaceFileAsText(uri) || "";
+        const metadata = (content ? parseCharmMetadataYAML(content) : undefined) || emptyMetadata();
+        this.model.updateMetadata(metadata);
     }
 
     private async _refreshSourceCodeFile(uri: Uri) {

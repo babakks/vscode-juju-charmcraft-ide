@@ -20,6 +20,7 @@ import {
     CharmMetadataProblem,
     CharmResource,
     CharmStorage,
+    emptyMetadata,
     isConfigParameterType
 } from './model/charm';
 import { toValidSymbol } from './model/common';
@@ -248,19 +249,9 @@ const _METADATA_PROBLEMS = {
 
 } satisfies Record<string, CharmMetadataProblem | ((...args: any[]) => CharmMetadataProblem)>;
 
-function emptyCharmMetadata(): CharmMetadata {
-    return {
-        name: '',
-        description: '',
-        displayName: '',
-        summary: '',
-        customFields: {},
-        problems: [],
-    };
-}
 export function parseCharmMetadataYAML(content: string): CharmMetadata {
     const doc: any = yaml.load(content);
-    const result = emptyCharmMetadata();
+    const result = emptyMetadata();
     if (!doc || typeof doc !== 'object') {
         result.problems.push(_METADATA_PROBLEMS.invalidYAMLFile);
         return result;

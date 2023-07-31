@@ -143,8 +143,11 @@ export interface CharmMetadata {
     problems: CharmMetadataProblem[];
 }
 
+export type CharmEventSource = 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides' | 'action' | 'built-in';
+
 export interface CharmEvent {
     name: string;
+    source: CharmEventSource,
     symbol: string;
     preferredHandlerSymbol: string;
     description?: string;
@@ -632,28 +635,28 @@ function withReference(text: string, ...urls: string[]): string {
 }
 
 const CHARM_LIFECYCLE_EVENTS: CharmEvent[] = [
-    Object.freeze({ name: 'start', symbol: 'start', preferredHandlerSymbol: '_on_start', description: withReference('Fired as soon as the unit initialization is complete.', 'https://juju.is/docs/sdk/start-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'config-changed', symbol: 'config_changed', preferredHandlerSymbol: '_on_config_changed', description: withReference('Fired whenever the cloud admin changes the charm configuration *.', 'https://juju.is/docs/sdk/config-changed-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'install', symbol: 'install', preferredHandlerSymbol: '_on_install', description: withReference('Fired when juju is done provisioning the unit.', 'https://juju.is/docs/sdk/install-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'leader-elected', symbol: 'leader_elected', preferredHandlerSymbol: '_on_leader_elected', description: withReference('Fired on the new leader when juju elects one.', 'https://juju.is/docs/sdk/leader-elected-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'leader-settings-changed', symbol: 'leader_settings_changed', preferredHandlerSymbol: '_on_leader_settings_changed', description: withReference('Fired on all follower units when a new leader is chosen.', 'https://juju.is/docs/sdk/leader-settings-changed-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'pre-series-upgrade', symbol: 'pre_series_upgrade', preferredHandlerSymbol: '_on_pre_series_upgrade', description: withReference('Fired before the series upgrade takes place.', 'https://juju.is/docs/sdk/pre-series-upgrade-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'post-series-upgrade', symbol: 'post_series_upgrade', preferredHandlerSymbol: '_on_post_series_upgrade', description: withReference('Fired after the series upgrade has taken place.', 'https://juju.is/docs/sdk/post-series-upgrade-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'stop', symbol: 'stop', preferredHandlerSymbol: '_on_stop', description: withReference('Fired before the unit begins deprovisioning.', 'https://juju.is/docs/sdk/stop-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'remove', symbol: 'remove', preferredHandlerSymbol: '_on_remove', description: withReference('Fired just before the unit is deprovisioned.', 'https://juju.is/docs/sdk/remove-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'update-status', symbol: 'update_status', preferredHandlerSymbol: '_on_update_status', description: withReference('Fired automatically at regular intervals by juju.', 'https://juju.is/docs/sdk/update-status-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'upgrade-charm', symbol: 'upgrade_charm', preferredHandlerSymbol: '_on_upgrade_charm', description: withReference('Fired when the cloud admin upgrades the charm.', 'https://juju.is/docs/sdk/upgrade-charm-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'collect-metrics', symbol: 'collect_metrics', preferredHandlerSymbol: '_on_collect_metrics', description: withReference('(deprecated, will be removed soon)', 'https://juju.is/docs/sdk/collect-metrics-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'start', symbol: 'start', preferredHandlerSymbol: '_on_start', description: withReference('Fired as soon as the unit initialization is complete.', 'https://juju.is/docs/sdk/start-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'config-changed', symbol: 'config_changed', preferredHandlerSymbol: '_on_config_changed', description: withReference('Fired whenever the cloud admin changes the charm configuration *.', 'https://juju.is/docs/sdk/config-changed-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'install', symbol: 'install', preferredHandlerSymbol: '_on_install', description: withReference('Fired when juju is done provisioning the unit.', 'https://juju.is/docs/sdk/install-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'leader-elected', symbol: 'leader_elected', preferredHandlerSymbol: '_on_leader_elected', description: withReference('Fired on the new leader when juju elects one.', 'https://juju.is/docs/sdk/leader-elected-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'leader-settings-changed', symbol: 'leader_settings_changed', preferredHandlerSymbol: '_on_leader_settings_changed', description: withReference('Fired on all follower units when a new leader is chosen.', 'https://juju.is/docs/sdk/leader-settings-changed-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'pre-series-upgrade', symbol: 'pre_series_upgrade', preferredHandlerSymbol: '_on_pre_series_upgrade', description: withReference('Fired before the series upgrade takes place.', 'https://juju.is/docs/sdk/pre-series-upgrade-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'post-series-upgrade', symbol: 'post_series_upgrade', preferredHandlerSymbol: '_on_post_series_upgrade', description: withReference('Fired after the series upgrade has taken place.', 'https://juju.is/docs/sdk/post-series-upgrade-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'stop', symbol: 'stop', preferredHandlerSymbol: '_on_stop', description: withReference('Fired before the unit begins deprovisioning.', 'https://juju.is/docs/sdk/stop-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'remove', symbol: 'remove', preferredHandlerSymbol: '_on_remove', description: withReference('Fired just before the unit is deprovisioned.', 'https://juju.is/docs/sdk/remove-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'update-status', symbol: 'update_status', preferredHandlerSymbol: '_on_update_status', description: withReference('Fired automatically at regular intervals by juju.', 'https://juju.is/docs/sdk/update-status-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'upgrade-charm', symbol: 'upgrade_charm', preferredHandlerSymbol: '_on_upgrade_charm', description: withReference('Fired when the cloud admin upgrades the charm.', 'https://juju.is/docs/sdk/upgrade-charm-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'collect-metrics', symbol: 'collect_metrics', preferredHandlerSymbol: '_on_collect_metrics', description: withReference('(deprecated, will be removed soon)', 'https://juju.is/docs/sdk/collect-metrics-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
 ];
 
 const CHARM_SECRET_EVENTS: CharmEvent[] = [
-    Object.freeze({ name: 'secret-changed', symbol: 'secret_changed', preferredHandlerSymbol: '_on_secret_changed', description: withReference('The `secret-changed` event is fired on all units observing a secret after the owner of a secret has published a new revision for it.', 'https://juju.is/docs/sdk/event-secret-changed', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'secret-expired', symbol: 'secret_expired', preferredHandlerSymbol: '_on_secret_expired', description: withReference('If a secret was added with the expire argument set to some future time, when that time elapses, Juju will notify the owner charm that the expiration time has been reached by firing a `secret-expired` event on the owner unit.', 'https://juju.is/docs/sdk/event-secret-expired', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'secret-remove', symbol: 'secret_remove', preferredHandlerSymbol: '_on_secret_remove', description: withReference('The `secret-remove` event is fired on the owner of a secret when either:\n  - All observers tracking a now-outdated revision have updated to tracking a newer one, so the old revision can be removed.\n  - No observer is tracking an intermediate revision, and a newer one has already been created. So there is a orphaned revision which no observer will ever be able to peek or update to, because there is already a newer one the observer would get instead.', 'https://juju.is/docs/sdk/event-secret-remove', 'https://juju.is/docs/sdk/a-charms-life',) }),
-    Object.freeze({ name: 'secret-rotate', symbol: 'secret_rotate', preferredHandlerSymbol: '_on_secret_rotate', description: withReference('The `secret-rotate` event is fired on the owner of a secret every time the rotation period elapses (and the event will keep firing until the owner rotates the secret).', 'https://juju.is/docs/sdk/event-secret-rotate', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'secret-changed', symbol: 'secret_changed', preferredHandlerSymbol: '_on_secret_changed', description: withReference('The `secret-changed` event is fired on all units observing a secret after the owner of a secret has published a new revision for it.', 'https://juju.is/docs/sdk/event-secret-changed', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'secret-expired', symbol: 'secret_expired', preferredHandlerSymbol: '_on_secret_expired', description: withReference('If a secret was added with the expire argument set to some future time, when that time elapses, Juju will notify the owner charm that the expiration time has been reached by firing a `secret-expired` event on the owner unit.', 'https://juju.is/docs/sdk/event-secret-expired', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'secret-remove', symbol: 'secret_remove', preferredHandlerSymbol: '_on_secret_remove', description: withReference('The `secret-remove` event is fired on the owner of a secret when either:\n  - All observers tracking a now-outdated revision have updated to tracking a newer one, so the old revision can be removed.\n  - No observer is tracking an intermediate revision, and a newer one has already been created. So there is a orphaned revision which no observer will ever be able to peek or update to, because there is already a newer one the observer would get instead.', 'https://juju.is/docs/sdk/event-secret-remove', 'https://juju.is/docs/sdk/a-charms-life',) }),
+    Object.freeze({ source: 'built-in', name: 'secret-rotate', symbol: 'secret_rotate', preferredHandlerSymbol: '_on_secret_rotate', description: withReference('The `secret-rotate` event is fired on the owner of a secret every time the rotation period elapses (and the event will keep firing until the owner rotates the secret).', 'https://juju.is/docs/sdk/event-secret-rotate', 'https://juju.is/docs/sdk/a-charms-life',) }),
 ];
 
-const CHARM_RELATION_EVENTS_TEMPLATE = (endpoint: CharmEndpoint): CharmEvent[] => {
+const CHARM_RELATION_EVENTS_TEMPLATE = (endpoint: CharmEndpoint, source: CharmEventSource): CharmEvent[] => {
     return [
         { suffix: '-relation-broken', description: withReference('`relation-broken` is a "teardown" event and is emitted when an existing relation between two applications is fully terminated.', 'https://juju.is/docs/sdk/relation-name-relation-broken-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
         { suffix: '-relation-changed', description: withReference('`relation-changed` is emitted when another unit involved in the relation (from either side) touches the relation data.', 'https://juju.is/docs/sdk/relation-name-relation-changed-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
@@ -665,6 +668,7 @@ const CHARM_RELATION_EVENTS_TEMPLATE = (endpoint: CharmEndpoint): CharmEvent[] =
         const symbol = toValidSymbol(name);
         return {
             name,
+            source,
             symbol,
             preferredHandlerSymbol: '_on_' + symbol,
             description,
@@ -684,6 +688,7 @@ const CHARM_CONTAINER_EVENT_SUFFIX = [
 const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
     return [
         {
+            source: 'action',
             name: `${action.name}-action`,
             symbol: `${action.symbol}_action`,
             preferredHandlerSymbol: `_on_${action.symbol}_action`,
@@ -692,20 +697,38 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
     ];
 };
 
-export function emptyActions() {
-    return { actions: [], problems: [] };
+export function emptyActions(): CharmActions {
+    return {
+        actions: [],
+        problems: []
+    };
 }
 
-export function emptyConfig() {
-    return { parameters: [], problems: [] };
+export function emptyConfig(): CharmConfig {
+    return {
+        parameters: [],
+        problems: []
+    };
+}
+
+export function emptyMetadata(): CharmMetadata {
+    return {
+        name: '',
+        description: '',
+        displayName: '',
+        summary: '',
+        customFields: {},
+        problems: [],
+    };
 }
 
 export class Charm {
     private _config: CharmConfig = emptyConfig();
     private _configMap = new Map<string, CharmConfigParameter>();
 
-    private _actions: CharmActions = emptyActions();
     private _eventSymbolMap = new Map<string, CharmEvent>();
+    private _actions: CharmActions = emptyActions();
+    private _metadata: CharmMetadata = emptyMetadata();
 
     private _events: CharmEvent[] = [];
     private _src: CharmSourceCode = new CharmSourceCode({});
@@ -721,11 +744,15 @@ export class Charm {
     }
 
     get events(): CharmEvent[] {
-        return Array.from(this._events);
+        return this._events;
     }
 
     getEventBySymbol(symbol: string): CharmEvent | undefined {
         return this._eventSymbolMap.get(symbol);
+    }
+
+    get metadata(): CharmMetadata {
+        return this._metadata;
     }
 
     get src(): CharmSourceCode {
@@ -745,6 +772,11 @@ export class Charm {
         }
     }
 
+    async updateMetadata(metadata: CharmMetadata) {
+        this._metadata = metadata;
+        this._repopulateEvents();
+    }
+
     async updateSourceCode(src: CharmSourceCode) {
         this._src = src;
     }
@@ -753,7 +785,11 @@ export class Charm {
         // TODO include other events
         this._events = [
             ...Array.from(CHARM_LIFECYCLE_EVENTS),
+            ...Array.from(CHARM_SECRET_EVENTS),
             ...this._actions.actions.map(action => CHARM_ACTION_EVENT_TEMPLATE(action)).flat(1),
+            ...this.metadata.peer?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/peer')).flat(1) ?? [],
+            ...this.metadata.provides?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/provides')).flat(1) ?? [],
+            ...this.metadata.requires?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/requires')).flat(1) ?? [],
         ];
 
         this._eventSymbolMap.clear();

@@ -31,7 +31,18 @@ export function getEventDocumentation(event: CharmEvent, includeTitle?: boolean)
     result.supportHtml = true;
 
     if (includeTitle) {
-        result.appendMarkdown(`\`${event.name}\` *(charm event)* ${SEPARATOR}`);
+        let source: string = '';
+        switch (event.source) {
+            case 'action': source = 'action'; break;
+            case 'endpoints/peer': source = 'peer'; break;
+            case 'endpoints/provides': source = 'provides'; break;
+            case 'endpoints/requires': source = 'requires'; break;
+        }
+        if (source) {
+            result.appendMarkdown(`\`${event.name}\` *(charm event: ${source}* ${SEPARATOR}`);
+        } else {
+            result.appendMarkdown(`\`${event.name}\` *(charm event)* ${SEPARATOR}`);
+        }
     }
     if (event.description) {
         result.appendMarkdown(event.description);
