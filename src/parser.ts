@@ -26,6 +26,15 @@ import {
 import { toValidSymbol } from './model/common';
 import path = require('path');
 
+function tryParseYAML(content: string): any {
+    try {
+        return yaml.load(content);
+    } catch {
+        return undefined;
+    }
+}
+
+
 const _ACTION_PROBLEMS = {
     invalidYAMLFile: { message: "Invalid YAML file." },
     entryMustBeObject: (key: string) => ({ action: key, message: `Action entry \`${key}\` must be an object.` }),
@@ -34,7 +43,7 @@ const _ACTION_PROBLEMS = {
 
 export function parseCharmActionsYAML(content: string): CharmActions {
     const problems: CharmActionProblem[] = [];
-    const doc = yaml.load(content);
+    const doc = tryParseYAML(content);
     if (!doc || typeof doc !== 'object') {
         problems.push(_ACTION_PROBLEMS.invalidYAMLFile);
         return { actions: [], problems };
@@ -84,7 +93,7 @@ const _CONFIG_PROBLEMS = {
 
 export function parseCharmConfigYAML(content: string): CharmConfig {
     const problems: CharmConfigParameterProblem[] = [];
-    const doc = yaml.load(content);
+    const doc = tryParseYAML(content);
     if (!doc || typeof doc !== 'object') {
         problems.push(_CONFIG_PROBLEMS.invalidYAMLFile);
         return { parameters: [], problems };
@@ -139,7 +148,7 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
 
                 if (problem) {
                     entry.problems.push(problem);
-                } else {
+                } else if (defaultValue === undefined || typeof defaultValue === 'string' || typeof defaultValue === 'number' || typeof defaultValue === 'boolean') {
                     entry.default = defaultValue;
                 }
             } else {
@@ -250,7 +259,7 @@ const _METADATA_PROBLEMS = {
 } satisfies Record<string, CharmMetadataProblem | ((...args: any[]) => CharmMetadataProblem)>;
 
 export function parseCharmMetadataYAML(content: string): CharmMetadata {
-    const doc: any = yaml.load(content);
+    const doc = tryParseYAML(content);
     const result = emptyMetadata();
     if (!doc || typeof doc !== 'object') {
         result.problems.push(_METADATA_PROBLEMS.invalidYAMLFile);
