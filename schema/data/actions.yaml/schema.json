@@ -1,0 +1,95 @@
+{
+    "$schema": "http://json-schema.org/schema",
+    "$id": "charms://schema/actions.json",
+    "$defs": {},
+    "type": "object",
+    "additionalProperties": false,
+    "patternProperties": {
+        "^[a-zA-Z_-][a-zA-Z0-9_-]*$": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'description'}}}"
+                },
+                "parallel": {
+                    "type": "boolean",
+                    "default": false,
+                    "markdownDescription": "{{{include 'parallel'}}}"
+                },
+                "execution-group": {
+                    "type": "string",
+                    "default": "",
+                    "markdownDescription": "{{{include 'execution-group'}}}"
+                },
+                "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "patternProperties": {
+                        "^.+$": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "enum": [
+                                        "string",
+                                        "boolean",
+                                        "number",
+                                        "integer",
+                                        "object",
+                                        "array",
+                                        "null"
+                                    ]
+                                },
+                                "description": {
+                                    "type": "string"
+                                },
+                                "default": {}
+                            }
+                        }
+                    },
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert parameter",
+                            "markdownDescription": "Inserts a parameter",
+                            "body": {
+                                "${1:parameter}": {
+                                    "type": "${2|string,boolean,number,integer,object,array,null|}",
+                                    "description": "${3:A parameter}"
+                                }
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'params'}}}"
+                }
+            },
+            "markdownDescription": "{{{include 'action'}}}"
+        }
+    },
+    "defaultSnippets": [
+        {
+            "label": "Insert action (without parameters)",
+            "markdownDescription": "Inserts an action (without parameters)",
+            "body": {
+                "${1:action}": {
+                    "description": "${2:An action}"
+                }
+            }
+        },
+        {
+            "label": "Insert action",
+            "markdownDescription": "Inserts an action",
+            "body": {
+                "${1:action}": {
+                    "description": "${2:An action}",
+                    "params": {
+                        "param": {
+                            "type": "${3|string,boolean,number,integer,object,array,null|}",
+                            "description": "${4:A parameter}"
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "required": []
+}
