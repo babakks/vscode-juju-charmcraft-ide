@@ -14,7 +14,7 @@ type SchemaMapByFilename = Map<string, Schema>;
 const SCHEMA_FILE = 'schema.json';
 const SCHEMA_INCLUDE_SUBDIR = 'include';
 
-export async function registerSchemas(schemaDataDir: string, yamlExtensionAPI: ExtensionAPI): Promise<vscode.Disposable> {
+export async function registerSchemas(schemaDataDir: string, yamlExtensionAPI: ExtensionAPI, watchForChanges: boolean): Promise<vscode.Disposable[]> {
     let [byURI, byFilename] = await loadSchemas(schemaDataDir);
     const protocols = new Set(Array.from(byURI.keys()).map(x => new URL(x).protocol).map(x => x.substring(0, -1 + x.length)));
 
@@ -43,8 +43,13 @@ export async function registerSchemas(schemaDataDir: string, yamlExtensionAPI: E
     const refresh = async (event: string, filename: string) => {
         [byURI, byFilename] = await loadSchemas(schemaDataDir);
     };
+
+    if (!watchForChanges) {
+        return [];
+    }
+
     const watchers = dirs.map(dir => watch(dir, refresh));
-    return { dispose: () => { watchers.forEach(x => x.close()); } };
+    return watchers.map(x => ({ dispose: () => x.close() }));
 }
 
 async function loadSchemas(schemaDir: string): Promise<[SchemaMapByURI, SchemaMapByFilename]> {

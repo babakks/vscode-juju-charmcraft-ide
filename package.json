@@ -1,6 +1,6 @@
 {
-    "name": "vscode-juju-charms-ide",
-    "displayName": "Juju Charms IDE",
+    "name": "vscode-juju-charmcraft-ide",
+    "displayName": "Charmcraft IDE",
     "description": "VS Code extension for Juju Charm development",
     "version": "0.0.1",
     "publisher": "babakks",
@@ -13,22 +13,24 @@
     "keywords": [
         "juju",
         "charm",
-        "charmcraft"
+        "charmcraft",
+        "ide"
     ],
     "activationEvents": [
         "onStartupFinished"
     ],
     "icon": "image/juju-128x128.png",
     "main": "./out/main.js",
-    "extensionDependencies": [
-        "redhat.vscode-yaml",
-        "ms-python.python"
-    ],
+    "extensionDependencies": [],
     "contributes": {
         "commands": [
             {
-                "command": "vscode-juju-charms-ide.helloWorld",
-                "title": "Hello World"
+                "command": "vscode-juju-charmcraft-ide.resetStateGlobal",
+                "title": "Reset State (Global)"
+            },
+            {
+                "command": "vscode-juju-charmcraft-ide.resetStateWorkspace",
+                "title": "Reset State (Workspace)"
             }
         ],
         "viewsContainers": {

@@ -1,10 +1,15 @@
-# Juju Charms IDE
+# Charmcraft IDE
 
-This is a VS Code extension to provide development tools for Juju Charms. 
+This is a VS Code extension to provide tools for Juju Charms development.
 
 ## Features
 
-- YAML file schema validation (e.g., `metadata.yaml` or `config.yaml`).
-- Configuration file auto-completions.
-- Hover for events and configuration parameters in charm source code.  
-- Auto-completion for events and configuration parameters in charm source code.  
+### Python features
+- Hover for events and configuration parameters in charm source code.
+- Auto-completion for events and configuration parameters in charm source code.
+
+### YAML features
+  > Note that for this feature to work, you need to install *Red Hat YAML* language server [extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml).
+  - Schema validation (e.g., `metadata.yaml` or `config.yaml`).
+  - Auto-completions (e.g., configurations or actions).
+  - Documentation hovers.
