@@ -8,7 +8,7 @@
 
 ```yaml
 description: |
-  <description>
+ <description>
 ```
 
 <!--

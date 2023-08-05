@@ -1,13 +1,13 @@
-<a href="#heading--provides"><h2 id="heading--provides">`provides`</h2></a>
+<a href="#heading--peers"><h2 id="heading--peers">`peers`</h2></a>
 
 **Status:** Optional.
 
-**Purpose:** Map of relations provided by this charm.
+**Purpose:** Mutual relations between units/peers of this charm.
 
 **Structure:**
 
 ```yaml
-provides:
+peers:
  # Each key represents the name of the relation as known by this charm
  <relation name>: {...}
 ```
