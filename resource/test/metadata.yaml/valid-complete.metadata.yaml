@@ -68,7 +68,7 @@ maintainers:
   - John Doe <john.doe@company.com>
   - Jane Doe <jane.doe@company.com>
 name: my-charm
-peer:
+peers:
   peer-one:
     interface: interface-one
     limit: 1

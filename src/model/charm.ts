@@ -132,7 +132,7 @@ export interface CharmMetadata {
     subordinate?: boolean;
     requires?: CharmEndpoint[];
     provides?: CharmEndpoint[];
-    peer?: CharmEndpoint[];
+    peers?: CharmEndpoint[];
     resources?: CharmResource[];
     devices?: CharmDevice[];
     storage?: CharmStorage[];
@@ -812,7 +812,7 @@ export class Charm {
             ...this._actions.actions.map(action => CHARM_ACTION_EVENT_TEMPLATE(action)).flat(1),
             ...this._metadata.storage?.map(storage => CHARM_STORAGE_EVENTS_TEMPLATE(storage)).flat(1) ?? [],
             ...this._metadata.containers?.map(container => CHARM_CONTAINER_EVENTS_TEMPLATE(container)).flat(1) ?? [],
-            ...this._metadata.peer?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/peer')).flat(1) ?? [],
+            ...this._metadata.peers?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/peer')).flat(1) ?? [],
             ...this._metadata.provides?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/provides')).flat(1) ?? [],
             ...this._metadata.requires?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/requires')).flat(1) ?? [],
         ];

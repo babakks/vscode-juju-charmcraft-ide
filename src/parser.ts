@@ -285,7 +285,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
 
     _optionalEndpoints(doc, result, 'requires', 'requires', _METADATA_PROBLEMS.requiresFieldInvalid, result.problems);
     _optionalEndpoints(doc, result, 'provides', 'provides', _METADATA_PROBLEMS.providesFieldInvalid, result.problems);
-    _optionalEndpoints(doc, result, 'peer', 'peer', _METADATA_PROBLEMS.peerFieldInvalid, result.problems);
+    _optionalEndpoints(doc, result, 'peers', 'peers', _METADATA_PROBLEMS.peerFieldInvalid, result.problems);
 
     _optionalResources(doc, result, 'resources', 'resources', _METADATA_PROBLEMS.resourcesFieldInvalid, result.problems);
     _optionalDevices(doc, result, 'devices', 'devices', _METADATA_PROBLEMS.devicesFieldInvalid, result.problems);
@@ -308,7 +308,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         'assumes',
         'requires',
         'provides',
-        'peer',
+        'peers',
         'resources',
         'devices',
         'storage',

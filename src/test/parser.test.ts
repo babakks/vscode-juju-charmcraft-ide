@@ -289,7 +289,7 @@ suite(parseCharmMetadataYAML.name, function () {
             issues: ['https://one.issues.url', 'https://two.issues.url'],
             maintainers: ['John Doe <john.doe@company.com>', 'Jane Doe <jane.doe@company.com>'],
             name: 'my-charm',
-            peer: [{
+            peers: [{
                 problems: [],
                 name: 'peer-one',
                 interface: 'interface-one',
