@@ -242,7 +242,6 @@ const _METADATA_PROBLEMS = {
     containerMissingResourceAndBases: (key: string) => ({ key, message: "One of `resource` or `bases` fields should be assigned." }),
     containerOnlyResourceOrBases: (key: string) => ({ key, message: "Only one of `resource` or `bases` fields should be assigned." }),
     containerMountsFieldInvalid: (key: string) => ({ key, message: "Value of `mounts` field should be an array of objects." }),
-    containerMountLocationFieldMissing: (index: number) => ({ index, message: "Missing `location` field." }),
     containerMountLocationFieldInvalid: (index: number) => ({ index, message: "Value of `location` field should be a string." }),
     containerMountStorageFieldMissing: (index: number) => ({ index, message: "Missing `storage` field." }),
     containerMountStorageFieldInvalid: (index: number) => ({ index, message: "Value of `storage` field should be a string." }),
@@ -682,14 +681,13 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
                     for (let i = 0; i < mounts.length; i++) {
                         const m = mounts[i];
                         const e: CharmContainerMount = {
-                            location: '',
                             storage: '',
                             problems: [],
                         };
                         entry.mounts.push(e);
 
-                        _required(m, e, 'string', 'location', 'location', _METADATA_PROBLEMS.containerMountLocationFieldMissing(i), _METADATA_PROBLEMS.containerMountLocationFieldInvalid(i), e.problems);
                         _required(m, e, 'string', 'storage', 'storage', _METADATA_PROBLEMS.containerMountStorageFieldMissing(i), _METADATA_PROBLEMS.containerMountStorageFieldInvalid(i), e.problems);
+                        _optional(m, e, 'string', 'location', 'location', _METADATA_PROBLEMS.containerMountLocationFieldInvalid(i), e.problems);
                     }
                 } else {
                     entry.problems.push(_METADATA_PROBLEMS.containerMountsFieldInvalid(key));

@@ -93,7 +93,7 @@ export interface CharmContainerBase {
 
 export interface CharmContainerMount {
     storage: string;
-    location: string;
+    location?: string;
     problems: CharmMetadataProblem[];
 }
 

@@ -46,7 +46,7 @@ export class EventHandlerCodeActionProvider implements CodeActionProvider {
         // } as CodeAction];
     }
 
-    resolveCodeAction?(codeAction: CodeAction, token: CancellationToken): ProviderResult<CodeAction> {
-        throw new Error('Method not implemented.');
-    }
+    // resolveCodeAction?(codeAction: CodeAction, token: CancellationToken): ProviderResult<CodeAction> {
+    //     throw new Error('Method not implemented.');
+    // }
 }

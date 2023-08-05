@@ -95,9 +95,9 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
 
     }
 
-    resolveCompletionItem?(item: CompletionItem, token: CancellationToken): ProviderResult<CompletionItem> {
-        return;
-    }
+    // resolveCompletionItem?(item: CompletionItem, token: CancellationToken): ProviderResult<CompletionItem> {
+    //     return;
+    // }
 
     getParameterDefaultValueAsString(param: CharmConfigParameter): string {
         switch (param.type) {
@@ -190,7 +190,7 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
 
     }
 
-    resolveCompletionItem?(item: CompletionItem, token: CancellationToken): ProviderResult<CompletionItem> {
-        return;
-    }
+    // resolveCompletionItem?(item: CompletionItem, token: CancellationToken): ProviderResult<CompletionItem> {
+    //     return;
+    // }
 }
