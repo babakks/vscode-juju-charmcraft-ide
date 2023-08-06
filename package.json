@@ -33,26 +33,7 @@
                 "command": "vscode-juju-charmcraft-ide.resetStateWorkspace",
                 "title": "Reset State (Workspace)"
             }
-        ],
-        "viewsContainers": {
-            "activitybar": [
-                {
-                    "id": "charms",
-                    "title": "Charms",
-                    "icon": "image/juju.svg"
-                }
-            ]
-        },
-        "views": {
-            "charms": [
-                {
-                    "id": "charms",
-                    "name": "Charms",
-                    "icon": "${terminal}",
-                    "type": "tree"
-                }
-            ]
-        }
+        ]
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
