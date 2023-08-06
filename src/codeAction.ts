@@ -9,9 +9,10 @@ import {
     TextDocument
 } from 'vscode';
 import { Registry } from './registry';
+import TelemetryReporter from '@vscode/extension-telemetry';
 
 export class EventHandlerCodeActionProvider implements CodeActionProvider {
-    constructor(readonly registry: Registry) { }
+    constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     async provideCodeActions(document: TextDocument, range: Range | Selection, context: CodeActionContext, token: CancellationToken): Promise<(CodeAction | Command)[] | undefined> {
         if (!(range instanceof Selection)) {

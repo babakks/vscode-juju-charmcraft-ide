@@ -13,6 +13,9 @@ import { Registry } from './registry';
 import { registerSchemas } from './schema';
 import { DocumentWatcher } from './watcher';
 import path = require('path');
+import TelemetryReporter from '@vscode/extension-telemetry';
+
+const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 
 const EXTENSION_SCHEMA_DATA_DIR = 'schema/data';
 
@@ -20,6 +23,9 @@ const RED_HAT_YAML_EXT = 'redhat.vscode-yaml';
 const GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT = 'never-ask-yaml-extension';
 
 export async function activate(context: ExtensionContext) {
+    const reporter = new TelemetryReporter(TELEMETRY_INSTRUMENTATION_KEY);
+    context.subscriptions.push(reporter);
+
     const output = window.createOutputChannel('Charms IDE');
     context.subscriptions.push(output);
 
@@ -28,16 +34,16 @@ export async function activate(context: ExtensionContext) {
     await registry.refresh();
 
     context.subscriptions.push(
-        ...registerCodeActionProviders(registry),
-        ...registerCompletionProviders(registry),
-        ...registerHoverProviders(registry)
+        ...registerCodeActionProviders(registry, reporter),
+        ...registerCompletionProviders(registry, reporter),
+        ...registerHoverProviders(registry, reporter)
     );
 
     const dw = new DocumentWatcher(registry);
     context.subscriptions.push(dw);
     dw.enable();
 
-    context.subscriptions.push(...registerCommands(context));
+    context.subscriptions.push(...registerCommands(context, reporter));
 
     // const python = extensions.getExtension('ms-python.python')?.exports as PythonExtension;
     // if (!python) {
@@ -54,15 +60,17 @@ export async function activate(context: ExtensionContext) {
 
 export function deactivate() { }
 
-function registerCommands(context: ExtensionContext): Disposable[] {
+function registerCommands(context: ExtensionContext, reporter: TelemetryReporter): Disposable[] {
     return [
         commands.registerCommand('vscode-juju-charmcraft-ide.resetStateGlobal', function () {
+            reporter.sendTelemetryEvent('v0.command.resetStateGlobal');
             const keys = context.globalState.keys();
             for (const key of keys) {
                 context.globalState.update(key, undefined);
             }
         }),
         commands.registerCommand('vscode-juju-charmcraft-ide.resetStateWorkspace', function () {
+            reporter.sendTelemetryEvent('v0.command.resetStateWorkspace');
             const keys = context.workspaceState.keys();
             for (const key of keys) {
                 context.workspaceState.update(key, undefined);
@@ -107,39 +115,39 @@ async function integrateWithYAMLExtension(context: ExtensionContext) {
     );
 }
 
-function registerCompletionProviders(registry: Registry): Disposable[] {
+function registerCompletionProviders(registry: Registry, reporter: TelemetryReporter): Disposable[] {
     return [
         languages.registerCompletionItemProvider(
             { scheme: 'file', language: 'python' },
-            new CharmConfigParametersCompletionProvider(registry),
+            new CharmConfigParametersCompletionProvider(registry, reporter),
             ...CHARM_CONFIG_COMPLETION_TRIGGER_CHARS
         ),
         languages.registerCompletionItemProvider(
             { scheme: 'file', language: 'python' },
-            new CharmEventCompletionProvider(registry),
+            new CharmEventCompletionProvider(registry, reporter),
             ...CHARM_EVENT_COMPLETION_TRIGGER_CHARS
         ),
     ];
 }
 
-function registerHoverProviders(registry: Registry): Disposable[] {
+function registerHoverProviders(registry: Registry, reporter: TelemetryReporter): Disposable[] {
     return [
         languages.registerHoverProvider(
             { scheme: 'file', language: 'python' },
-            new CharmConfigHoverProvider(registry)
+            new CharmConfigHoverProvider(registry, reporter),
         ),
         languages.registerHoverProvider(
             { scheme: 'file', language: 'python' },
-            new CharmEventHoverProvider(registry)
+            new CharmEventHoverProvider(registry, reporter),
         ),
     ];
 }
 
-function registerCodeActionProviders(registry: Registry): Disposable[] {
+function registerCodeActionProviders(registry: Registry, reporter: TelemetryReporter): Disposable[] {
     return [
         languages.registerCodeActionsProvider(
             { scheme: 'file', language: 'python' },
-            new EventHandlerCodeActionProvider(registry)
+            new EventHandlerCodeActionProvider(registry, reporter),
         ),
     ];
 }

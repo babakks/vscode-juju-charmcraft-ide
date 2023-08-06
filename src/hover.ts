@@ -9,11 +9,14 @@ import {
 } from 'vscode';
 import { Registry } from './registry';
 import { getConfigParamDocumentation, getEventDocumentation } from './util';
+import TelemetryReporter from '@vscode/extension-telemetry';
 
 const REGEX_SELF_CONFIG_BRACKET = /self(?:\.model)?\.config\[(['"])(?<name>.*?)\1/;
 const REGEX_SELF_CONFIG_GET_SET = /self(?:\.model)?\.config\.(?:get|set)\((['"])(?<name>.*?)\1/;
 export class CharmConfigHoverProvider implements HoverProvider {
-    constructor(readonly registry: Registry) { }
+    private static readonly _telemetryEvent = 'v0.hover.config';
+
+    constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
         const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
@@ -32,6 +35,8 @@ export class CharmConfigHoverProvider implements HoverProvider {
             return;
         }
 
+        this.reporter.sendTelemetryEvent(CharmConfigHoverProvider._telemetryEvent);
+
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
@@ -46,7 +51,9 @@ export class CharmConfigHoverProvider implements HoverProvider {
 
 const REGEX_SELF_ON = /self\.on\.(?<symbol>\w*)/;
 export class CharmEventHoverProvider implements HoverProvider {
-    constructor(readonly registry: Registry) { }
+    private static readonly _telemetryEvent = 'v0.hover.event';
+
+    constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
         const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
@@ -66,6 +73,8 @@ export class CharmEventHoverProvider implements HoverProvider {
         if (!event) {
             return;
         }
+
+        this.reporter.sendTelemetryEvent(CharmEventHoverProvider._telemetryEvent);
 
         return new Hover(getEventDocumentation(event, true));
     }

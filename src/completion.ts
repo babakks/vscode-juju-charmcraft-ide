@@ -13,14 +13,17 @@ import { Registry } from './registry';
 import { getConfigParamDocumentation, getEventDocumentation } from './util';
 import { CharmConfigParameter } from './model/charm';
 import { isInRange } from './model/common';
+import TelemetryReporter from '@vscode/extension-telemetry';
 
 export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['"', "'"];
 
 export class CharmConfigParametersCompletionProvider implements CompletionItemProvider<CompletionItem> {
+    private static readonly _telemetryEvent = 'v0.completion.config';
+
     private readonly _regexSelfConfigBracket = /self(?:\.model)?\.config\[(?<quote>["'])$/;
     private readonly _regexSelfConfigGetSet = /self(?:\.model)?\.config\.(?<method>get|set)\((?<quote>["'])$/;
 
-    constructor(readonly registry: Registry) { }
+    constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): Promise<CompletionItem[] | CompletionList<CompletionItem> | undefined> {
         const { workspaceCharm, relativeSourcePath } = this.registry.getCharmBySourceCodeFile(document.uri);
@@ -64,6 +67,8 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         if (!match) {
             return;
         }
+
+        this.reporter.sendTelemetryEvent(CharmConfigParametersCompletionProvider._telemetryEvent);
 
         const openQuote = match.groups!['quote'];
         const trailingText = document.getText(new Range(position, new Position(1 + position.line, 0)));
@@ -122,7 +127,9 @@ const SELF_FRAMEWORK_OBSERVE_SELF_ON = 'self.framework.observe(self.on.';
 export const CHARM_EVENT_COMPLETION_TRIGGER_CHARS = ['.', '('];
 
 export class CharmEventCompletionProvider implements CompletionItemProvider<CompletionItem> {
-    constructor(readonly registry: Registry) { }
+    private static readonly _telemetryEvent = 'v0.completion.event';
+
+    constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): ProviderResult<CompletionItem[] | CompletionList<CompletionItem>> {
         const { workspaceCharm, relativeSourcePath } = this.registry.getCharmBySourceCodeFile(document.uri);
@@ -162,6 +169,8 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
             return;
         }
 
+        this.reporter.sendTelemetryEvent(CharmEventCompletionProvider._telemetryEvent);
+
         const remainingLineText = document.getText(new Range(position, new Position(1 + position.line, 0)));
         const isNextCharClosedBracket = (isFullEventSubscription || isPartialEventSubscription) && remainingLineText.startsWith(')');
 
@@ -187,7 +196,6 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
             result.push(item);
         }
         return result;
-
     }
 
     // resolveCompletionItem?(item: CompletionItem, token: CancellationToken): ProviderResult<CompletionItem> {
