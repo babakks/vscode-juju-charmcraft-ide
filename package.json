@@ -1,45 +1,71 @@
 {
-    "name": "vscode-juju-charms-ide",
-    "displayName": "Juju Charms IDE",
+    "name": "vscode-juju-charmcraft-ide",
+    "displayName": "Charmcraft IDE",
     "description": "VS Code extension for Juju Charm development",
     "version": "0.0.1",
+    "publisher": "babakks",
     "engines": {
         "vscode": "^1.73.0"
     },
     "categories": [
-        "Other"
+        "Other",
+        "Programming Languages"
+    ],
+    "keywords": [
+        "juju",
+        "charm",
+        "charmcraft",
+        "ide"
     ],
     "activationEvents": [
-        "onCommand:vscode-juju-charms-ide.helloWorld"
+        "onStartupFinished"
     ],
-    "main": "./out/extension.js",
+    "icon": "image/juju-128x128.png",
+    "main": "./out/main.js",
+    "extensionDependencies": [],
     "contributes": {
         "commands": [
             {
-                "command": "vscode-juju-charms-ide.helloWorld",
-                "title": "Hello World"
+                "command": "vscode-juju-charmcraft-ide.resetStateGlobal",
+                "title": "Reset State (Global)",
+                "category": "Charmcraft IDE"
+            },
+            {
+                "command": "vscode-juju-charmcraft-ide.resetStateWorkspace",
+                "title": "Reset State (Workspace)",
+                "category": "Charmcraft IDE"
             }
         ]
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
+        "clean": "rm -rf out",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
-        "pretest": "npm run compile && npm run lint",
+        "pretest": "npm run clean && npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
-        "test": "node ./out/test/runTest.js"
+        "test-vscode": "node ./out/test/vscode/runTest.js",
+        "test": "mocha 'out/**/*.test.js' --ignore 'out/test/vscode/**/*' --ui tdd"
     },
     "devDependencies": {
+        "@types/chai": "^4.3.5",
         "@types/glob": "^7.2.0",
+        "@types/js-yaml": "^4.0.5",
         "@types/mocha": "^9.1.0",
         "@types/node": "14.x",
         "@types/vscode": "^1.73.0",
         "@typescript-eslint/eslint-plugin": "^5.16.0",
         "@typescript-eslint/parser": "^5.16.0",
         "@vscode/test-electron": "^2.1.3",
+        "chai": "^4.3.7",
         "eslint": "^8.11.0",
         "glob": "^7.2.0",
         "mocha": "^9.2.2",
-        "typescript": "^4.5.5"
+        "typescript": "^4.9.5"
+    },
+    "dependencies": {
+        "@vscode/extension-telemetry": "^0.8.2",
+        "handlebars": "^4.7.7",
+        "js-yaml": "^4.1.0"
     }
 }

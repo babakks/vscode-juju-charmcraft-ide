@@ -1,0 +1,12 @@
+action-array-empty: []
+action-array:
+  - element
+action-string: something
+action-number: 0
+action-invalid-description-array-empty:
+  description: []
+action-invalid-description-array:
+  description:
+    - element
+action-invalid-description-number:
+  description: 0
