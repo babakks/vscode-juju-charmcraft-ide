@@ -24,7 +24,6 @@
     "activationEvents": [
         "onStartupFinished"
     ],
-    "icon": "image/juju-128x128.png",
     "main": "./out/main.js",
     "extensionDependencies": [],
     "contributes": {
