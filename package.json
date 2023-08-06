@@ -24,6 +24,7 @@
     "activationEvents": [
         "onStartupFinished"
     ],
+    "icon": "image/logo-128x128.png",
     "main": "./out/main.js",
     "extensionDependencies": [],
     "contributes": {
