@@ -36,8 +36,6 @@ In some cases, it may be awkward or impossible to provide a sensible default. In
 
 **Examples:**
 
------
-
 ```yaml
 options:
   name:
@@ -61,4 +59,3 @@ options:
     type: boolean
     description: turn on debugging features of mediawiki
 ```
--------

@@ -31,7 +31,7 @@
                 }
             ],
             "patternProperties": {
-                ".+": {
+                "^.+$": {
                     "type": "object",
                     "defaultSnippets": [
                         {
@@ -52,6 +52,7 @@
                             }
                         }
                     ],
+                    "markdownDescription": "{{{include 'option-entry'}}}",
                     "properties": {
                         "type": {
                             "$id": "options/element/type",
@@ -61,16 +62,16 @@
                                 "float",
                                 "boolean"
                             ],
-                            "markdownDescription": "Specifies the data type of the configuration option. Possible values are: `string`, `int`, `float` and `boolean`."
+                            "markdownDescription": "{{{include 'option-entry-type'}}}"
                         },
                         "description": {
                             "$id": "options/element/description",
                             "type": "string",
-                            "markdownDescription": "Contains an explanation of the configuration item and the resulting behaviour. Might also include a list of acceptable values."
+                            "markdownDescription": "{{{include 'option-entry-description'}}}"
                         },
                         "default": {
                             "$id": "options/element/default",
-                            "markdownDescription": "Defines the default value for the option. Must be of the appropriate type and a sane default value in the context of the charm."
+                            "markdownDescription": "{{{include 'option-entry-default'}}}"
                         }
                     },
                     "required": [
@@ -164,6 +165,5 @@
                 }
             }
         }
-    },
-    "required": []
+    }
 }
