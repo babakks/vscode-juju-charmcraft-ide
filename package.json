@@ -4,6 +4,10 @@
     "description": "VS Code extension for Juju Charm development",
     "version": "0.0.1",
     "publisher": "babakks",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/babakks/vscode-juju-charmcraft-ide"
+    },
     "engines": {
         "vscode": "^1.73.0"
     },
