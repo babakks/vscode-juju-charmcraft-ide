@@ -4,6 +4,8 @@ This is a VS Code extension to provide tools for Juju Charms development. To lea
 
 [juju]: https://juju.is
 
+> ⚠️ *This extension is still in development. Please share your feedbacks/thoughts through submitting issues/PRs.* 🙏
+
 ## Features
 
 ### Python features
