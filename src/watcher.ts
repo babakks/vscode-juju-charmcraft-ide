@@ -59,7 +59,7 @@ export class DocumentWatcher implements Disposable {
             const keys = dirtyKeys.filter(x => x.startsWith(home));
             for (const k of keys) {
                 const uri = dirties.get(k)!;
-                charm.updateLiveSourceCodeFile(uri).then(() => {
+                charm.updateLiveFile(uri).then(() => {
                     // nop
                 });
             }

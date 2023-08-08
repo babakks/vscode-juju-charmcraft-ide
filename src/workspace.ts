@@ -1,7 +1,7 @@
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
 import { Disposable, Uri } from 'vscode';
-import { Charm, CharmSourceCode, CharmSourceCodeFile, CharmSourceCodeTree, emptyActions, emptyConfig, emptyMetadata } from './model/charm';
+import { Charm, CharmConfig, CharmSourceCode, CharmSourceCodeFile, CharmSourceCodeTree, emptyActions, emptyConfig, emptyMetadata } from './model/charm';
 import * as constant from './model/common';
 import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from './parser';
 import { tryReadWorkspaceFileAsText } from './util';
@@ -50,15 +50,19 @@ const WATCH_GLOB_PATTERN = `{${constant.CHARM_FILE_CONFIG_YAML},${constant.CHARM
 
 export class WorkspaceCharm implements vscode.Disposable {
     private _disposables: Disposable[] = [];
-    private _liveFileCache = new Map<string, CharmSourceCodeFile>();
+    private _liveSourceFileCache = new Map<string, CharmSourceCodeFile>();
+    private _liveConfigCache: CharmConfig | undefined;
 
     readonly model: Charm;
     private readonly _srcDir: Uri;
 
     private readonly watcher: vscode.FileSystemWatcher;
 
+    readonly configUri: Uri;
+
     constructor(readonly home: Uri, readonly output: vscode.OutputChannel) {
         this.model = new Charm();
+        this.configUri = Uri.joinPath(this.home, constant.CHARM_FILE_CONFIG_YAML);
         this._srcDir = Uri.joinPath(this.home, constant.CHARM_DIR_SRC);
         this._disposables.push(
             this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(home, WATCH_GLOB_PATTERN)),
@@ -121,6 +125,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         const content = await tryReadWorkspaceFileAsText(uri) || "";
         const config = (content ? parseCharmConfigYAML(content) : undefined) || emptyConfig();
         this.model.updateConfig(config);
+        this._liveConfigCache = undefined;
     }
 
     private async _refreshMetadata() {
@@ -148,7 +153,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
 
         this.model.src.updateFile(relativePath, file);
-        this._liveFileCache.delete(relativePath);
+        this._liveSourceFileCache.delete(relativePath);
     }
 
     private _makeFileWithOldAST(relativePath: string, newFile: CharmSourceCodeFile): CharmSourceCodeFile | undefined {
@@ -165,7 +170,7 @@ export class WorkspaceCharm implements vscode.Disposable {
             return;
         }
         this.model.updateSourceCode(new CharmSourceCode(tree));
-        this._liveFileCache.clear();
+        this._liveSourceFileCache.clear();
     }
 
     getLatestCachedLiveSourceCodeFile(uri: Uri): CharmSourceCodeFile | undefined {
@@ -173,7 +178,48 @@ export class WorkspaceCharm implements vscode.Disposable {
         if (!relativePath) {
             return undefined;
         }
-        return this._liveFileCache.get(relativePath) ?? this.model.src.getFile(relativePath);
+        return this._liveSourceFileCache.get(relativePath) ?? this.model.src.getFile(relativePath);
+    }
+
+    getLatestCachedConfig(): CharmConfig {
+        return this._liveConfigCache ?? this.model.config;
+    }
+
+    async updateLiveFile(uri: Uri) {
+        if (this._getRelativePathToSrc(uri) === undefined) {
+            await this.updateLiveSourceCodeFile(uri);
+        } else if (uri.path === this.configUri.path) {
+            await this.updateLiveConfigFile();
+        }
+    }
+
+    /**
+     * @returns `undefined` when there's no dirty document with the given URI. 
+     */
+    private _getDirtyDocumentContent(uri: Uri): string | undefined {
+        const docs = Array.from(vscode.workspace.textDocuments);
+        for (const doc of docs) {
+            if (doc.isClosed) {
+                continue;
+            }
+            if (doc.uri.toString() === uri.toString()) {
+                if (doc.isDirty) {
+                    return doc.getText();
+                }
+            }
+        }
+        return undefined;
+    }
+
+    async updateLiveConfigFile() {
+        const content = this._getDirtyDocumentContent(this.configUri);
+        if (content === undefined) {
+            this._liveConfigCache = this.model.config;
+            return;
+        }
+
+        this._log('config refreshed');
+        this._liveConfigCache = parseCharmConfigYAML(content);
     }
 
     async updateLiveSourceCodeFile(uri: Uri): Promise<CharmSourceCodeFile | undefined> {
@@ -182,26 +228,13 @@ export class WorkspaceCharm implements vscode.Disposable {
             return undefined;
         }
 
-        let content: string | undefined;
-        const docs = Array.from(vscode.workspace.textDocuments);
-        for (const doc of docs) {
-            if (doc.isClosed) {
-                continue;
-            }
-            if (doc.uri.toString() === uri.toString()) {
-                if (doc.isDirty) {
-                    content = doc.getText();
-                }
-                break;
-            }
-        }
-
+        const content = this._getDirtyDocumentContent(uri);
         if (content === undefined) {
             return this.model.src.getFile(relativePath);
         }
 
         // using cached data to avoid unnecessary running of python AST parser.
-        const cached = this._liveFileCache.get(relativePath);
+        const cached = this._liveSourceFileCache.get(relativePath);
         if (cached?.content === content) {
             return cached;
         }
@@ -219,7 +252,7 @@ export class WorkspaceCharm implements vscode.Disposable {
             }
         }
 
-        this._liveFileCache.set(relativePath, file);
+        this._liveSourceFileCache.set(relativePath, file);
         return file;
     }
 

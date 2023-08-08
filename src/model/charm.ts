@@ -157,7 +157,13 @@ export interface CharmAction {
     name: string;
     symbol: string;
     description?: string;
-    problems: CharmActionProblem[];
+    node?: CharmActionNode;
+    problems: Problem[];
+}
+
+export interface CharmActionNode {
+    entire?: YAMLNode;
+    description?: YAMLNode;
 }
 
 export interface CharmActionProblem {
@@ -168,6 +174,20 @@ export interface CharmActionProblem {
 export interface CharmActions {
     actions: CharmAction[];
     problems: CharmActionProblem[];
+}
+
+export interface YAMLNode {
+    range: Range;
+    pairKeyRange?: Range;
+    pairValueRange?: Range;
+    problems: Problem[];
+}
+
+export interface Problem {
+    message: string;
+    key?: string;
+    index?: number;
+    [key: string]: any;
 }
 
 export class CharmSourceCodeFile {

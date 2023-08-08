@@ -1,6 +1,7 @@
 import { TextDecoder } from 'util';
 import { MarkdownString, Uri, workspace } from 'vscode';
-import { CharmConfigParameter, CharmEvent } from './model/charm';
+import { CharmConfigParameter, CharmEvent, escapeRegex } from './model/charm';
+import { Range } from './model/common';
 
 const SEPARATOR = '\n<hr/>\n\n';
 

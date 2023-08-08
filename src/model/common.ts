@@ -47,3 +47,59 @@ export function isInRange(position: Position, range: Range): boolean {
 export function toValidSymbol(value: string): string {
     return value.replace(/-/g, '_');
 }
+
+export class TextPositionMapper {
+    readonly lines: string[];
+    private readonly _offsets: number[];
+
+    constructor(readonly content: string) {
+        this.lines = content.split('\n');
+        this._offsets = new Array<number>(this.lines.length);
+        let cursor = 0;
+        for (let i = 0; i < this.lines.length; i++) {
+            this._offsets[i] = cursor;
+            cursor += 1 + this.lines[i].length;
+            if (this.lines[i].endsWith('\r')) {
+                this.lines[i] = this.lines[i].substring(0, -1 + this.lines[i].length);
+            }
+        }
+    }
+
+    indexToPosition(index: number): Position {
+        if (!Number.isInteger(index)) {
+            index = Math.floor(index);
+        }
+        for (let i = -1 + this._offsets.length; i >= 0; i--) {
+            if (this._offsets[i] <= index) {
+                const delta = index - this._offsets[i];
+                return {
+                    line: i,
+                    character: delta <= this.lines[i].length ? delta : this.lines[i].length,
+                };
+            }
+        }
+        return {
+            line: -1 + this.lines.length,
+            character: this.lines[-1 + this.lines.length].length,
+        };
+    }
+
+    positionToIndex(position: Position): number {
+        const posLine = Number.isInteger(position.line) ? position.line : Math.floor(position.line);
+        const posCharacter = Number.isInteger(position.character) ? position.character : Math.floor(position.character);
+        if (posLine > -1 + this.lines.length) {
+            return this.content.length;
+        }
+        if (posLine < 0) {
+            return 0;
+        }
+        if (posCharacter < 0) {
+            return this._offsets[posLine];
+        }
+        const line = this.lines[posLine];
+        if (posCharacter >= line.length) {
+            return this._offsets[posLine] + line.length;
+        }
+        return this._offsets[posLine] + posCharacter;
+    }
+}

@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import * as yaml from 'js-yaml';
+import { parseDocument, isPair, isMap, isSeq, isScalar, Node, Pair, ParsedNode, YAMLMap } from 'yaml';
 import { tmpdir } from 'os';
 import {
     CharmAction,
@@ -20,10 +21,12 @@ import {
     CharmMetadataProblem,
     CharmResource,
     CharmStorage,
+    Problem,
+    YAMLNode,
     emptyMetadata,
     isConfigParameterType
 } from './model/charm';
-import { toValidSymbol } from './model/common';
+import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
 
 function tryParseYAML(content: string): any {
@@ -34,6 +37,58 @@ function tryParseYAML(content: string): any {
     }
 }
 
+function getYAMLNodeRange(node: Node, tpm: TextPositionMapper): Range {
+    if (!node.range) {
+        return { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
+    }
+    return {
+        start: tpm.indexToPosition(node.range[0]),
+        end: tpm.indexToPosition(node.range[2]),
+    };
+}
+
+function getYAMLPairNodeRange(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPositionMapper): Range {
+    return {
+        start: tpm.indexToPosition(node.key.range[0]),
+        end: node.value ? tpm.indexToPosition(node.value.range[2]) : tpm.indexToPosition(node.key.range[2]),
+    };
+}
+
+function toYAMLNode(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPositionMapper): YAMLNode {
+    return {
+        range: getYAMLPairNodeRange(node, tpm),
+        pairKeyRange: getYAMLNodeRange(node.key, tpm),
+        pairValueRange: node.value ? getYAMLNodeRange(node.value, tpm) : undefined,
+        problems: [],
+    };
+}
+
+const YAML_PROBLEMS = {
+    missingField: (key: string) => ({ key, message: `Missing \`${key}\` field.` }),
+    unexpectedPrimitiveType: (key: string, expected: SupportedType) => ({ key, message: `Value of \`${key}\` must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
+    expectedObject: (key: string) => ({ key, message: `Value of \`${key}\` must be an object.` }),
+    expectedArray: (key: string) => ({ key, message: `Value of \`${key}\` must be an array.` }),
+} satisfies Record<string, Problem | ((...args: any[]) => Problem)>;;
+
+type SupportedType = 'string' | 'boolean' | 'number' | 'integer';
+
+type ParsePairResult = { found: boolean; problems: Problem[]; yamlNode?: YAMLNode; value?: any };
+function parsePair(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t: SupportedType, tpm: TextPositionMapper, required?: boolean): ParsePairResult {
+    const result: ParsePairResult = { found: false, problems: [] };
+    const pairNode = node.items.find(x => isScalar(x.key) && x.key.toString() === key);
+    result.found = !!pairNode;
+    if (!pairNode) {
+        if (required) {
+            result.problems.push(YAML_PROBLEMS.missingField(key));
+        }
+    } else if (pairNode.value && isScalar(pairNode.value) && (typeof pairNode.value.value === t || t === 'integer' && typeof pairNode.value.value === 'number' && Number.isInteger(pairNode.value.value))) {
+        result.value = pairNode.value.value;
+        result.yamlNode = toYAMLNode(pairNode, tpm);
+    } else {
+        result.problems.push(YAML_PROBLEMS.unexpectedPrimitiveType(key, t));
+    }
+    return result;
+}
 
 const _ACTION_PROBLEMS = {
     invalidYAMLFile: { message: "Invalid YAML file." },
@@ -43,32 +98,36 @@ const _ACTION_PROBLEMS = {
 
 export function parseCharmActionsYAML(content: string): CharmActions {
     const problems: CharmActionProblem[] = [];
-    const doc = tryParseYAML(content);
-    if (!doc || typeof doc !== 'object') {
+    const doc = parseDocument(content).contents;
+
+    if (!isMap(doc)) {
         problems.push(_ACTION_PROBLEMS.invalidYAMLFile);
         return { actions: [], problems };
     }
 
+    const tpm = new TextPositionMapper(content);
     const actions: CharmAction[] = [];
-    for (const [name, value] of Object.entries(doc)) {
+    for (const item of doc.items) {
+        const name = item.key.toString();
         const entry: CharmAction = {
             name,
             symbol: toValidSymbol(name),
+            node: { entire: toYAMLNode(item, tpm), },
             problems: [],
         };
         actions.push(entry);
 
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            entry.problems.push(_ACTION_PROBLEMS.entryMustBeObject(name));
+        const valueNode = item.value;
+        if (!isMap(valueNode)) {
+            entry.problems.push(YAML_PROBLEMS.expectedObject(name));
             continue;
         }
 
-        if ('description' in value) {
-            if (typeof value['description'] !== 'string') {
-                entry.problems.push(_ACTION_PROBLEMS.entryDescriptionMustBeValid(name));
-            } else {
-                entry.description = value.description;
-            }
+        const descriptionNode = parsePair(valueNode, 'description', 'string', tpm, false);
+        entry.node!.description = descriptionNode.yamlNode;
+        entry.problems.push(...descriptionNode.problems);
+        if (descriptionNode.found && !descriptionNode.problems.length) {
+            entry.description = descriptionNode.value;
         }
     }
 
