@@ -166,14 +166,14 @@ export interface CharmActionNode {
     description?: YAMLNode;
 }
 
-export interface CharmActionProblem {
+export interface Problem {
     message: string;
     action?: string;
 }
 
 export interface CharmActions {
     actions: CharmAction[];
-    problems: CharmActionProblem[];
+    problems: Problem[];
 }
 
 export interface YAMLNode {
@@ -749,10 +749,7 @@ export function emptyActions(): CharmActions {
 }
 
 export function emptyConfig(): CharmConfig {
-    return {
-        parameters: [],
-        problems: []
-    };
+    return new CharmConfig('', [], []);
 }
 
 export function emptyMetadata(): CharmMetadata {

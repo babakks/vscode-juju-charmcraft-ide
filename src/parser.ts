@@ -5,12 +5,10 @@ import { parseDocument, isPair, isMap, isSeq, isScalar, Node, Pair, ParsedNode, 
 import { tmpdir } from 'os';
 import {
     CharmAction,
-    CharmActionProblem,
     CharmActions,
     CharmAssumptions,
     CharmConfig,
     CharmConfigParameter,
-    CharmConfigParameterProblem,
     CharmContainer,
     CharmContainerBase,
     CharmContainerMount,
@@ -24,7 +22,8 @@ import {
     Problem,
     YAMLNode,
     emptyMetadata,
-    isConfigParameterType
+    isConfigParameterType,
+    CharmConfigParameterType
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
@@ -64,10 +63,12 @@ function toYAMLNode(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPosition
 }
 
 const YAML_PROBLEMS = {
+    invalidYAML: { message: "Invalid YAML file." },
     missingField: (key: string) => ({ key, message: `Missing \`${key}\` field.` }),
     unexpectedPrimitiveType: (key: string, expected: SupportedType) => ({ key, message: `Value of \`${key}\` must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
     expectedObject: (key: string) => ({ key, message: `Value of \`${key}\` must be an object.` }),
     expectedArray: (key: string) => ({ key, message: `Value of \`${key}\` must be an array.` }),
+    expectedEnumValue: (key: string, expectedValues: string[]) => ({ key, message: `Value of \`${key}\` must be one of the following: ${expectedValues.join(', ')}.` }),
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;;
 
 type SupportedType = 'string' | 'boolean' | 'number' | 'integer';
@@ -90,18 +91,26 @@ function parsePair(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t:
     return result;
 }
 
+function parsePairStringEnum(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, enumValues: string[], tpm: TextPositionMapper, required?: boolean): ParsePairResult {
+    const result = parsePair(node, key, 'string', tpm, required);
+    if (!result.found || result.problems.length || !enumValues.includes(result.value)) {
+        result.problems.push(YAML_PROBLEMS.expectedEnumValue(key, enumValues));
+    }
+    return result;
+}
+
 const _ACTION_PROBLEMS = {
     invalidYAMLFile: { message: "Invalid YAML file." },
     entryMustBeObject: (key: string) => ({ action: key, message: `Action entry \`${key}\` must be an object.` }),
     entryDescriptionMustBeValid: (key: string) => ({ action: key, message: `Description for action \`${key}\` should be a string.` }),
-} satisfies Record<string, CharmActionProblem | ((...args: any[]) => CharmActionProblem)>;
+} satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
 
 export function parseCharmActionsYAML(content: string): CharmActions {
-    const problems: CharmActionProblem[] = [];
+    const problems: Problem[] = [];
     const doc = parseDocument(content).contents;
 
     if (!isMap(doc)) {
-        problems.push(_ACTION_PROBLEMS.invalidYAMLFile);
+        problems.push(YAML_PROBLEMS.invalidYAML);
         return { actions: [], problems };
     }
 
@@ -135,101 +144,119 @@ export function parseCharmActionsYAML(content: string): CharmActions {
 }
 
 const _CONFIG_PROBLEMS = {
-    invalidYAMLFile: { message: "Invalid YAML file." },
-    optionsFieldMissing: { message: "Missing `options` field." },
-    optionsFieldMustBeObject: { message: "The `options` field must be an object." },
-    paramEntryMustBeObject: (key: string) => ({ parameter: key, message: `Parameter entry \`${key}\` must be an object.` }),
-    paramEntryMustIncludeType: (key: string) => ({ parameter: key, message: `Parameter \`${key}\` must include \`type\` field.` }),
-    paramEntryTypeMustBeValid: (key: string) => ({ parameter: key, message: `Parameter \`${key}\` must have a valid type; \`bool\`, \`string\`, \`int\`, or \`float\`.` }),
-    paramEntryDefaultMustMatchTypeBoolean: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a boolean value.` }),
-    paramEntryDefaultMustMatchTypeString: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a string value.` }),
-    paramEntryDefaultMustMatchTypeInteger: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be an integer value.` }),
-    paramEntryDefaultMustMatchTypeFloat: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a float value.` }),
-    paramEntryDefaultMustBeValid: // This happens when there'n no `type` field to restrict the default value type
+    // invalidYAMLFile: { message: "Invalid YAML file." },
+    // optionsFieldMissing: { message: "Missing `options` field." },
+    // optionsFieldMustBeObject: { message: "The `options` field must be an object." },
+    // paramEntryMustBeObject: (key: string) => ({ parameter: key, message: `Parameter entry \`${key}\` must be an object.` }),
+    // paramEntryMustIncludeType: (key: string) => ({ parameter: key, message: `Parameter \`${key}\` must include \`type\` field.` }),
+    // paramEntryTypeMustBeValid: (key: string) => ({ parameter: key, message: `Parameter \`${key}\` must have a valid type; \`bool\`, \`string\`, \`int\`, or \`float\`.` }),
+    // paramEntryDefaultMustMatchTypeBoolean: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a boolean value.` }),
+    // paramEntryDefaultMustMatchTypeString: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a string value.` }),
+    // paramEntryDefaultMustMatchTypeInteger: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be an integer value.` }),
+    // paramEntryDefaultMustMatchTypeFloat: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a float value.` }),
+    // paramEntryDescriptionMustBeValid: (key: string) => ({ parameter: key, message: `Description for parameter \`${key}\` should be a string.` }),
+
+    invalidDefault: // This happens when there'n no `type` field to restrict the default value type
         (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` must have a valid type; boolean, string, integer, or float.` }),
-    paramEntryDescriptionMustBeValid: (key: string) => ({ parameter: key, message: `Description for parameter \`${key}\` should be a string.` }),
-} satisfies Record<string, CharmConfigParameterProblem | ((...args: any[]) => CharmConfigParameterProblem)>;
+    wrongDefaultType: (key: string, expected: CharmConfigParameterType) => ({ key, message: `Default value for parameter \`${key}\` must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
+
+} satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
 
 export function parseCharmConfigYAML(content: string): CharmConfig {
-    const problems: CharmConfigParameterProblem[] = [];
-    const doc = tryParseYAML(content);
-    if (!doc || typeof doc !== 'object') {
-        problems.push(_CONFIG_PROBLEMS.invalidYAMLFile);
-        return { parameters: [], problems };
-    }
-    if (!('options' in doc)) {
-        problems.push(_CONFIG_PROBLEMS.optionsFieldMissing);
-        return { parameters: [], problems };
-    }
-    if (!doc['options'] || typeof doc['options'] !== 'object' || Array.isArray(doc['options'])) {
-        problems.push(_CONFIG_PROBLEMS.optionsFieldMustBeObject);
-        return { parameters: [], problems };
+    const problems: Problem[] = [];
+    const doc = parseDocument(content).contents;
+
+    if (!isMap(doc)) {
+        problems.push(YAML_PROBLEMS.invalidYAML);
+        return new CharmConfig(content, [], problems);
     }
 
+    const optionsNode = doc.items.find(x => isScalar(x.key) && x.key.toString() === 'options');
+    if (!optionsNode) {
+        return new CharmConfig(content, [], problems);
+    }
+
+    if (!isMap(optionsNode.value)) {
+        problems.push(YAML_PROBLEMS.expectedObject('options'));
+        return new CharmConfig(content, [], problems);
+    }
+
+    const tpm = new TextPositionMapper(content);
     const parameters: CharmConfigParameter[] = [];
-    for (const [name, value] of Object.entries(doc['options'])) {
+
+    for (const item of optionsNode.value.items) {
+        const name = item.key.toString();
         const entry: CharmConfigParameter = {
             name,
+            node: { entire: toYAMLNode(item, tpm), },
             problems: [],
         };
         parameters.push(entry);
 
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            entry.problems.push(_CONFIG_PROBLEMS.paramEntryMustBeObject(name));
+        const valueNode = item.value;
+        if (!isMap(valueNode)) {
+            entry.problems.push(YAML_PROBLEMS.expectedObject(name));
             continue;
         }
 
-        if (!('type' in value)) {
-            entry.problems.push(_CONFIG_PROBLEMS.paramEntryMustIncludeType(name));
-        } else if (!value['type'] || typeof value['type'] !== 'string' || !isConfigParameterType(value['type'])) {
-            entry.problems.push(_CONFIG_PROBLEMS.paramEntryTypeMustBeValid(name));
-        } else {
-            entry.type = value['type'];
+        const typeNode = parsePairStringEnum(valueNode, 'type', ['string', 'int', 'float', 'boolean'], tpm, true);
+        entry.node!.type = typeNode.yamlNode;
+        entry.problems.push(...typeNode.problems);
+        if (typeNode.found && !typeNode.problems.length) {
+            entry.type = typeNode.value;
         }
 
-        if ('default' in value) {
-            const defaultValue = value['default'];
-            if (entry.type) {
-                let problem: CharmConfigParameterProblem | undefined;
+        const descriptionNode = parsePair(valueNode, 'description', 'string', tpm, false);
+        entry.node!.description = descriptionNode.yamlNode;
+        entry.problems.push(...descriptionNode.problems);
+        if (descriptionNode.found && !descriptionNode.problems.length) {
+            entry.description = descriptionNode.value;
+        }
 
+        const defaultNode = valueNode.items.find(x => isScalar(x.key) && x.key.toString() === 'default');
+        if (defaultNode) {
+            entry.node!.default = toYAMLNode(defaultNode, tpm);
+            if (entry.type) {
+                let problem: Problem | undefined;
+                const defaultValue = isScalar(defaultNode.value)
+                    ? defaultNode.value.value
+                    : null /* this makes sure one of the following if-statements will catch the mis-typed default value */;
                 if (entry.type === 'string' && typeof defaultValue !== 'string') {
-                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeString(name);
+                    problem = _CONFIG_PROBLEMS.wrongDefaultType(name, 'string');
                 }
                 else if (entry.type === 'boolean' && typeof defaultValue !== 'boolean') {
-                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeBoolean(name);
+                    problem = _CONFIG_PROBLEMS.wrongDefaultType(name, 'boolean');
                 }
                 else if (entry.type === 'int' && (typeof defaultValue !== 'number' || !Number.isInteger(defaultValue))) {
-                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeInteger(name);
+                    problem = _CONFIG_PROBLEMS.wrongDefaultType(name, 'int');
                 }
                 else if (entry.type === 'float' && typeof defaultValue !== 'number') {
-                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeFloat(name);
+                    problem = _CONFIG_PROBLEMS.wrongDefaultType(name, 'float');
                 }
 
                 if (problem) {
-                    entry.problems.push(problem);
-                } else if (defaultValue === undefined || typeof defaultValue === 'string' || typeof defaultValue === 'number' || typeof defaultValue === 'boolean') {
-                    entry.default = defaultValue;
+                    entry.node!.default.problems.push(problem);
+                } else {
+                    (entry as any).default = defaultValue;
                 }
             } else {
                 // There's no valid type for the parameter, so we should check if the default value is not essentially invalid.
-                if (!(typeof defaultValue === 'string' || typeof defaultValue === 'boolean' || typeof defaultValue === 'number')) {
-                    entry.problems.push(_CONFIG_PROBLEMS.paramEntryDefaultMustBeValid(name));
+                if (!isScalar(defaultNode.value)
+                    || !(
+                        typeof defaultNode.value.value === 'string'
+                        || typeof defaultNode.value.value === 'number'
+                        || typeof defaultNode.value.value === 'boolean'
+                    )
+                ) {
+                    entry.node!.default.problems.push(_CONFIG_PROBLEMS.invalidDefault(name));
                 } else {
-                    entry.default = defaultValue;
+                    entry.default = defaultNode.value.value;
                 }
-            }
-        }
-
-        if ('description' in value) {
-            if (typeof value['description'] !== 'string') {
-                entry.problems.push(_CONFIG_PROBLEMS.paramEntryDescriptionMustBeValid(name));
-            } else {
-                entry.description = value['description'];
             }
         }
     }
 
-    return { parameters, problems };
+    return new CharmConfig(content, parameters, problems);
 }
 
 const _METADATA_PROBLEMS = {
@@ -433,7 +460,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _requiredArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, missing: CharmActionProblem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _requiredArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, missing: Problem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
         if (!(key in doc)) {
             problems.push(missing);
         } else {

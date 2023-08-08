@@ -1,7 +1,7 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { CharmActionProblem, CharmConfigParameterProblem, CharmMetadata } from "../model/charm";
+import { Problem, CharmMetadata } from "../model/charm";
 import { parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from "../parser";
 import path = require("path");
 import { readFileSync } from "fs";
@@ -37,7 +37,7 @@ suite(parseCharmActionsYAML.name, function () {
     });
 
     suite('invalid yaml structure', function () {
-        const tests: { name: string; content: string; expectedProblems: CharmActionProblem[] }[] = [
+        const tests: { name: string; content: string; expectedProblems: Problem[] }[] = [
             {
                 name: 'invalid yaml',
                 content: '123',
@@ -119,7 +119,7 @@ suite(parseCharmConfigYAML.name, function () {
     });
 
     suite('invalid yaml structure', function () {
-        const tests: { name: string; content: string; expectedProblems: CharmConfigParameterProblem[] }[] = [
+        const tests: { name: string; content: string; expectedProblems: Problem[] }[] = [
             {
                 name: 'invalid yaml',
                 content: '123',
