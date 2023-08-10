@@ -65,77 +65,78 @@ function toYAMLNode(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPosition
 const YAML_PROBLEMS = {
     invalidYAML: { message: "Invalid YAML file." },
     missingField: (key: string) => ({ key, message: `Missing \`${key}\` field.` }),
-    unexpectedPrimitiveType: (key: string, expected: SupportedType) => ({ key, message: `Value of \`${key}\` must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
-    expectedObject: (key: string) => ({ key, message: `Value of \`${key}\` must be an object.` }),
-    expectedArray: (key: string) => ({ key, message: `Value of \`${key}\` must be an array.` }),
-    expectedEnumValue: (key: string, expectedValues: string[]) => ({ key, message: `Value of \`${key}\` must be one of the following: ${expectedValues.join(', ')}.` }),
+    unexpectedPrimitiveType: (expected: SupportedType) => ({ message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
+    expectedObject: { message: `Must be an object.` },
+    expectedArray: { message: `Must be an array.` },
+    expectedEnumValue: (expectedValues: string[]) => ({ message: `Must be one of the following: ${expectedValues.join(', ')}.` }),
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;;
 
 type SupportedType = 'string' | 'boolean' | 'number' | 'integer';
 
-type ParsePairResult = { found: boolean; problems: Problem[]; yamlNode?: YAMLNode; value?: any };
+type ParsePairResult = { found: boolean; problemsAtParent: Problem[]; yamlNode?: YAMLNode; value?: any };
 function parsePair(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t: SupportedType, tpm: TextPositionMapper, required?: boolean): ParsePairResult {
-    const result: ParsePairResult = { found: false, problems: [] };
+    const result: ParsePairResult = { found: false, problemsAtParent: [] };
     const pairNode = node.items.find(x => isScalar(x.key) && x.key.toString() === key);
     result.found = !!pairNode;
     if (!pairNode) {
         if (required) {
-            result.problems.push(YAML_PROBLEMS.missingField(key));
+            result.problemsAtParent.push(YAML_PROBLEMS.missingField(key));
         }
-    } else if (pairNode.value && isScalar(pairNode.value) && (typeof pairNode.value.value === t || t === 'integer' && typeof pairNode.value.value === 'number' && Number.isInteger(pairNode.value.value))) {
+        return result;
+    }
+    result.yamlNode = toYAMLNode(pairNode, tpm);
+    if (pairNode.value && isScalar(pairNode.value) && (typeof pairNode.value.value === t || t === 'integer' && typeof pairNode.value.value === 'number' && Number.isInteger(pairNode.value.value))) {
         result.value = pairNode.value.value;
-        result.yamlNode = toYAMLNode(pairNode, tpm);
     } else {
-        result.problems.push(YAML_PROBLEMS.unexpectedPrimitiveType(key, t));
+        result.yamlNode.problems.push(YAML_PROBLEMS.unexpectedPrimitiveType(t));
     }
     return result;
 }
 
 function parsePairStringEnum(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, enumValues: string[], tpm: TextPositionMapper, required?: boolean): ParsePairResult {
     const result = parsePair(node, key, 'string', tpm, required);
-    if (!result.found || result.problems.length || !enumValues.includes(result.value)) {
-        result.problems.push(YAML_PROBLEMS.expectedEnumValue(key, enumValues));
+    if (!result.found || result.problemsAtParent.length || result.yamlNode?.problems.length) {
+        return result;
+    }
+    if (!enumValues.includes(result.value)) {
+        result.yamlNode?.problems.push(YAML_PROBLEMS.expectedEnumValue(enumValues));
     }
     return result;
 }
 
-const _ACTION_PROBLEMS = {
-    invalidYAMLFile: { message: "Invalid YAML file." },
-    entryMustBeObject: (key: string) => ({ action: key, message: `Action entry \`${key}\` must be an object.` }),
-    entryDescriptionMustBeValid: (key: string) => ({ action: key, message: `Description for action \`${key}\` should be a string.` }),
-} satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
-
-export function parseCharmActionsYAML(content: string): CharmActions {
+export function parseCharmActionsYAML(raw: string): CharmActions {
     const problems: Problem[] = [];
-    const doc = parseDocument(content).contents;
+    const doc = parseDocument(raw).contents;
 
     if (!isMap(doc)) {
         problems.push(YAML_PROBLEMS.invalidYAML);
         return { actions: [], problems };
     }
 
-    const tpm = new TextPositionMapper(content);
+    const tpm = new TextPositionMapper(raw);
     const actions: CharmAction[] = [];
     for (const item of doc.items) {
         const name = item.key.toString();
         const entry: CharmAction = {
             name,
             symbol: toValidSymbol(name),
-            node: { entire: toYAMLNode(item, tpm), },
-            problems: [],
+            node: {
+                problems: [],
+                entire: toYAMLNode(item, tpm),
+            },
         };
         actions.push(entry);
 
         const valueNode = item.value;
         if (!isMap(valueNode)) {
-            entry.problems.push(YAML_PROBLEMS.expectedObject(name));
+            entry.node.problems.push(YAML_PROBLEMS.expectedObject);
             continue;
         }
 
         const descriptionNode = parsePair(valueNode, 'description', 'string', tpm, false);
-        entry.node!.description = descriptionNode.yamlNode;
-        entry.problems.push(...descriptionNode.problems);
-        if (descriptionNode.found && !descriptionNode.problems.length) {
+        entry.node.description = descriptionNode.yamlNode;
+        entry.node.problems.push(...descriptionNode.problemsAtParent);
+        if (descriptionNode.found && !descriptionNode.problemsAtParent.length && !descriptionNode.yamlNode?.problems.length) {
             entry.description = descriptionNode.value;
         }
     }
@@ -157,81 +158,83 @@ const _CONFIG_PROBLEMS = {
     // paramEntryDescriptionMustBeValid: (key: string) => ({ parameter: key, message: `Description for parameter \`${key}\` should be a string.` }),
 
     invalidDefault: // This happens when there'n no `type` field to restrict the default value type
-        (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` must have a valid type; boolean, string, integer, or float.` }),
-    wrongDefaultType: (key: string, expected: CharmConfigParameterType) => ({ key, message: `Default value for parameter \`${key}\` must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
+        { message: `Default value must have a valid type; boolean, string, integer, or float.` },
+    wrongDefaultType: (expected: CharmConfigParameterType) => ({ message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
 
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
 
-export function parseCharmConfigYAML(content: string): CharmConfig {
+export function parseCharmConfigYAML(raw: string): CharmConfig {
     const problems: Problem[] = [];
-    const doc = parseDocument(content).contents;
+    const doc = parseDocument(raw).contents;
 
     if (!isMap(doc)) {
         problems.push(YAML_PROBLEMS.invalidYAML);
-        return new CharmConfig(content, [], problems);
+        return { raw, parameters: [], problems };
     }
 
     const optionsNode = doc.items.find(x => isScalar(x.key) && x.key.toString() === 'options');
     if (!optionsNode) {
-        return new CharmConfig(content, [], problems);
+        return { raw, parameters: [], problems };
     }
 
     if (!isMap(optionsNode.value)) {
-        problems.push(YAML_PROBLEMS.expectedObject('options'));
-        return new CharmConfig(content, [], problems);
+        problems.push(YAML_PROBLEMS.expectedObject);
+        return { raw, parameters: [], problems };
     }
 
-    const tpm = new TextPositionMapper(content);
+    const tpm = new TextPositionMapper(raw);
     const parameters: CharmConfigParameter[] = [];
 
     for (const item of optionsNode.value.items) {
         const name = item.key.toString();
         const entry: CharmConfigParameter = {
             name,
-            node: { entire: toYAMLNode(item, tpm), },
-            problems: [],
+            node: {
+                problems: [],
+                entire: toYAMLNode(item, tpm),
+            },
         };
         parameters.push(entry);
 
         const valueNode = item.value;
         if (!isMap(valueNode)) {
-            entry.problems.push(YAML_PROBLEMS.expectedObject(name));
+            entry.node.problems.push(YAML_PROBLEMS.expectedObject);
             continue;
         }
 
         const typeNode = parsePairStringEnum(valueNode, 'type', ['string', 'int', 'float', 'boolean'], tpm, true);
-        entry.node!.type = typeNode.yamlNode;
-        entry.problems.push(...typeNode.problems);
-        if (typeNode.found && !typeNode.problems.length) {
+        entry.node.type = typeNode.yamlNode;
+        entry.node.problems.push(...typeNode.problemsAtParent);
+        if (typeNode.found && !typeNode.problemsAtParent.length && !typeNode.yamlNode?.problems.length) {
             entry.type = typeNode.value;
         }
 
         const descriptionNode = parsePair(valueNode, 'description', 'string', tpm, false);
         entry.node!.description = descriptionNode.yamlNode;
-        entry.problems.push(...descriptionNode.problems);
-        if (descriptionNode.found && !descriptionNode.problems.length) {
+        entry.node.problems.push(...descriptionNode.problemsAtParent);
+        if (descriptionNode.found && !descriptionNode.problemsAtParent.length && !descriptionNode.yamlNode?.problems.length) {
             entry.description = descriptionNode.value;
         }
 
         const defaultNode = valueNode.items.find(x => isScalar(x.key) && x.key.toString() === 'default');
         if (defaultNode) {
-            entry.node!.default = toYAMLNode(defaultNode, tpm);
+            entry.node.default = toYAMLNode(defaultNode, tpm);
             if (entry.type) {
                 let problem: Problem | undefined;
                 const defaultValue = isScalar(defaultNode.value)
                     ? defaultNode.value.value
                     : null /* this makes sure one of the following if-statements will catch the mis-typed default value */;
                 if (entry.type === 'string' && typeof defaultValue !== 'string') {
-                    problem = _CONFIG_PROBLEMS.wrongDefaultType(name, 'string');
+                    problem = _CONFIG_PROBLEMS.wrongDefaultType('string');
                 }
                 else if (entry.type === 'boolean' && typeof defaultValue !== 'boolean') {
-                    problem = _CONFIG_PROBLEMS.wrongDefaultType(name, 'boolean');
+                    problem = _CONFIG_PROBLEMS.wrongDefaultType('boolean');
                 }
                 else if (entry.type === 'int' && (typeof defaultValue !== 'number' || !Number.isInteger(defaultValue))) {
-                    problem = _CONFIG_PROBLEMS.wrongDefaultType(name, 'int');
+                    problem = _CONFIG_PROBLEMS.wrongDefaultType('int');
                 }
                 else if (entry.type === 'float' && typeof defaultValue !== 'number') {
-                    problem = _CONFIG_PROBLEMS.wrongDefaultType(name, 'float');
+                    problem = _CONFIG_PROBLEMS.wrongDefaultType('float');
                 }
 
                 if (problem) {
@@ -248,7 +251,7 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
                         || typeof defaultNode.value.value === 'boolean'
                     )
                 ) {
-                    entry.node!.default.problems.push(_CONFIG_PROBLEMS.invalidDefault(name));
+                    entry.node!.default.problems.push(_CONFIG_PROBLEMS.invalidDefault);
                 } else {
                     entry.default = defaultNode.value.value;
                 }
@@ -256,7 +259,7 @@ export function parseCharmConfigYAML(content: string): CharmConfig {
         }
     }
 
-    return new CharmConfig(content, parameters, problems);
+    return { raw, parameters, problems };
 }
 
 const _METADATA_PROBLEMS = {

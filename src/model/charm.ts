@@ -17,17 +17,21 @@ export interface CharmConfigParameter {
     type?: CharmConfigParameterType;
     description?: string;
     default?: string | number | boolean;
-    problems: CharmConfigParameterProblem[];
+    node: CharmConfigParameterNode;
 }
 
-export interface CharmConfigParameterProblem {
-    message: string;
-    parameter?: string;
+export interface CharmConfigParameterNode {
+    entire?: YAMLNode;
+    description?: YAMLNode;
+    type?: YAMLNode;
+    default?: YAMLNode;
+    problems: Problem[];
 }
 
 export interface CharmConfig {
+    raw: string;
     parameters: CharmConfigParameter[];
-    problems: CharmConfigParameterProblem[];
+    problems: Problem[];
 }
 
 export type CharmEndpointScope = 'global' | 'container';
@@ -157,18 +161,13 @@ export interface CharmAction {
     name: string;
     symbol: string;
     description?: string;
-    node?: CharmActionNode;
-    problems: Problem[];
+    node: CharmActionNode;
 }
 
 export interface CharmActionNode {
     entire?: YAMLNode;
     description?: YAMLNode;
-}
-
-export interface Problem {
-    message: string;
-    action?: string;
+    problems: Problem[];
 }
 
 export interface CharmActions {
@@ -749,7 +748,11 @@ export function emptyActions(): CharmActions {
 }
 
 export function emptyConfig(): CharmConfig {
-    return new CharmConfig('', [], []);
+    return {
+        raw: '',
+        parameters: [],
+        problems: [],
+    };
 }
 
 export function emptyMetadata(): CharmMetadata {
