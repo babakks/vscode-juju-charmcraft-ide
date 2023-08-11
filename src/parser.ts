@@ -144,21 +144,12 @@ export function parseCharmActionsYAML(raw: string): CharmActions {
     return { actions, problems };
 }
 
-const _CONFIG_PROBLEMS = {
-    // invalidYAMLFile: { message: "Invalid YAML file." },
-    // optionsFieldMissing: { message: "Missing `options` field." },
-    // optionsFieldMustBeObject: { message: "The `options` field must be an object." },
-    // paramEntryMustBeObject: (key: string) => ({ parameter: key, message: `Parameter entry \`${key}\` must be an object.` }),
-    // paramEntryMustIncludeType: (key: string) => ({ parameter: key, message: `Parameter \`${key}\` must include \`type\` field.` }),
-    // paramEntryTypeMustBeValid: (key: string) => ({ parameter: key, message: `Parameter \`${key}\` must have a valid type; \`bool\`, \`string\`, \`int\`, or \`float\`.` }),
-    // paramEntryDefaultMustMatchTypeBoolean: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a boolean value.` }),
-    // paramEntryDefaultMustMatchTypeString: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a string value.` }),
-    // paramEntryDefaultMustMatchTypeInteger: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be an integer value.` }),
-    // paramEntryDefaultMustMatchTypeFloat: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a float value.` }),
-    // paramEntryDescriptionMustBeValid: (key: string) => ({ parameter: key, message: `Description for parameter \`${key}\` should be a string.` }),
-
-    invalidDefault: // This happens when there'n no `type` field to restrict the default value type
-        { message: `Default value must have a valid type; boolean, string, integer, or float.` },
+const CONFIG_PROBLEMS = {
+    /**
+    * Occurs when the `default` field is assigned with a wrong type of value (e.g., object or array) and also the `type`
+    * field (to pinpoint the type of the default value) is missing,
+     */
+    invalidDefault: { message: `Default value must have a valid type; boolean, string, integer, or float.` },
     wrongDefaultType: (expected: CharmConfigParameterType) => ({ message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
 
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
@@ -225,16 +216,16 @@ export function parseCharmConfigYAML(raw: string): CharmConfig {
                     ? defaultNode.value.value
                     : null /* this makes sure one of the following if-statements will catch the mis-typed default value */;
                 if (entry.type === 'string' && typeof defaultValue !== 'string') {
-                    problem = _CONFIG_PROBLEMS.wrongDefaultType('string');
+                    problem = CONFIG_PROBLEMS.wrongDefaultType('string');
                 }
                 else if (entry.type === 'boolean' && typeof defaultValue !== 'boolean') {
-                    problem = _CONFIG_PROBLEMS.wrongDefaultType('boolean');
+                    problem = CONFIG_PROBLEMS.wrongDefaultType('boolean');
                 }
                 else if (entry.type === 'int' && (typeof defaultValue !== 'number' || !Number.isInteger(defaultValue))) {
-                    problem = _CONFIG_PROBLEMS.wrongDefaultType('int');
+                    problem = CONFIG_PROBLEMS.wrongDefaultType('int');
                 }
                 else if (entry.type === 'float' && typeof defaultValue !== 'number') {
-                    problem = _CONFIG_PROBLEMS.wrongDefaultType('float');
+                    problem = CONFIG_PROBLEMS.wrongDefaultType('float');
                 }
 
                 if (problem) {
@@ -251,7 +242,7 @@ export function parseCharmConfigYAML(raw: string): CharmConfig {
                         || typeof defaultNode.value.value === 'boolean'
                     )
                 ) {
-                    entry.node!.default.problems.push(_CONFIG_PROBLEMS.invalidDefault);
+                    entry.node!.default.problems.push(CONFIG_PROBLEMS.invalidDefault);
                 } else {
                     entry.default = defaultNode.value.value;
                 }
