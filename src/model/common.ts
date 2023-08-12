@@ -69,9 +69,15 @@ export class TextPositionMapper {
         if (!Number.isInteger(index)) {
             index = Math.floor(index);
         }
+        if (!this.content.length) {
+            return { line: 0, character: 0 };
+        }
         for (let i = -1 + this._offsets.length; i >= 0; i--) {
             if (this._offsets[i] <= index) {
                 const delta = index - this._offsets[i];
+                if (i === -1 + this.lines.length && this.lines[i].length && delta >= this.lines[i].length) {
+                    return { line: 1 + i, character: 0 };
+                }
                 return {
                     line: i,
                     character: delta <= this.lines[i].length ? delta : this.lines[i].length,
@@ -101,5 +107,15 @@ export class TextPositionMapper {
             return this._offsets[posLine] + line.length;
         }
         return this._offsets[posLine] + posCharacter;
+    }
+
+    /**
+     * @returns A range that covers all of the content.
+     */
+    all(): Range {
+        return {
+            start: { line: 0, character: 0 },
+            end: this.indexToPosition(this.content.length),
+        };
     }
 }
