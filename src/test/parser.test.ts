@@ -1,7 +1,7 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { Problem, CharmMetadata, CharmAction, CharmConfigParameter } from "../model/charm";
+import { Problem, CharmMetadata, CharmAction, CharmConfigParameter, emptyYAMLNode } from "../model/charm";
 import { parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from "../parser";
 import path = require("path");
 import { readFileSync } from "fs";
@@ -26,8 +26,7 @@ suite(parseCharmActionsYAML.name, function () {
         assert.lengthOf(actions, 3);
         assert.isEmpty(actions.map(x => [
             ...x.node.problems,
-            ...x.node.entire?.problems || [],
-            ...x.node.description?.problems || [],
+            ...x.description.node?.problems || [],
         ]).flat(), 'problem in some action(s)');
     });
 
@@ -40,34 +39,46 @@ suite(parseCharmActionsYAML.name, function () {
 
         c.next();
         assert.strictEqual(c.current.name, 'action-array-empty');
-        assert.deepEqual(c.current.node.problems, [{ message: 'Must be an object.' }]);
+        assert.deepEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-array');
-        assert.deepEqual(c.current.node.problems, [{ message: 'Must be an object.' }]);
+        assert.deepEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-string');
-        assert.deepEqual(c.current.node.problems, [{ message: 'Must be an object.' }]);
+        assert.deepEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-number');
-        assert.deepEqual(c.current.node.problems, [{ message: 'Must be an object.' }]);
+        assert.deepEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-invalid-description-array-empty');
         assert.isEmpty(c.current.node.problems);
-        assert.deepEqual(c.current.node.description?.problems, [{ message: 'Must be a string.' }]);
+        assert.deepEqual(c.current.description.node?.problems, [{
+            expected: 'string',
+            id: 'unexpectedPrimitiveType',
+            message: 'Must be a string.',
+        }]);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-invalid-description-array');
         assert.isEmpty(c.current.node.problems);
-        assert.deepEqual(c.current.node.description?.problems, [{ message: 'Must be a string.' }]);
+        assert.deepEqual(c.current.description.node?.problems, [{
+            expected: 'string',
+            id: 'unexpectedPrimitiveType',
+            message: 'Must be a string.',
+        }]);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-invalid-description-number');
         assert.isEmpty(c.current.node.problems);
-        assert.deepEqual(c.current.node.description?.problems, [{ message: 'Must be a string.' }]);
+        assert.deepEqual(c.current.description.node?.problems, [{
+            expected: 'string',
+            id: 'unexpectedPrimitiveType',
+            message: 'Must be a string.',
+        }]);
     });
 
     suite('invalid yaml structure', function () {
@@ -75,12 +86,12 @@ suite(parseCharmActionsYAML.name, function () {
             {
                 name: 'invalid yaml',
                 content: '123',
-                expectedProblems: [{ message: "Invalid YAML file." }],
+                expectedProblems: [{ id: 'invalidYAML', message: "Invalid YAML file." }],
             },
             {
                 name: 'empty',
                 content: '',
-                expectedProblems: [{ message: 'Invalid YAML file.' }],
+                expectedProblems: [{ id: 'invalidYAML', message: 'Invalid YAML file.' }],
             },
         ];
 
@@ -296,16 +307,19 @@ suite(parseCharmConfigYAML.name, function () {
 
 suite(parseCharmMetadataYAML.name, function () {
     const RESOURCE_ACTIONS_PATH = '../../resource/test/metadata.yaml';
-    function parseMetadata(resource: string): ReturnType<typeof parseCharmMetadataYAML> {
-        return parseCharmMetadataYAML(new TextDecoder().decode(readFileSync(path.join(__dirname, RESOURCE_ACTIONS_PATH, resource))));
+    function parseMetadata(resource: string): { raw: string, metadata: ReturnType<typeof parseCharmMetadataYAML> } {
+        const raw = new TextDecoder().decode(readFileSync(path.join(__dirname, RESOURCE_ACTIONS_PATH, resource)));
+        return { raw, metadata: parseCharmMetadataYAML(raw) };
     }
 
     test('valid-complete', function () {
-        const metadata = parseMetadata('valid-complete.metadata.yaml');
+        const { raw, metadata } = parseMetadata('valid-complete.metadata.yaml');
         assert.isEmpty(metadata.problems, 'expected no file-scope problem');
         /* eslint-disable */
         assert.deepStrictEqual(metadata, {
+            raw,
             problems: [],
+            node: emptyYAMLNode(),
             assumes: {
                 problems: [],
                 singles: ['juju >= 2.9', 'k8s-api'],

@@ -1,14 +1,15 @@
 import { spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import * as yaml from 'js-yaml';
-import { parseDocument, isPair, isMap, isSeq, isScalar, Node, Pair, ParsedNode, YAMLMap } from 'yaml';
 import { tmpdir } from 'os';
+import { Node, Pair, ParsedNode, YAMLMap, isMap, isPair, isScalar, isSeq, parseDocument } from 'yaml';
 import {
     CharmAction,
     CharmActions,
     CharmAssumptions,
     CharmConfig,
     CharmConfigParameter,
+    CharmConfigParameterType,
     CharmContainer,
     CharmContainerBase,
     CharmContainerMount,
@@ -16,14 +17,15 @@ import {
     CharmEndpoint,
     CharmExtraBinding,
     CharmMetadata,
-    CharmMetadataProblem,
     CharmResource,
     CharmStorage,
     Problem,
     YAMLNode,
     emptyMetadata,
+    emptyWithNode,
     isConfigParameterType,
-    CharmConfigParameterType
+    YAML_PROBLEMS,
+    emptyOptionalWithNode
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
@@ -55,6 +57,7 @@ function getYAMLPairNodeRange(node: Pair<ParsedNode, ParsedNode | null>, tpm: Te
 
 function toYAMLNode(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPositionMapper): YAMLNode {
     return {
+        raw: node,
         range: getYAMLPairNodeRange(node, tpm),
         pairKeyRange: getYAMLNodeRange(node.key, tpm),
         pairValueRange: node.value ? getYAMLNodeRange(node.value, tpm) : undefined,
@@ -62,55 +65,53 @@ function toYAMLNode(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPosition
     };
 }
 
-const YAML_PROBLEMS = {
-    invalidYAML: { message: "Invalid YAML file." },
-    missingField: (key: string) => ({ key, message: `Missing \`${key}\` field.` }),
-    unexpectedPrimitiveType: (expected: SupportedType) => ({ message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
-    expectedObject: { message: `Must be an object.` },
-    expectedArray: { message: `Must be an array.` },
-    expectedEnumValue: (expectedValues: string[]) => ({ message: `Must be one of the following: ${expectedValues.join(', ')}.` }),
-} satisfies Record<string, Problem | ((...args: any[]) => Problem)>;;
-
 type SupportedType = 'string' | 'boolean' | 'number' | 'integer';
 
-type ParsePairResult = { found: boolean; problemsAtParent: Problem[]; yamlNode?: YAMLNode; value?: any };
+type ParsePairResult = {
+    problemsAtParent: Problem[],
+    /**
+     * If the field was not found, this will be missing/`undefined`.
+     */
+    yamlNode?: YAMLNode;
+    /**
+     * Will not be `undefined` (not `null`), if parsing was unsuccessful.
+     */
+    value?: any
+};
+
 function parsePair(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t: SupportedType, tpm: TextPositionMapper, required?: boolean): ParsePairResult {
-    const result: ParsePairResult = { found: false, problemsAtParent: [] };
     const pairNode = node.items.find(x => isScalar(x.key) && x.key.toString() === key);
-    result.found = !!pairNode;
     if (!pairNode) {
-        if (required) {
-            result.problemsAtParent.push(YAML_PROBLEMS.missingField(key));
-        }
-        return result;
+        return { problemsAtParent: required ? [YAML_PROBLEMS.generic.missingField(key)] : [] };
     }
-    result.yamlNode = toYAMLNode(pairNode, tpm);
+    const result = {
+        yamlNode: toYAMLNode(pairNode, tpm),
+        problemsAtParent: [],
+    };
     if (pairNode.value && isScalar(pairNode.value) && (typeof pairNode.value.value === t || t === 'integer' && typeof pairNode.value.value === 'number' && Number.isInteger(pairNode.value.value))) {
-        result.value = pairNode.value.value;
+        (result as ParsePairResult).value = pairNode.value.value;
     } else {
-        result.yamlNode.problems.push(YAML_PROBLEMS.unexpectedPrimitiveType(t));
+        result.yamlNode.problems.push(YAML_PROBLEMS.generic.unexpectedPrimitiveType(t));
     }
     return result;
 }
 
 function parsePairStringEnum(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, enumValues: string[], tpm: TextPositionMapper, required?: boolean): ParsePairResult {
     const result = parsePair(node, key, 'string', tpm, required);
-    if (!result.found || result.problemsAtParent.length || result.yamlNode?.problems.length) {
+    if (result.problemsAtParent.length || !result.yamlNode || result.yamlNode.problems.length) {
         return result;
     }
     if (!enumValues.includes(result.value)) {
-        result.yamlNode?.problems.push(YAML_PROBLEMS.expectedEnumValue(enumValues));
+        result.yamlNode.problems.push(YAML_PROBLEMS.generic.expectedEnumValue(enumValues));
     }
     return result;
 }
 
 export function parseCharmActionsYAML(raw: string): CharmActions {
-    const problems: Problem[] = [];
     const doc = parseDocument(raw).contents;
 
     if (!isMap(doc)) {
-        problems.push(YAML_PROBLEMS.invalidYAML);
-        return { actions: [], problems };
+        return { actions: [], problems: [YAML_PROBLEMS.generic.invalidYAML] };
     }
 
     const tpm = new TextPositionMapper(raw);
@@ -120,57 +121,44 @@ export function parseCharmActionsYAML(raw: string): CharmActions {
         const entry: CharmAction = {
             name,
             symbol: toValidSymbol(name),
-            node: {
-                problems: [],
-                entire: toYAMLNode(item, tpm),
-            },
+            description: emptyOptionalWithNode(),
+            node: toYAMLNode(item, tpm),
         };
         actions.push(entry);
 
         const valueNode = item.value;
         if (!isMap(valueNode)) {
-            entry.node.problems.push(YAML_PROBLEMS.expectedObject);
+            entry.node.problems.push(YAML_PROBLEMS.generic.expectedObject);
             continue;
         }
 
         const descriptionNode = parsePair(valueNode, 'description', 'string', tpm, false);
-        entry.node.description = descriptionNode.yamlNode;
         entry.node.problems.push(...descriptionNode.problemsAtParent);
-        if (descriptionNode.found && !descriptionNode.problemsAtParent.length && !descriptionNode.yamlNode?.problems.length) {
+        if (descriptionNode.yamlNode) {
+            entry.description.node = descriptionNode.yamlNode;
+        }
+        if (descriptionNode.value !== undefined) {
             entry.description = descriptionNode.value;
         }
     }
 
-    return { actions, problems };
+    return { actions, problems: [] };
 }
 
-const CONFIG_PROBLEMS = {
-    /**
-    * Occurs when the `default` field is assigned with a wrong type of value (e.g., object or array) and also the `type`
-    * field (to pinpoint the type of the default value) is missing,
-     */
-    invalidDefault: { message: `Default value must have a valid type; boolean, string, integer, or float.` },
-    wrongDefaultType: (expected: CharmConfigParameterType) => ({ message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
-
-} satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
-
 export function parseCharmConfigYAML(raw: string): CharmConfig {
-    const problems: Problem[] = [];
     const doc = parseDocument(raw).contents;
 
     if (!isMap(doc)) {
-        problems.push(YAML_PROBLEMS.invalidYAML);
-        return { raw, parameters: [], problems };
+        return { raw, parameters: [], problems: [YAML_PROBLEMS.generic.invalidYAML] };
     }
 
     const optionsNode = doc.items.find(x => isScalar(x.key) && x.key.toString() === 'options');
     if (!optionsNode) {
-        return { raw, parameters: [], problems };
+        return { raw, parameters: [], problems: [] };
     }
 
     if (!isMap(optionsNode.value)) {
-        problems.push(YAML_PROBLEMS.expectedObject);
-        return { raw, parameters: [], problems };
+        return { raw, parameters: [], problems: [YAML_PROBLEMS.generic.expectedObject] };
     }
 
     const tpm = new TextPositionMapper(raw);
@@ -189,21 +177,21 @@ export function parseCharmConfigYAML(raw: string): CharmConfig {
 
         const valueNode = item.value;
         if (!isMap(valueNode)) {
-            entry.node.problems.push(YAML_PROBLEMS.expectedObject);
+            entry.node.problems.push(YAML_PROBLEMS.generic.expectedObject);
             continue;
         }
 
         const typeNode = parsePairStringEnum(valueNode, 'type', ['string', 'int', 'float', 'boolean'], tpm, true);
         entry.node.type = typeNode.yamlNode;
         entry.node.problems.push(...typeNode.problemsAtParent);
-        if (typeNode.found && !typeNode.problemsAtParent.length && !typeNode.yamlNode?.problems.length) {
+        if (typeNode.value !== undefined) {
             entry.type = typeNode.value;
         }
 
         const descriptionNode = parsePair(valueNode, 'description', 'string', tpm, false);
         entry.node!.description = descriptionNode.yamlNode;
         entry.node.problems.push(...descriptionNode.problemsAtParent);
-        if (descriptionNode.found && !descriptionNode.problemsAtParent.length && !descriptionNode.yamlNode?.problems.length) {
+        if (descriptionNode.value !== undefined) {
             entry.description = descriptionNode.value;
         }
 
@@ -216,16 +204,16 @@ export function parseCharmConfigYAML(raw: string): CharmConfig {
                     ? defaultNode.value.value
                     : null /* this makes sure one of the following if-statements will catch the mis-typed default value */;
                 if (entry.type === 'string' && typeof defaultValue !== 'string') {
-                    problem = CONFIG_PROBLEMS.wrongDefaultType('string');
+                    problem = YAML_PROBLEMS.config.wrongDefaultType('string');
                 }
                 else if (entry.type === 'boolean' && typeof defaultValue !== 'boolean') {
-                    problem = CONFIG_PROBLEMS.wrongDefaultType('boolean');
+                    problem = YAML_PROBLEMS.config.wrongDefaultType('boolean');
                 }
                 else if (entry.type === 'int' && (typeof defaultValue !== 'number' || !Number.isInteger(defaultValue))) {
-                    problem = CONFIG_PROBLEMS.wrongDefaultType('int');
+                    problem = YAML_PROBLEMS.config.wrongDefaultType('int');
                 }
                 else if (entry.type === 'float' && typeof defaultValue !== 'number') {
-                    problem = CONFIG_PROBLEMS.wrongDefaultType('float');
+                    problem = YAML_PROBLEMS.config.wrongDefaultType('float');
                 }
 
                 if (problem) {
@@ -242,7 +230,7 @@ export function parseCharmConfigYAML(raw: string): CharmConfig {
                         || typeof defaultNode.value.value === 'boolean'
                     )
                 ) {
-                    entry.node!.default.problems.push(CONFIG_PROBLEMS.invalidDefault);
+                    entry.node!.default.problems.push(YAML_PROBLEMS.config.invalidDefault);
                 } else {
                     entry.default = defaultNode.value.value;
                 }
@@ -250,7 +238,7 @@ export function parseCharmConfigYAML(raw: string): CharmConfig {
         }
     }
 
-    return { raw, parameters, problems };
+    return { raw, parameters, problems: [] };
 }
 
 const _METADATA_PROBLEMS = {
@@ -335,7 +323,7 @@ const _METADATA_PROBLEMS = {
     integrityContainerResourceUndefined: (container: string, resource: string) => ({ key: container, message: `Container resource \`${resource}\` is not defined,` }),
     integrityContainerMountStorageUndefined: (mount: number, storage: string) => ({ index: mount, message: `Container mount storage \`${storage}\` is not defined,` }),
 
-} satisfies Record<string, CharmMetadataProblem | ((...args: any[]) => CharmMetadataProblem)>;
+} satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
 
 export function parseCharmMetadataYAML(content: string): CharmMetadata {
     const doc = tryParseYAML(content);
@@ -416,7 +404,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
 
     return result;
 
-    function _required<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number' | 'int', key: string, mapToKey: keyof T, missing: CharmMetadataProblem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _required<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number' | 'int', key: string, mapToKey: keyof T, missing: Problem, invalid: Problem, problems: Problem[]) {
         if (!(key in doc)) {
             problems.push(missing);
         } else if (doc[key] !== undefined && doc[key] !== null && doc[key] && t === 'int' && typeof doc[key] === 'number' && Number.isInteger(doc[key])) {
@@ -428,7 +416,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optional<T>(doc: any, result: T, t: 'boolean' | 'number' | 'string' | 'int', key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optional<T>(doc: any, result: T, t: 'boolean' | 'number' | 'string' | 'int', key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!(key in doc)) {
             return;
         }
@@ -441,7 +429,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalValueOrArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalValueOrArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!(key in doc)) {
             return;
         }
@@ -454,7 +442,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _requiredArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, missing: Problem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _requiredArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, missing: Problem, invalid: Problem, problems: Problem[]) {
         if (!(key in doc)) {
             problems.push(missing);
         } else {
@@ -462,7 +450,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!(key in doc)) {
             return;
         }
@@ -473,7 +461,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalStringEnum<T>(doc: any, result: T, enumValues: string[], key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalStringEnum<T>(doc: any, result: T, enumValues: string[], key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!(key in doc)) {
             return;
         }
@@ -484,7 +472,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _requiredStringEnum<T>(doc: any, result: T, enumValues: string[], key: string, mapToKey: keyof T, missing: CharmMetadataProblem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _requiredStringEnum<T>(doc: any, result: T, enumValues: string[], key: string, mapToKey: keyof T, missing: Problem, invalid: Problem, problems: Problem[]) {
         if (!(key in doc)) {
             problems.push(missing);
         } else {
@@ -492,7 +480,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalEndpoints<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalEndpoints<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!doc[key]) {
             return;
         }
@@ -525,7 +513,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalResources<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalResources<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!doc[key]) {
             return;
         }
@@ -561,7 +549,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalDevices<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalDevices<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!doc[key]) {
             return;
         }
@@ -594,7 +582,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalStorage<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalStorage<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!doc[key]) {
             return;
         }
@@ -669,7 +657,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalExtraBindings<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalExtraBindings<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!doc[key]) {
             return;
         }
@@ -696,7 +684,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalContainers<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalContainers<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!doc[key]) {
             return;
         }
@@ -776,7 +764,7 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         }
     }
 
-    function _optionalAssumes<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
+    function _optionalAssumes<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: Problem, problems: Problem[]) {
         if (!doc[key]) {
             return;
         }

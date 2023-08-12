@@ -7,9 +7,62 @@ import {
     toValidSymbol
 } from "./common";
 
+export const YAML_PROBLEMS = {
+    /**
+     * Generic YAML file problems.
+     */
+    generic: {
+        invalidYAML: { id: 'invalidYAML', message: "Invalid YAML file." },
+        missingField: (key: string) => ({ id: 'missingField', key, message: `Missing \`${key}\` field.` }),
+        unexpectedPrimitiveType: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'unexpectedPrimitiveType', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
+        expectedObject: { id: 'expectedObject', message: `Must be an object.` },
+        expectedArray: { id: 'expectedArray', message: `Must be an array.` },
+        expectedEnumValue: (expectedValues: string[]) => ({ id: 'expectedEnumValue', message: `Must be one of the following: ${expectedValues.join(', ')}.` }),
+    },
+    /**
+     * Problems specific to `config.yaml`.
+     */
+    config: {
+        /**
+        * Occurs when the `default` field is assigned with a wrong type of value (e.g., object or array) and also the `type`
+        * field (to pinpoint the type of the default value) is missing,
+         */
+        invalidDefault: { id: 'invalidDefault', message: `Default value must have a valid type; boolean, string, integer, or float.` },
+        wrongDefaultType: (expected: CharmConfigParameterType) => ({ id: 'wrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
+    },
+} satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
+
 export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
 export function isConfigParameterType(value: string): value is CharmConfigParameterType {
     return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
+}
+
+type AttachedNode = {
+    /**
+     * If the field/value was not found, this will be missing/`undefined`.
+     */
+    node?: YAMLNode;
+};
+
+type WithNode<T> = AttachedNode & {
+    value: T;
+};
+
+type OptionalWithNode<T> = AttachedNode & {
+    value?: T;
+};
+
+export function emptyOptionalWithNode<T>(): OptionalWithNode<T> {
+    return {
+        node: emptyYAMLNode(),
+    };
+}
+
+export function emptyWithNode<T>(value: T): WithNode<T> {
+    return {
+        value,
+        node: emptyYAMLNode(),
+    };
 }
 
 export interface CharmConfigParameter {
@@ -31,6 +84,9 @@ export interface CharmConfigParameterNode {
 export interface CharmConfig {
     raw: string;
     parameters: CharmConfigParameter[];
+    /**
+     * File-level problems (e.g., invalid file format, or invalid `options` value).
+     */
     problems: Problem[];
 }
 
@@ -42,7 +98,7 @@ export interface CharmEndpoint {
     limit?: number;
     optional?: boolean;
     scope?: CharmEndpointScope;
-    problems: CharmMetadataProblem[];
+    problems: Problem[];
 }
 
 export type CharmResourceType = 'file' | 'oci-image' | 'unknown';
@@ -52,7 +108,7 @@ export interface CharmResource {
     type: CharmResourceType;
     description?: string;
     filename?: string;
-    problems: CharmMetadataProblem[];
+    problems: Problem[];
 }
 
 
@@ -63,7 +119,7 @@ export interface CharmDevice {
     description?: string;
     countMin?: number;
     countMax?: number;
-    problems: CharmMetadataProblem[];
+    problems: Problem[];
 }
 
 export type CharmStorageType = 'filesystem' | 'block' | 'unknown';
@@ -80,25 +136,25 @@ export interface CharmStorage {
     multiple?: string;
     minimumSize?: string;
     properties?: CharmStorageProperty[];
-    problems: CharmMetadataProblem[];
+    problems: Problem[];
 }
 
 export interface CharmExtraBinding {
     name: string;
-    problems: CharmMetadataProblem[];
+    problems: Problem[];
 }
 
 export interface CharmContainerBase {
     name: string;
     channel: string;
     architectures: string[];
-    problems: CharmMetadataProblem[];
+    problems: Problem[];
 }
 
 export interface CharmContainerMount {
     storage: string;
     location?: string;
-    problems: CharmMetadataProblem[];
+    problems: Problem[];
 }
 
 export interface CharmContainer {
@@ -106,23 +162,19 @@ export interface CharmContainer {
     resource?: string;
     bases?: CharmContainerBase[];
     mounts?: CharmContainerMount[];
-    problems: CharmMetadataProblem[];
+    problems: Problem[];
 }
 
 export interface CharmAssumptions {
     singles?: string[];
     allOf?: string[];
     anyOf?: string[];
-    problems: CharmMetadataProblem[];
-}
-
-export interface CharmMetadataProblem {
-    message: string;
-    key?: string;
-    index?: number;
+    problems: Problem[];
 }
 
 export interface CharmMetadata {
+    node: YAMLNode;
+    raw: string;
     name: string;
     displayName: string
     description: string
@@ -144,7 +196,35 @@ export interface CharmMetadata {
     containers?: CharmContainer[];
     assumes?: CharmAssumptions;
     customFields: { [key: string]: any };
-    problems: CharmMetadataProblem[];
+    /**
+     * File-level problems (e.g., invalid file format).
+     */
+    problems: Problem[];
+}
+
+export interface CharmMetadataNode {
+    entire: YAMLNode;
+    name?: YAMLNode;
+    displayName?: YAMLNode;
+    description?: YAMLNode;
+    summary?: YAMLNode;
+    source?: YAMLNode;
+    issues?: YAMLNode;
+    website?: YAMLNode;
+    maintainers?: YAMLNode;
+    terms?: YAMLNode;
+    docs?: YAMLNode;
+    subordinate?: YAMLNode;
+    requires?: YAMLNode;
+    provides?: YAMLNode;
+    peers?: YAMLNode;
+    resources?: YAMLNode;
+    devices?: YAMLNode;
+    storage?: YAMLNode;
+    extraBindings?: YAMLNode;
+    containers?: YAMLNode;
+    assumes?: YAMLNode;
+    problems: Problem[];
 }
 
 export type CharmEventSource = 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides' | 'storage' | 'container' | 'action' | 'built-in';
@@ -160,18 +240,22 @@ export interface CharmEvent {
 export interface CharmAction {
     name: string;
     symbol: string;
-    description?: string;
-    node: CharmActionNode;
+    description: OptionalWithNode<string>;
+    node: YAMLNode;
+    // node: WithNode<CharmActionNode>;
 }
 
-export interface CharmActionNode {
-    entire?: YAMLNode;
-    description?: YAMLNode;
-    problems: Problem[];
-}
+// export interface CharmActionNode {
+//     entire?: YAMLNode;
+//     description?: YAMLNode;
+//     problems: Problem[];
+// }
 
 export interface CharmActions {
     actions: CharmAction[];
+    /**
+     * File-level problems (e.g., invalid file format).
+     */
     problems: Problem[];
 }
 
@@ -180,12 +264,23 @@ export interface YAMLNode {
     pairKeyRange?: Range;
     pairValueRange?: Range;
     problems: Problem[];
+    /**
+     * Raw node returned by the underlying YAML parser/tokenizer library.
+     */
+    raw: any;
 }
 
 export interface Problem {
     message: string;
+    /**
+     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
+     */
+    id?: string;
     key?: string;
     index?: number;
+    /**
+     * Supplementary data for further usage (e.g., when providing fix suggestions). 
+     */
     [key: string]: any;
 }
 
@@ -740,6 +835,14 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
     ];
 };
 
+export function emptyYAMLNode(): YAMLNode {
+    return {
+        raw: '',
+        problems: [],
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    };
+}
+
 export function emptyActions(): CharmActions {
     return {
         actions: [],
@@ -757,12 +860,14 @@ export function emptyConfig(): CharmConfig {
 
 export function emptyMetadata(): CharmMetadata {
     return {
+        raw: '',
+        node: emptyYAMLNode(),
+        problems: [],
         name: '',
         description: '',
         displayName: '',
         summary: '',
         customFields: {},
-        problems: [],
     };
 }
 
