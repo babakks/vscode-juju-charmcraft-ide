@@ -691,6 +691,13 @@ export function getTextOverRange(lines: string[], range: Range): string {
     const portion = lines.slice(start.line, 1 + end.line);
     portion[-1 + portion.length] = portion[-1 + portion.length].substring(0, end.character);
     portion[0] = portion[0].substring(start.character);
+
+    if (portion[-1 + portion.length] === '') {
+        portion.pop();
+    }
+    if (portion[0] === '') {
+        portion.splice(0, 1);
+    }
     return portion.join('\n');
 }
 
