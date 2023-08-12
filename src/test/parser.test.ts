@@ -77,46 +77,90 @@ suite(parseCharmActionsYAML.name, function () {
 
         c.next();
         assert.strictEqual(c.current.name, 'action-array-empty');
-        assert.deepEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.strictEqual(c.current.symbol, 'action_array_empty');
+        assert.strictEqual(c.current.node.text, 'action-array-empty: []');
+        assert.deepStrictEqual(c.current.node.range, newRange(0, 0, 1, 0));
+        assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.isUndefined(c.current.description.value);
+        assert.isUndefined(c.current.description.node);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-array');
-        assert.deepEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.strictEqual(c.current.symbol, 'action_array');
+        assert.strictEqual(c.current.node.text, 'action-array:\n  - element');
+        assert.deepStrictEqual(c.current.node.range, newRange(1, 0, 3, 0));
+        assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.isUndefined(c.current.description.value);
+        assert.isUndefined(c.current.description.node);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-string');
-        assert.deepEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.strictEqual(c.current.symbol, 'action_string');
+        assert.strictEqual(c.current.node.text, 'action-string: something');
+        assert.deepStrictEqual(c.current.node.range, newRange(3, 0, 4, 0));
+        assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.isUndefined(c.current.description.value);
+        assert.isUndefined(c.current.description.node);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-number');
-        assert.deepEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.strictEqual(c.current.symbol, 'action_number');
+        assert.strictEqual(c.current.node.text, 'action-number: 0');
+        assert.deepStrictEqual(c.current.node.range, newRange(4, 0, 5, 0));
+        assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.isUndefined(c.current.description.value);
+        assert.isUndefined(c.current.description.node);
 
         c.next();
         assert.strictEqual(c.current.name, 'action-invalid-description-array-empty');
+        assert.strictEqual(c.current.symbol, 'action_invalid_description_array_empty');
+        assert.strictEqual(c.current.node.text, 'action-invalid-description-array-empty:\n  description: []');
+        assert.deepStrictEqual(c.current.node.range, newRange(5, 0, 7, 0));
         assert.isEmpty(c.current.node.problems);
-        assert.deepEqual(c.current.description.node?.problems, [{
+        assert.deepStrictEqual(c.current.description.node?.problems, [{
             expected: 'string',
             id: 'unexpectedPrimitiveType',
             message: 'Must be a string.',
         }]);
+        assert.isUndefined(c.current.description.value);
+        assert.strictEqual(c.current.description.node?.text, 'description: []');
+        assert.deepStrictEqual(c.current.description.node?.range, newRange(6, 2, 7, 0));
+        assert.deepStrictEqual(c.current.description.node?.pairKeyRange, newRange(6, 2, 6, 13));
+        assert.deepStrictEqual(c.current.description.node?.pairValueRange, newRange(6, 15, 7, 0));
 
         c.next();
         assert.strictEqual(c.current.name, 'action-invalid-description-array');
+        assert.strictEqual(c.current.symbol, 'action_invalid_description_array');
+        assert.strictEqual(c.current.node.text, 'action-invalid-description-array:\n  description:\n    - element');
+        assert.deepStrictEqual(c.current.node.range, newRange(7, 0, 10, 0));
         assert.isEmpty(c.current.node.problems);
-        assert.deepEqual(c.current.description.node?.problems, [{
+        assert.deepStrictEqual(c.current.description.node?.problems, [{
             expected: 'string',
             id: 'unexpectedPrimitiveType',
             message: 'Must be a string.',
         }]);
+        assert.isUndefined(c.current.description.value);
+        assert.strictEqual(c.current.description.node?.text, 'description:\n    - element');
+        assert.deepStrictEqual(c.current.description.node?.range, newRange(8, 2, 10, 0));
+        assert.deepStrictEqual(c.current.description.node?.pairKeyRange, newRange(8, 2, 8, 13));
+        assert.deepStrictEqual(c.current.description.node?.pairValueRange, newRange(9, 4, 10, 0));
 
         c.next();
         assert.strictEqual(c.current.name, 'action-invalid-description-number');
+        assert.strictEqual(c.current.symbol, 'action_invalid_description_number');
+        assert.strictEqual(c.current.node.text, 'action-invalid-description-number:\n  description: 0');
+        assert.deepStrictEqual(c.current.node.range, newRange(10, 0, 12, 0));
         assert.isEmpty(c.current.node.problems);
-        assert.deepEqual(c.current.description.node?.problems, [{
+        assert.deepStrictEqual(c.current.description.node?.problems, [{
             expected: 'string',
             id: 'unexpectedPrimitiveType',
             message: 'Must be a string.',
         }]);
+        assert.isUndefined(c.current.description.value);
+        assert.strictEqual(c.current.description.node?.text, 'description: 0');
+        assert.deepStrictEqual(c.current.description.node?.range, newRange(11, 2, 12, 0));
+        assert.deepStrictEqual(c.current.description.node?.pairKeyRange, newRange(11, 2, 11, 13));
+        assert.deepStrictEqual(c.current.description.node?.pairValueRange, newRange(11, 15, 12, 0));
     });
 
     suite('invalid yaml structure', function () {

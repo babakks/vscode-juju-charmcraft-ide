@@ -52,16 +52,9 @@ type OptionalWithNode<T> = AttachedNode & {
     value?: T;
 };
 
-export function emptyOptionalWithNode<T>(): OptionalWithNode<T> {
-    return {
-        node: emptyYAMLNode(),
-    };
-}
-
 export function emptyWithNode<T>(value: T): WithNode<T> {
     return {
         value,
-        node: emptyYAMLNode(),
     };
 }
 

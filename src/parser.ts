@@ -25,7 +25,6 @@ import {
     emptyWithNode,
     isConfigParameterType,
     YAML_PROBLEMS,
-    emptyOptionalWithNode,
     getTextOverRange
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
@@ -138,7 +137,7 @@ export function parseCharmActionsYAML(text: string): CharmActions {
         const entry: CharmAction = {
             name,
             symbol: toValidSymbol(name),
-            description: emptyOptionalWithNode(),
+            description: {},
             node: pairToYAMLNode(item, tpm),
         };
         result.actions.push(entry);
