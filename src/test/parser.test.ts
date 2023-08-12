@@ -5,12 +5,20 @@ import { Problem, CharmMetadata, CharmAction, CharmConfigParameter, emptyYAMLNod
 import { parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from "../parser";
 import path = require("path");
 import { readFileSync } from "fs";
+import { Range } from "../model/common";
 
 function cursor<T>(list: T[]) {
     let index = -1;
     return {
         next() { return list[++index]; },
         get current() { return list[index]; },
+    };
+}
+
+function newRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
+    return {
+        start: { line: startLine, character: startCharacter },
+        end: { line: endLine, character: endCharacter },
     };
 }
 
@@ -21,18 +29,48 @@ suite(parseCharmActionsYAML.name, function () {
     }
 
     test('valid', function () {
-        const { actions, problems } = parseActions('valid.actions.yaml');
-        assert.isEmpty(problems, 'expected no file-scope problem');
+        const { actions, node } = parseActions('valid.actions.yaml');
+        assert.isEmpty(node.problems, 'expected no file-scope problem');
         assert.lengthOf(actions, 3);
         assert.isEmpty(actions.map(x => [
             ...x.node.problems,
             ...x.description.node?.problems || [],
         ]).flat(), 'problem in some action(s)');
+
+        const c = cursor(actions);
+
+        c.next();
+        assert.equal(c.current.name, 'action-empty');
+        assert.equal(c.current.symbol, 'action_empty');
+        assert.equal(c.current.node.text, 'action-empty: {}');
+        assert.deepStrictEqual(c.current.node.range, newRange(0, 0, 1, 0));
+
+        c.next();
+        assert.equal(c.current.name, 'action-with-description-empty');
+        assert.equal(c.current.symbol, 'action_with_description_empty');
+        assert.equal(c.current.node.text, 'action-with-description-empty:\n  description: ""');
+        assert.deepStrictEqual(c.current.node.range, newRange(1, 0, 3, 0));
+        assert.equal(c.current.description.value, '');
+        assert.equal(c.current.description.node?.text, 'description: ""');
+        assert.deepStrictEqual(c.current.description.node?.range, newRange(2, 2, 3, 0));
+        assert.deepStrictEqual(c.current.description.node?.pairKeyRange, newRange(2, 2, 2, 13));
+        assert.deepStrictEqual(c.current.description.node?.pairValueRange, newRange(2, 15, 3, 0));
+
+        c.next();
+        assert.equal(c.current.name, 'action-with-description');
+        assert.equal(c.current.symbol, 'action_with_description');
+        assert.equal(c.current.node.text, 'action-with-description:\n  description: description');
+        assert.deepStrictEqual(c.current.node.range, newRange(3, 0, 5, 0));
+        assert.equal(c.current.description.value, 'description');
+        assert.equal(c.current.description.node?.text, 'description: description');
+        assert.deepStrictEqual(c.current.description.node?.range, newRange(4, 2, 5, 0));
+        assert.deepStrictEqual(c.current.description.node?.pairKeyRange, newRange(4, 2, 4, 13));
+        assert.deepStrictEqual(c.current.description.node?.pairValueRange, newRange(4, 15, 5, 0));
     });
 
     test('invalid', function () {
-        const { actions, problems } = parseActions('invalid.actions.yaml');
-        assert.lengthOf(problems, 0, 'expected no file-scope problem');
+        const { actions, node } = parseActions('invalid.actions.yaml');
+        assert.lengthOf(node.problems, 0, 'expected no file-scope problem');
         assert.lengthOf(actions, 7);
 
         const c = cursor(actions);
@@ -98,8 +136,8 @@ suite(parseCharmActionsYAML.name, function () {
         for (const t of tests) {
             const tt = t;
             test(tt.name, function () {
-                const { problems } = parseCharmActionsYAML(tt.content);
-                assert.includeDeepMembers(problems, tt.expectedProblems);
+                const { node } = parseCharmActionsYAML(tt.content);
+                assert.includeDeepMembers(node.problems, tt.expectedProblems);
             });
         }
     });

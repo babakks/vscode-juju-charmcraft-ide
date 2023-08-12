@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import * as yaml from 'js-yaml';
 import { tmpdir } from 'os';
-import { Node, Pair, ParsedNode, YAMLMap, isMap, isPair, isScalar, isSeq, parseDocument } from 'yaml';
+import { Document, Range as YAMLRange, Node, Pair, ParsedNode, YAMLMap, isMap, isPair, isScalar, isSeq, parseDocument } from 'yaml';
 import {
     CharmAction,
     CharmActions,
@@ -25,7 +25,8 @@ import {
     emptyWithNode,
     isConfigParameterType,
     YAML_PROBLEMS,
-    emptyOptionalWithNode
+    emptyOptionalWithNode,
+    getTextOverRange
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
@@ -38,13 +39,13 @@ function tryParseYAML(content: string): any {
     }
 }
 
-function getYAMLNodeRange(node: Node, tpm: TextPositionMapper): Range {
-    if (!node.range) {
+function yamlRangeToRange(nodeRange: YAMLRange | null | undefined, tpm: TextPositionMapper): Range {
+    if (!nodeRange) {
         return { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
     }
     return {
-        start: tpm.indexToPosition(node.range[0]),
-        end: tpm.indexToPosition(node.range[2]),
+        start: tpm.indexToPosition(nodeRange[0]),
+        end: tpm.indexToPosition(nodeRange[2]),
     };
 }
 
@@ -55,12 +56,14 @@ function getYAMLPairNodeRange(node: Pair<ParsedNode, ParsedNode | null>, tpm: Te
     };
 }
 
-function toYAMLNode(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPositionMapper): YAMLNode {
+function pairToYAMLNode(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPositionMapper): YAMLNode {
+    const range = getYAMLPairNodeRange(node, tpm);
     return {
+        range,
+        text: getTextOverRange(tpm.lines, range),
         raw: node,
-        range: getYAMLPairNodeRange(node, tpm),
-        pairKeyRange: getYAMLNodeRange(node.key, tpm),
-        pairValueRange: node.value ? getYAMLNodeRange(node.value, tpm) : undefined,
+        pairKeyRange: yamlRangeToRange(node.key.range, tpm),
+        pairValueRange: node.value ? yamlRangeToRange(node.value.range, tpm) : undefined,
         problems: [],
     };
 }
@@ -85,7 +88,7 @@ function parsePair(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t:
         return { problemsAtParent: required ? [YAML_PROBLEMS.generic.missingField(key)] : [] };
     }
     const result = {
-        yamlNode: toYAMLNode(pairNode, tpm),
+        yamlNode: pairToYAMLNode(pairNode, tpm),
         problemsAtParent: [],
     };
     if (pairNode.value && isScalar(pairNode.value) && (typeof pairNode.value.value === t || t === 'integer' && typeof pairNode.value.value === 'number' && Number.isInteger(pairNode.value.value))) {
@@ -107,24 +110,38 @@ function parsePairStringEnum(node: YAMLMap<ParsedNode, ParsedNode | null>, key: 
     return result;
 }
 
-export function parseCharmActionsYAML(raw: string): CharmActions {
-    const doc = parseDocument(raw).contents;
+function yamlRootToYAMLNode(root: Document['contents'], tpm: TextPositionMapper): YAMLNode {
+    return {
+        text: tpm.content,
+        raw: root,
+        range: root ? yamlRangeToRange(root.range, tpm) : tpm.all(),
+        problems: [],
+    };
+}
 
-    if (!isMap(doc)) {
-        return { actions: [], problems: [YAML_PROBLEMS.generic.invalidYAML] };
+export function parseCharmActionsYAML(text: string): CharmActions {
+    const root = parseDocument(text).contents;
+    const tpm = new TextPositionMapper(text);
+
+    const result: CharmActions = {
+        node: yamlRootToYAMLNode(root, tpm),
+        actions: [],
+    };
+
+    if (!root || !isMap(root)) {
+        result.node.problems.push(YAML_PROBLEMS.generic.invalidYAML);
+        return result;
     }
 
-    const tpm = new TextPositionMapper(raw);
-    const actions: CharmAction[] = [];
-    for (const item of doc.items) {
+    for (const item of root.items) {
         const name = item.key.toString();
         const entry: CharmAction = {
             name,
             symbol: toValidSymbol(name),
             description: emptyOptionalWithNode(),
-            node: toYAMLNode(item, tpm),
+            node: pairToYAMLNode(item, tpm),
         };
-        actions.push(entry);
+        result.actions.push(entry);
 
         const valueNode = item.value;
         if (!isMap(valueNode)) {
@@ -138,11 +155,11 @@ export function parseCharmActionsYAML(raw: string): CharmActions {
             entry.description.node = descriptionNode.yamlNode;
         }
         if (descriptionNode.value !== undefined) {
-            entry.description = descriptionNode.value;
+            entry.description.value = descriptionNode.value;
         }
     }
 
-    return { actions, problems: [] };
+    return result;
 }
 
 export function parseCharmConfigYAML(raw: string): CharmConfig {

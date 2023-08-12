@@ -242,21 +242,14 @@ export interface CharmAction {
     symbol: string;
     description: OptionalWithNode<string>;
     node: YAMLNode;
-    // node: WithNode<CharmActionNode>;
 }
-
-// export interface CharmActionNode {
-//     entire?: YAMLNode;
-//     description?: YAMLNode;
-//     problems: Problem[];
-// }
 
 export interface CharmActions {
     actions: CharmAction[];
     /**
-     * File-level problems (e.g., invalid file format).
+     * Root node.
      */
-    problems: Problem[];
+    node: YAMLNode;
 }
 
 export interface YAMLNode {
@@ -268,6 +261,10 @@ export interface YAMLNode {
      * Raw node returned by the underlying YAML parser/tokenizer library.
      */
     raw: any;
+    /**
+     * Raw text content, corresponding to the {@link range `range`} property.
+     */
+    text: string;
 }
 
 export interface Problem {
@@ -844,7 +841,8 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
 
 export function emptyYAMLNode(): YAMLNode {
     return {
-        raw: '',
+        text: '',
+        raw: {},
         problems: [],
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
     };
@@ -853,7 +851,7 @@ export function emptyYAMLNode(): YAMLNode {
 export function emptyActions(): CharmActions {
     return {
         actions: [],
-        problems: []
+        node: emptyYAMLNode(),
     };
 }
 
