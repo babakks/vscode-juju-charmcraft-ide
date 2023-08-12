@@ -23,13 +23,17 @@ function newRange(startLine: number, startCharacter: number, endLine: number, en
 }
 
 suite(parseCharmActionsYAML.name, function () {
-    const RESOURCE_ACTIONS_PATH = '../../resource/test/actions.yaml';
-    function parseActions(resource: string): ReturnType<typeof parseCharmActionsYAML> {
-        return parseCharmActionsYAML(new TextDecoder().decode(readFileSync(path.join(__dirname, RESOURCE_ACTIONS_PATH, resource))));
-    }
-
     test('valid', function () {
-        const { actions, node } = parseActions('valid.actions.yaml');
+        const content = [
+            `action-empty: {}`,
+            `action-with-description-empty:`,
+            `  description: ""`,
+            `action-with-description:`,
+            `  description: description`,
+        ].join('\n');
+
+        const { actions, node } = parseCharmActionsYAML(content);
+
         assert.isEmpty(node.problems, 'expected no file-scope problem');
         assert.lengthOf(actions, 3);
         assert.isEmpty(actions.map(x => [
@@ -69,7 +73,22 @@ suite(parseCharmActionsYAML.name, function () {
     });
 
     test('invalid', function () {
-        const { actions, node } = parseActions('invalid.actions.yaml');
+        const content = [
+            `action-array-empty: []`,
+            `action-array:`,
+            `  - element`,
+            `action-string: something`,
+            `action-number: 0`,
+            `action-invalid-description-array-empty:`,
+            `  description: []`,
+            `action-invalid-description-array:`,
+            `  description:`,
+            `    - element`,
+            `action-invalid-description-number:`,
+            `  description: 0`,
+        ].join('\n');
+
+        const { actions, node } = parseCharmActionsYAML(content);
         assert.lengthOf(node.problems, 0, 'expected no file-scope problem');
         assert.lengthOf(actions, 7);
 
@@ -189,11 +208,6 @@ suite(parseCharmActionsYAML.name, function () {
 
 
 suite(parseCharmConfigYAML.name, function () {
-    const RESOURCE_CONFIG_PATH = '../../resource/test/config.yaml';
-    function parseConfig(resource: string): ReturnType<typeof parseCharmConfigYAML> {
-        return parseCharmConfigYAML(new TextDecoder().decode(readFileSync(path.join(__dirname, RESOURCE_CONFIG_PATH, resource))));
-    }
-
     function allProblems(parameter: CharmConfigParameter): Problem[] {
         return [
             ...parameter.node.problems,
@@ -205,14 +219,108 @@ suite(parseCharmConfigYAML.name, function () {
     }
 
     test('valid', function () {
-        const { parameters, problems } = parseConfig('valid.config.yaml');
+        const content = [
+            `options:`,
+            `  # Full params (type, description, default)`,
+            `  int-param-full:`,
+            `    type: int`,
+            `    description: some description`,
+            `    default: -1`,
+            `  float-param-full:`,
+            `    type: float`,
+            `    description: some description`,
+            `    default: -1e-1`,
+            `  string-param-full:`,
+            `    type: string`,
+            `    description: some description`,
+            `    default: hello`,
+            `  boolean-param-full:`,
+            `    type: boolean`,
+            `    description: some description`,
+            `    default: false`,
+            ``,
+            `  # Minimal params (type)`,
+            `  int-param-minimal:`,
+            `    type: int`,
+            `  float-param-minimal:`,
+            `    type: float`,
+            `  string-param-minimal:`,
+            `    type: string`,
+            `  boolean-param-minimal:`,
+            `    type: boolean`,
+            ``,
+            `  # Partial params (type, default)`,
+            `  int-param-with-default:`,
+            `    type: int`,
+            `    default: -1`,
+            `  float-param-with-default:`,
+            `    type: float`,
+            `    default: -1e-1`,
+            `  string-param-with-default:`,
+            `    type: string`,
+            `    default: hello`,
+            `  boolean-param-with-default:`,
+            `    type: boolean`,
+            `    default: false`,
+            ``,
+            `  # Partial params (type, description)`,
+            `  int-param-with-description:`,
+            `    type: int`,
+            `    description: some description`,
+            `  float-param-with-description:`,
+            `    type: float`,
+            `    description: some description`,
+            `  string-param-with-description:`,
+            `    type: string`,
+            `    description: some description`,
+            `  boolean-param-with-description:`,
+            `    type: boolean`,
+            `    description: some description`,
+        ].join('\n');
+
+        const { parameters, problems } = parseCharmConfigYAML(content);
+
         assert.isEmpty(problems, 'expected no file-scope problem');
         assert.lengthOf(parameters, 16);
         assert.isEmpty(parameters.map(x => allProblems(x)).flat(), 'problem in some parameter(s)');
     });
 
     test('type/default mismatch', function () {
-        const { parameters, problems } = parseConfig('type-default-mismatch.config.yaml');
+        const content = [
+            `options:`,
+            `  type-missing: {}`,
+            `  type-invalid-string:`,
+            `    type: invalid-value-for-type`,
+            `  type-invalid-int:`,
+            `    type: 0`,
+            `  type-invalid-array:`,
+            `    type: []`,
+            `  type-invalid-object:`,
+            `    type: {}`,
+            `  type-invalid-boolean:`,
+            `    type: false`,
+            `  description-invalid-int:`,
+            `    type: string`,
+            `    description: 0`,
+            `  description-invalid-array:`,
+            `    type: string`,
+            `    description: []`,
+            `  description-invalid-object:`,
+            `    type: string`,
+            `    description: {}`,
+            `  description-invalid-boolean:`,
+            `    type: string`,
+            `    description: false`,
+            `  # Invalid default values when type is missing (Note that when the type field`,
+            `  # is present, the default value should match the that type)`,
+            `  default-invalid-object:`,
+            `    default: {}`,
+            `  default-invalid-array:`,
+            `    default: []`,
+        ].join('\n');
+
+        const { parameters, problems } = parseCharmConfigYAML(content);
+
         assert.lengthOf(problems, 0, 'expected no file-scope problem');
         assert.lengthOf(parameters, 11);
 
@@ -264,7 +372,41 @@ suite(parseCharmConfigYAML.name, function () {
     });
 
     test('invalid parameter', function () {
-        const { parameters, problems } = parseConfig('invalid.config.yaml');
+        const content = [
+            `options:`,
+            `  type-missing: {}`,
+            `  type-invalid-string:`,
+            `    type: invalid-value-for-type`,
+            `  type-invalid-int:`,
+            `    type: 0`,
+            `  type-invalid-array:`,
+            `    type: []`,
+            `  type-invalid-object:`,
+            `    type: {}`,
+            `  type-invalid-boolean:`,
+            `    type: false`,
+            `  description-invalid-int:`,
+            `    type: string`,
+            `    description: 0`,
+            `  description-invalid-array:`,
+            `    type: string`,
+            `    description: []`,
+            `  description-invalid-object:`,
+            `    type: string`,
+            `    description: {}`,
+            `  description-invalid-boolean:`,
+            `    type: string`,
+            `    description: false`,
+            `  # Invalid default values when type is missing (Note that when the type field`,
+            `  # is present, the default value should match the that type)`,
+            `  default-invalid-object:`,
+            `    default: {}`,
+            `  default-invalid-array:`,
+            `    default: []`,
+        ].join('\n');
+
+        const { parameters, problems } = parseCharmConfigYAML(content);
+
         assert.lengthOf(problems, 0, 'expected no file-scope problem');
         assert.lengthOf(parameters, 12);
 
@@ -388,18 +530,168 @@ suite(parseCharmConfigYAML.name, function () {
 });
 
 suite(parseCharmMetadataYAML.name, function () {
-    const RESOURCE_ACTIONS_PATH = '../../resource/test/metadata.yaml';
-    function parseMetadata(resource: string): { raw: string, metadata: ReturnType<typeof parseCharmMetadataYAML> } {
-        const raw = new TextDecoder().decode(readFileSync(path.join(__dirname, RESOURCE_ACTIONS_PATH, resource)));
-        return { raw, metadata: parseCharmMetadataYAML(raw) };
-    }
-
     test('valid-complete', function () {
-        const { raw, metadata } = parseMetadata('valid-complete.metadata.yaml');
+        /**
+         * Here:
+         * - Keys are ordered alphabetically.
+         * - Values are valid.
+         * - All fields (both optional or required) are assigned.
+         * - Fields that accept an array of values or a map of key/value pairs, are
+         *   assigned with more than one element/pair.
+         */
+        const content = [
+            `assumes:`,
+            `  - juju >= 2.9`,
+            `  - k8s-api`,
+            `  - all-of:`,
+            `      - juju >= 2.9`,
+            `      - k8s-api`,
+            `  - any-of:`,
+            `      - juju >= 2.9`,
+            `      - k8s-api`,
+            `containers:`,
+            `  container-one:`,
+            `    resource: resource-one`,
+            `    mounts:`,
+            `      - storage: storage-one`,
+            `        location: /some/location`,
+            `      - storage: storage-two`,
+            `        location: /some/location`,
+            `  container-two:`,
+            `    bases:`,
+            `      - name: base-one`,
+            `        channel: channel-one`,
+            `        architectures:`,
+            `          - architecture-one`,
+            `          - architecture-two`,
+            `      - name: base-two`,
+            `        channel: channel-two`,
+            `        architectures:`,
+            `          - architecture-one`,
+            `          - architecture-two`,
+            `    mounts:`,
+            `      - storage: storage-one`,
+            `        location: /some/location`,
+            `      - storage: storage-two`,
+            `        location: /some/location`,
+            `description: my-charm-description`,
+            `devices:`,
+            `  device-one:`,
+            `    type: gpu`,
+            `    description: device-one-description`,
+            `    countmin: 1`,
+            `    countmax: 2`,
+            `  device-two:`,
+            `    type: nvidia.com/gpu`,
+            `    description: device-two-description`,
+            `    countmin: 1`,
+            `    countmax: 2`,
+            `  device-three:`,
+            `    type: amd.com/gpu`,
+            `    description: device-three-description`,
+            `    countmin: 1`,
+            `    countmax: 2`,
+            `display-name: my-charm-display-name`,
+            `docs: https://docs.url`,
+            `extra-bindings:`,
+            `  binding-one:`,
+            `  binding-two:`,
+            `issues:`,
+            `  - https://one.issues.url`,
+            `  - https://two.issues.url`,
+            `maintainers:`,
+            `  - John Doe <john.doe@company.com>`,
+            `  - Jane Doe <jane.doe@company.com>`,
+            `name: my-charm`,
+            `peers:`,
+            `  peer-one:`,
+            `    interface: interface-one`,
+            `    limit: 1`,
+            `    optional: false`,
+            `    scope: global`,
+            `  peer-two:`,
+            `    interface: interface-two`,
+            `    limit: 2`,
+            `    optional: true`,
+            `    scope: container`,
+            `provides:`,
+            `  provides-one:`,
+            `    interface: interface-one`,
+            `    limit: 1`,
+            `    optional: false`,
+            `    scope: global`,
+            `  provides-two:`,
+            `    interface: interface-two`,
+            `    limit: 2`,
+            `    optional: true`,
+            `    scope: container`,
+            `requires:`,
+            `  requires-one:`,
+            `    interface: interface-one`,
+            `    limit: 1`,
+            `    optional: false`,
+            `    scope: global`,
+            `  requires-two:`,
+            `    interface: interface-two`,
+            `    limit: 2`,
+            `    optional: true`,
+            `    scope: container`,
+            `resources:`,
+            `  resource-one:`,
+            `    type: oci-image`,
+            `    description: resource-one-description`,
+            `  resource-two:`,
+            `    type: file`,
+            `    description: resource-two-description`,
+            `    filename: some-file-name`,
+            `source:`,
+            `  - https://one.source.url`,
+            `  - https://two.source.url`,
+            `storage:`,
+            `  storage-one:`,
+            `    type: filesystem`,
+            `    description: storage-one-description`,
+            `    location: /some/location`,
+            `    shared: false`,
+            `    read-only: false`,
+            `    multiple: 1`,
+            `    minimum-size: 1`,
+            `    properties:`,
+            `      - transient`,
+            `  storage-two:`,
+            `    type: block`,
+            `    description: storage-two-description`,
+            `    location: /some/location`,
+            `    shared: true`,
+            `    read-only: true`,
+            `    multiple: 1+`,
+            `    minimum-size: 1G`,
+            `    properties:`,
+            `      - transient`,
+            `subordinate: false`,
+            `summary: my-charm-summary`,
+            `terms:`,
+            `  - term-one`,
+            `  - term-two`,
+            `website:`,
+            `  - https://one.website.url`,
+            `  - https://two.website.url`,
+            `z-custom-field-array:`,
+            `  - custom-value-one`,
+            `  - custom-value-two`,
+            `z-custom-field-boolean: true`,
+            `z-custom-field-map:`,
+            `  key-one: value-one`,
+            `  key-two: value-two`,
+            `z-custom-field-number: 0`,
+            `z-custom-field-string: some-string-value`,
+        ].join('\n');
+
+        const metadata = parseCharmMetadataYAML(content);
         assert.isEmpty(metadata.problems, 'expected no file-scope problem');
         /* eslint-disable */
         assert.deepStrictEqual(metadata, {
-            raw,
+            raw: content,
             problems: [],
             node: emptyYAMLNode(),
             assumes: {
