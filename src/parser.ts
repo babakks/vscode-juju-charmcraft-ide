@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import * as yaml from 'js-yaml';
 import { tmpdir } from 'os';
-import { Document, Range as YAMLRange, Node, Pair, ParsedNode, YAMLMap, isMap, isPair, isScalar, isSeq, parseDocument } from 'yaml';
+import { Document, Range as YAMLRange, Node, Pair, ParsedNode, YAMLMap, isMap, isPair, isScalar, isSeq, parseDocument, YAMLSeq, Scalar, Alias } from 'yaml';
 import {
     CharmAction,
     CharmActions,
@@ -25,7 +25,9 @@ import {
     emptyWithNode,
     isConfigParameterType,
     YAML_PROBLEMS,
-    getTextOverRange
+    getTextOverRange,
+    OptionalWithNode,
+    WithNode
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
@@ -116,6 +118,136 @@ function yamlRootToYAMLNode(root: Document['contents'], tpm: TextPositionMapper)
         range: root ? yamlRangeToRange(root.range, tpm) : tpm.all(),
         problems: [],
     };
+}
+
+function yamlNodeToYAMLNode(node: { range: YAMLRange }, tpm: TextPositionMapper): YAMLNode {
+    const range = yamlRangeToRange(node.range, tpm);
+    return {
+        range,
+        text: getTextOverRange(tpm.lines, range),
+        raw: node,
+        problems: [],
+    };
+}
+
+function assignParsedToWithNode(parsed: ParsePairResult, parent: YAMLNode, target: OptionalWithNode<any> | WithNode<any>) {
+    parent.problems.push(...parsed.problemsAtParent);
+    if (parsed.yamlNode) {
+        target.node = parsed.yamlNode;
+    }
+    if (parsed.value !== undefined) {
+        target.value = parsed.value;
+    }
+}
+
+
+export class YAMLParser {
+    readonly tpm: TextPositionMapper;
+    constructor(readonly text: string) {
+        this.tpm = new TextPositionMapper(text);
+    }
+
+    /**
+     * @returns `undefined` if given content was not a valid YAML.
+     */
+    parse() {
+        const root = parseDocument(this.text).contents;
+        return this.parseValue(root);
+    }
+
+    parseValue(node: Alias.Parsed | Scalar.Parsed | YAMLMap.Parsed<ParsedNode, ParsedNode | null> | YAMLSeq.Parsed<ParsedNode> | null): WithNode<any> {
+        if (isMap(node)) {
+            return this.parseMap(node);
+        }
+        if (isSeq(node)) {
+            return this.parseSeq(node);
+        }
+        if (isScalar(node)) {
+            return this.parseScalar(node);
+        }
+        return {
+            value: null,
+            node: {
+                kind: undefined,
+                problems: [],
+                text: '',
+                raw: node,
+            }
+        };
+    }
+
+    parseMap(node: YAMLMap<ParsedNode, ParsedNode | null>): WithNode<any> {
+        const range = this._yamlRangeToRange(node.range, this.tpm);
+        return {
+            value: Object.fromEntries(node.items.filter(x => isScalar(x.key)).map(x => [x.key.toString(), this.parsePair(x)])),
+            node: {
+                kind: 'map',
+                range,
+                text: getTextOverRange(this.tpm.lines, range),
+                raw: node,
+                problems: [],
+            }
+        };
+    }
+
+    parseSeq(node: YAMLSeq<ParsedNode>): WithNode<any> {
+        const range = this._yamlRangeToRange(node.range, this.tpm);
+        return {
+            value: node.items.map(x => this.parseValue(x)),
+            node: {
+                kind: 'sequence',
+                range,
+                text: getTextOverRange(this.tpm.lines, range),
+                raw: node,
+                problems: [],
+            }
+        };
+    }
+
+    parseScalar(node: Scalar.Parsed): WithNode<any> {
+        const range = this._yamlRangeToRange(node.range, this.tpm);
+        return {
+            value: node.value,
+            node: {
+                kind: 'scalar',
+                range,
+                text: getTextOverRange(this.tpm.lines, range),
+                raw: node,
+                problems: [],
+            }
+        };
+    }
+
+    parsePair(node: Pair<ParsedNode, ParsedNode | null>): WithNode<any> {
+        const range: Range = {
+            start: this.tpm.indexToPosition(node.key.range[0]),
+            end: node.value ? this.tpm.indexToPosition(node.value.range[2]) : this.tpm.indexToPosition(node.key.range[2]),
+        };
+        const value = this.parseValue(node.value);
+
+        return {
+            value,
+            node: {
+                kind: 'pair',
+                range,
+                text: getTextOverRange(this.tpm.lines, range),
+                raw: node,
+                pairKeyRange: this._yamlRangeToRange(node.key.range, this.tpm),
+                pairValueRange: node.value ? this._yamlRangeToRange(node.value.range, this.tpm) : undefined,
+                problems: [],
+            }
+        };
+    }
+
+    private _yamlRangeToRange(nodeRange: YAMLRange | null | undefined, tpm: TextPositionMapper): Range {
+        if (!nodeRange) {
+            return { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
+        }
+        return {
+            start: tpm.indexToPosition(nodeRange[0]),
+            end: tpm.indexToPosition(nodeRange[2]),
+        };
+    }
 }
 
 export function parseCharmActionsYAML(text: string): CharmActions {

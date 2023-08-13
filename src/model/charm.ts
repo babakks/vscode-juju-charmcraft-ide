@@ -44,11 +44,11 @@ type AttachedNode = {
     node?: YAMLNode;
 };
 
-type WithNode<T> = AttachedNode & {
+export type WithNode<T> = AttachedNode & {
     value: T;
 };
 
-type OptionalWithNode<T> = AttachedNode & {
+export type OptionalWithNode<T> = AttachedNode & {
     value?: T;
 };
 
@@ -246,7 +246,8 @@ export interface CharmActions {
 }
 
 export interface YAMLNode {
-    range: Range;
+    kind?: 'map' | 'sequence' | 'pair' | 'scalar';
+    range?: Range;
     pairKeyRange?: Range;
     pairValueRange?: Range;
     problems: Problem[];
