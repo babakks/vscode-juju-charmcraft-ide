@@ -152,7 +152,18 @@ export class YAMLParser {
     /**
      * @returns `undefined` if given content was not a valid YAML.
      */
-    parse() {
+    parse(): WithNode<any> | undefined {
+        if (!this.text.trim().length) {
+            return {
+                value: {},
+                node: {
+                    kind: 'map',
+                    problems: [],
+                    text: this.text,
+                    range: this.tpm.all(),
+                }
+            };
+        }
         const root = parseDocument(this.text).contents;
         return this._parseValue(root);
     }

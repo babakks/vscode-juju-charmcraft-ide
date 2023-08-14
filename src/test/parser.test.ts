@@ -22,14 +22,52 @@ function newRange(startLine: number, startCharacter: number, endLine: number, en
     };
 }
 
-suite(YAMLParser.name, function () {
+suite.only(YAMLParser.name, function () {
     suite(YAMLParser.prototype.parse.name, function () {
         function parse(content: string) {
             return new YAMLParser(content).parse();
         }
 
-        test('invalid content', function () {
-            assert.isUndefined(parse(''));
+        suite('empty', function () {
+            type TestCase = {
+                name: string;
+                content: string;
+                expectedRange: Range;
+            };
+            const tests: TestCase[] = [
+                {
+                    name: 'empty',
+                    content: '',
+                    expectedRange: newRange(0, 0, 0, 0),
+                }, {
+                    name: 'whitespace',
+                    content: ' ',
+                    expectedRange: newRange(0, 0, 1, 0),
+                }, {
+                    name: '\\n',
+                    content: '\n',
+                    expectedRange: newRange(0, 0, 1, 0),
+                }, {
+                    name: 'mixed whitespace and \\n',
+                    content: ' \n  \n ',
+                    expectedRange: newRange(0, 0, 3, 0),
+                },
+            ];
+
+            for (const t of tests) {
+                const tt = t;
+                test(tt.name, function () {
+                    assert.deepInclude(parse(tt.content), {
+                        value: {},
+                        node: {
+                            kind: 'map',
+                            problems: [],
+                            text: tt.content,
+                            range: tt.expectedRange,
+                        },
+                    });
+                });
+            }
         });
 
         test('map', function () {
