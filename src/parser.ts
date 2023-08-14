@@ -140,7 +140,9 @@ function assignParsedToWithNode(parsed: ParsePairResult, parent: YAMLNode, targe
     }
 }
 
-
+/**
+ * A generic YAML parser that returns a tree of objects/arrays of type {@link WithNode<any>}.
+ */
 export class YAMLParser {
     readonly tpm: TextPositionMapper;
     constructor(readonly text: string) {
@@ -152,34 +154,26 @@ export class YAMLParser {
      */
     parse() {
         const root = parseDocument(this.text).contents;
-        return this.parseValue(root);
+        return this._parseValue(root);
     }
 
-    parseValue(node: Alias.Parsed | Scalar.Parsed | YAMLMap.Parsed<ParsedNode, ParsedNode | null> | YAMLSeq.Parsed<ParsedNode> | null): WithNode<any> {
+    private _parseValue(node: Alias.Parsed | Scalar.Parsed | YAMLMap.Parsed<ParsedNode, ParsedNode | null> | YAMLSeq.Parsed<ParsedNode> | null): WithNode<any> | undefined {
         if (isMap(node)) {
-            return this.parseMap(node);
+            return this._parseMap(node);
         }
         if (isSeq(node)) {
-            return this.parseSeq(node);
+            return this._parseSeq(node);
         }
         if (isScalar(node)) {
-            return this.parseScalar(node);
+            return this._parseScalar(node);
         }
-        return {
-            value: null,
-            node: {
-                kind: undefined,
-                problems: [],
-                text: '',
-                raw: node,
-            }
-        };
+        return undefined;
     }
 
-    parseMap(node: YAMLMap<ParsedNode, ParsedNode | null>): WithNode<any> {
-        const range = this._yamlRangeToRange(node.range, this.tpm);
+    private _parseMap(node: YAMLMap<ParsedNode, ParsedNode | null>): WithNode<any> {
+        const range = this._nodeRangeToRange(node.range, this.tpm);
         return {
-            value: Object.fromEntries(node.items.filter(x => isScalar(x.key)).map(x => [x.key.toString(), this.parsePair(x)])),
+            value: Object.fromEntries(node.items.filter(x => isScalar(x.key)).map(x => [x.key.toString(), this._parsePair(x)])),
             node: {
                 kind: 'map',
                 range,
@@ -190,10 +184,10 @@ export class YAMLParser {
         };
     }
 
-    parseSeq(node: YAMLSeq<ParsedNode>): WithNode<any> {
-        const range = this._yamlRangeToRange(node.range, this.tpm);
+    private _parseSeq(node: YAMLSeq<ParsedNode>): WithNode<any> {
+        const range = this._nodeRangeToRange(node.range, this.tpm);
         return {
-            value: node.items.map(x => this.parseValue(x)),
+            value: node.items.map(x => this._parseValue(x)),
             node: {
                 kind: 'sequence',
                 range,
@@ -204,8 +198,8 @@ export class YAMLParser {
         };
     }
 
-    parseScalar(node: Scalar.Parsed): WithNode<any> {
-        const range = this._yamlRangeToRange(node.range, this.tpm);
+    private _parseScalar(node: Scalar.Parsed): WithNode<any> {
+        const range = this._nodeRangeToRange(node.range, this.tpm);
         return {
             value: node.value,
             node: {
@@ -218,12 +212,12 @@ export class YAMLParser {
         };
     }
 
-    parsePair(node: Pair<ParsedNode, ParsedNode | null>): WithNode<any> {
+    private _parsePair(node: Pair<ParsedNode, ParsedNode | null>): WithNode<any> {
         const range: Range = {
             start: this.tpm.indexToPosition(node.key.range[0]),
             end: node.value ? this.tpm.indexToPosition(node.value.range[2]) : this.tpm.indexToPosition(node.key.range[2]),
         };
-        const value = this.parseValue(node.value);
+        const value = this._parseValue(node.value);
 
         return {
             value,
@@ -232,14 +226,14 @@ export class YAMLParser {
                 range,
                 text: getTextOverRange(this.tpm.lines, range),
                 raw: node,
-                pairKeyRange: this._yamlRangeToRange(node.key.range, this.tpm),
-                pairValueRange: node.value ? this._yamlRangeToRange(node.value.range, this.tpm) : undefined,
+                pairKeyRange: this._nodeRangeToRange(node.key.range, this.tpm),
+                pairValueRange: node.value ? this._nodeRangeToRange(node.value.range, this.tpm) : undefined,
                 problems: [],
             }
         };
     }
 
-    private _yamlRangeToRange(nodeRange: YAMLRange | null | undefined, tpm: TextPositionMapper): Range {
+    private _nodeRangeToRange(nodeRange: YAMLRange | null | undefined, tpm: TextPositionMapper): Range {
         if (!nodeRange) {
             return { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
         }

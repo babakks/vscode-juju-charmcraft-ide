@@ -24,6 +24,14 @@ function newRange(startLine: number, startCharacter: number, endLine: number, en
 
 suite(YAMLParser.name, function () {
     suite(YAMLParser.prototype.parse.name, function () {
+        function parse(content: string) {
+            return new YAMLParser(content).parse();
+        }
+
+        test('invalid content', function () {
+            assert.isUndefined(parse(''));
+        });
+
         test('map', function () {
             const content = [
                 `a:`,
@@ -33,8 +41,9 @@ suite(YAMLParser.name, function () {
                 `c: 0`,
             ].join('\n');
 
-            const root = new YAMLParser(content).parse();
+            const root = parse(content)!;
 
+            assert.isDefined(root);
             assert.deepInclude(root.node, {
                 kind: 'map',
                 problems: [],
@@ -138,8 +147,9 @@ suite(YAMLParser.name, function () {
                 `- 1`,
             ].join('\n');
 
-            const root = new YAMLParser(content).parse();
+            const root = parse(content)!;
 
+            assert.isDefined(root);
             assert.deepInclude(root.node, {
                 kind: 'sequence',
                 problems: [],
@@ -176,8 +186,9 @@ suite(YAMLParser.name, function () {
                 `a-true: true`,
             ].join('\n');
 
-            const root = new YAMLParser(content).parse();
+            const root = parse(content)!;
 
+            assert.isDefined(root);
             assert.deepInclude(root.node, {
                 kind: 'map',
                 problems: [],
