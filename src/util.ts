@@ -13,16 +13,16 @@ export function getConfigParamDocumentation(param: CharmConfigParameter, include
         result.appendMarkdown(`\`${param.name}\` *[charm configuration]* ${SEPARATOR}`);
     }
 
-    if (param.type && param.default !== undefined) {
-        result.appendMarkdown(`**Type:** ${param.type}<br/>**Default:** \`${JSON.stringify(param.default)}\` ${SEPARATOR}`);
-    } else if (param.type) {
-        result.appendMarkdown(`**Type:** ${param.type} ${SEPARATOR}`);
-    } else if (param.default !== undefined) {
-        result.appendMarkdown(`**Default:** \`${JSON.stringify(param.default)}\` ${SEPARATOR}`);
+    if (param.type?.value && param.default?.value !== undefined) {
+        result.appendMarkdown(`**Type:** ${param.type.value}<br/>**Default:** \`${JSON.stringify(param.default.value)}\` ${SEPARATOR}`);
+    } else if (param.type?.value) {
+        result.appendMarkdown(`**Type:** ${param.type.value} ${SEPARATOR}`);
+    } else if (param.default?.value !== undefined) {
+        result.appendMarkdown(`**Default:** \`${JSON.stringify(param.default.value)}\` ${SEPARATOR}`);
     }
 
-    if (param.description) {
-        result.appendMarkdown(param.description);
+    if (param.description?.value) {
+        result.appendMarkdown(param.description.value);
     }
     return result;
 }

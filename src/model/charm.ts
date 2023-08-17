@@ -14,7 +14,7 @@ export const YAML_PROBLEMS = {
     generic: {
         invalidYAML: { id: 'invalidYAML', message: "Invalid YAML file." },
         missingField: (key: string) => ({ id: 'missingField', key, message: `Missing \`${key}\` field.` }),
-        unexpectedPrimitiveType: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'unexpectedPrimitiveType', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
+        unexpectedScalarType: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'unexpectedScalarType', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
         expectedObject: { id: 'expectedObject', message: `Must be an object.` },
         expectedArray: { id: 'expectedArray', message: `Must be an array.` },
         expectedEnumValue: (expectedValues: string[]) => ({ id: 'expectedEnumValue', message: `Must be one of the following: ${expectedValues.join(', ')}.` }),
@@ -41,46 +41,31 @@ type AttachedNode = {
     /**
      * If the field/value was not found, this will be missing/`undefined`.
      */
-    node?: YAMLNode;
+    node: YAMLNode;
 };
 
 export type WithNode<T> = AttachedNode & {
-    value: T;
+    value?: T;
 };
 
 export type OptionalWithNode<T> = AttachedNode & {
     value?: T;
 };
 
-export function emptyWithNode<T>(value: T): WithNode<T> {
-    return {
-        value,
-    };
-}
-
 export interface CharmConfigParameter {
     name: string;
-    type?: CharmConfigParameterType;
-    description?: string;
-    default?: string | number | boolean;
-    node: CharmConfigParameterNode;
-}
-
-export interface CharmConfigParameterNode {
-    entire?: YAMLNode;
-    description?: YAMLNode;
-    type?: YAMLNode;
-    default?: YAMLNode;
-    problems: Problem[];
+    type?: WithNode<CharmConfigParameterType>;
+    description?: WithNode<string>;
+    default?: WithNode<string | number | boolean>;
+    node: YAMLNode;
 }
 
 export interface CharmConfig {
-    raw: string;
-    parameters: CharmConfigParameter[];
+    parameters?: WithNode<CharmConfigParameter[]>;
     /**
-     * File-level problems (e.g., invalid file format, or invalid `options` value).
+     * Root node.
      */
-    problems: Problem[];
+    node: YAMLNode;
 }
 
 export type CharmEndpointScope = 'global' | 'container';
@@ -233,7 +218,7 @@ export interface CharmEvent {
 export interface CharmAction {
     name: string;
     symbol: string;
-    description: OptionalWithNode<string>;
+    description?: WithNode<string>;
     node: YAMLNode;
 }
 
@@ -254,7 +239,7 @@ export interface YAMLNode {
     /**
      * Raw node returned by the underlying YAML parser/tokenizer library.
      */
-    raw: any;
+    raw?: any;
     /**
      * Raw text content, corresponding to the {@link range `range`} property.
      */
@@ -851,9 +836,7 @@ export function emptyActions(): CharmActions {
 
 export function emptyConfig(): CharmConfig {
     return {
-        raw: '',
-        parameters: [],
-        problems: [],
+        node: emptyYAMLNode(),
     };
 }
 
@@ -915,7 +898,7 @@ export class Charm {
     async updateConfig(config: CharmConfig) {
         this._config = config;
         this._configMap.clear();
-        for (const p of this._config.parameters) {
+        for (const p of this._config.parameters?.value ?? []) {
             this._configMap.set(p.name, p);
         }
     }

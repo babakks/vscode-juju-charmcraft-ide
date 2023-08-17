@@ -75,7 +75,7 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         const needsCloseQuote = openQuote && !trailingText.startsWith(openQuote);
 
         const result: CompletionItem[] = [];
-        for (const p of workspaceCharm.model.config.parameters) {
+        for (const p of workspaceCharm.model.config.parameters?.value ?? []) {
             const completion: CompletionItem = {
                 label: p.name,
                 sortText: "0",
@@ -105,17 +105,19 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     // }
 
     getParameterDefaultValueAsString(param: CharmConfigParameter): string {
-        switch (param.type) {
-            case undefined:
-                return '""';
+        if (!param.type?.value) {
+            return '""';
+        }
+        const defaultValue = param.default?.value;
+        switch (param.type.value) {
             case 'string':
-                return param.default !== undefined && typeof param.default === 'string' ? JSON.stringify(param.default) : '""';
+                return defaultValue !== undefined && typeof defaultValue === 'string' ? JSON.stringify(defaultValue) : '""';
             case 'boolean':
-                return param.default !== undefined && typeof param.default === 'boolean' ? (param.default ? 'True' : 'False') : 'False';
+                return defaultValue !== undefined && typeof defaultValue === 'boolean' ? (defaultValue ? 'True' : 'False') : 'False';
             case 'int':
-                return param.default !== undefined && typeof param.default === 'number' && Number.isInteger(param.default) ? param.default.toString() : '0';
+                return defaultValue !== undefined && typeof defaultValue === 'number' && Number.isInteger(defaultValue) ? defaultValue.toString() : '0';
             case 'float':
-                return param.default !== undefined && typeof param.default === 'number' ? param.default.toString() : '0';
+                return defaultValue !== undefined && typeof defaultValue === 'number' ? defaultValue.toString() : '0';
         }
     }
 }

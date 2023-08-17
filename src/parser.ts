@@ -22,7 +22,6 @@ import {
     Problem,
     YAMLNode,
     emptyMetadata,
-    emptyWithNode,
     isConfigParameterType,
     YAML_PROBLEMS,
     getTextOverRange,
@@ -83,7 +82,7 @@ type ParsePairResult = {
     value?: any
 };
 
-function parsePair(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t: SupportedType, tpm: TextPositionMapper, required?: boolean): ParsePairResult {
+function parsePairWithScalarValue(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t: SupportedType, tpm: TextPositionMapper, required?: boolean): ParsePairResult {
     const pairNode = node.items.find(x => isScalar(x.key) && x.key.toString() === key);
     if (!pairNode) {
         return { problemsAtParent: required ? [YAML_PROBLEMS.generic.missingField(key)] : [] };
@@ -95,13 +94,13 @@ function parsePair(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t:
     if (pairNode.value && isScalar(pairNode.value) && (typeof pairNode.value.value === t || t === 'integer' && typeof pairNode.value.value === 'number' && Number.isInteger(pairNode.value.value))) {
         (result as ParsePairResult).value = pairNode.value.value;
     } else {
-        result.yamlNode.problems.push(YAML_PROBLEMS.generic.unexpectedPrimitiveType(t));
+        result.yamlNode.problems.push(YAML_PROBLEMS.generic.unexpectedScalarType(t));
     }
     return result;
 }
 
 function parsePairStringEnum(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, enumValues: string[], tpm: TextPositionMapper, required?: boolean): ParsePairResult {
-    const result = parsePair(node, key, 'string', tpm, required);
+    const result = parsePairWithScalarValue(node, key, 'string', tpm, required);
     if (result.problemsAtParent.length || !result.yamlNode || result.yamlNode.problems.length) {
         return result;
     }
@@ -256,142 +255,203 @@ export class YAMLParser {
 }
 
 export function parseCharmActionsYAML(text: string): CharmActions {
-    const root = parseDocument(text).contents;
-    const tpm = new TextPositionMapper(text);
+    const root = new YAMLParser(text).parse();
+    if (!root) {
+        return {
+            actions: [],
+            node: {
+                kind: 'map',
+                problems: [],
+                text,
+                range: new TextPositionMapper(text).all(),
+            }
+        };
+    }
 
     const result: CharmActions = {
-        node: yamlRootToYAMLNode(root, tpm),
         actions: [],
+        node: root.node,
     };
 
-    if (!root || !isMap(root)) {
+    if (root.node.kind !== 'map') {
         result.node.problems.push(YAML_PROBLEMS.generic.invalidYAML);
         return result;
     }
 
-    for (const item of root.items) {
-        const name = item.key.toString();
+    for (const name in root.value) {
+        const item: WithNode<any> = root.value[name];
         const entry: CharmAction = {
             name,
             symbol: toValidSymbol(name),
-            description: {},
-            node: pairToYAMLNode(item, tpm),
+            node: item.node,
         };
         result.actions.push(entry);
 
-        const valueNode = item.value;
-        if (!isMap(valueNode)) {
+        const map = item.value;
+        if (map.node.kind !== 'map') {
             entry.node.problems.push(YAML_PROBLEMS.generic.expectedObject);
             continue;
         }
 
-        const descriptionNode = parsePair(valueNode, 'description', 'string', tpm, false);
-        entry.node.problems.push(...descriptionNode.problemsAtParent);
-        if (descriptionNode.yamlNode) {
-            entry.description.node = descriptionNode.yamlNode;
-        }
-        if (descriptionNode.value !== undefined) {
-            entry.description.value = descriptionNode.value;
-        }
+        entry.description = assignFromScalarPair(map, 'description', 'string');
     }
 
     return result;
 }
 
-export function parseCharmConfigYAML(raw: string): CharmConfig {
-    const doc = parseDocument(raw).contents;
-
-    if (!isMap(doc)) {
-        return { raw, parameters: [], problems: [YAML_PROBLEMS.generic.invalidYAML] };
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing. 
+ */
+function assignFromScalarPair<T>(map: WithNode<any>, key: string, t: SupportedType, required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
+    if (required && parentNodeProblems === undefined) {
+        throw Error('`parentNodeProblems` cannot be `undefined` when `required` is `true`.');
+    }
+    if (!(key in map.value)) {
+        if (required) {
+            parentNodeProblems!.push(YAML_PROBLEMS.generic.missingField(key));
+        }
+        return undefined;
     }
 
-    const optionsNode = doc.items.find(x => isScalar(x.key) && x.key.toString() === 'options');
-    if (!optionsNode) {
-        return { raw, parameters: [], problems: [] };
+    const pair: WithNode<any> = map.value[key];
+    if (pair.node.kind !== 'pair') {
+        return undefined;
     }
 
-    if (!isMap(optionsNode.value)) {
-        return { raw, parameters: [], problems: [YAML_PROBLEMS.generic.expectedObject] };
+    const result: WithNode<T> = {
+        node: pair.node,
+    };
+    const value = pair.value.value;
+
+    if (value !== undefined && (typeof value === t || t === 'integer' && typeof value === 'number' && Number.isInteger(value))) {
+        result.value = value;
+    } else {
+        result.node.problems.push(YAML_PROBLEMS.generic.unexpectedScalarType(t));
+    }
+    return result;
+}
+
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing. 
+ */
+function assignAnyFromScalarPair(map: WithNode<any>, key: string, required?: boolean, parentNodeProblems?: Problem[]): WithNode<any> | undefined {
+    if (required && parentNodeProblems === undefined) {
+        throw Error('`parentNodeProblems` cannot be `undefined` when `required` is `true`.');
+    }
+    if (!(key in map.value)) {
+        if (required) {
+            parentNodeProblems!.push(YAML_PROBLEMS.generic.missingField(key));
+        }
+        return undefined;
     }
 
-    const tpm = new TextPositionMapper(raw);
-    const parameters: CharmConfigParameter[] = [];
+    const pair: WithNode<any> = map.value[key];
+    if (pair.node.kind !== 'pair') {
+        return undefined;
+    }
 
-    for (const item of optionsNode.value.items) {
-        const name = item.key.toString();
+    return {
+        node: pair.node,
+        value: pair.value.value,
+    };
+}
+
+function assignStringEnumFromScalarPair<T>(map: WithNode<any>, key: string, enumValues: string[], required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
+    const result = assignFromScalarPair<T>(map, key, 'string', required, parentNodeProblems);
+    if (!result || result.value === undefined || result.node.problems.length) {
+        return result;
+    }
+    if (!enumValues.includes(result.value as string)) {
+        result.node.problems.push(YAML_PROBLEMS.generic.expectedEnumValue(enumValues));
+    }
+    return result;
+}
+
+export function parseCharmConfigYAML(text: string): CharmConfig {
+    const root = new YAMLParser(text).parse();
+    if (!root) {
+        return {
+            node: {
+                kind: 'map',
+                problems: [],
+                text,
+                range: new TextPositionMapper(text).all(),
+            }
+        };
+    }
+
+    const result: CharmConfig = {
+        node: root.node,
+    };
+
+    if (root.node.kind !== 'map') {
+        result.node.problems.push(YAML_PROBLEMS.generic.invalidYAML);
+        return result;
+    }
+
+    if (!('options' in root.value)) {
+        return result;
+    }
+
+    const optionsPair: WithNode<any> = root.value['options'];
+    result.parameters = {
+        value: [],
+        node: optionsPair.node,
+    };
+
+    const options = optionsPair.value;
+    if (options.node.kind !== 'map') {
+        result.parameters.node.problems.push(YAML_PROBLEMS.generic.expectedObject);
+        return result;
+    }
+
+    for (const name in options.value) {
+        const item: WithNode<any> = options.value[name];
         const entry: CharmConfigParameter = {
             name,
-            node: {
-                problems: [],
-                entire: toYAMLNode(item, tpm),
-            },
+            node: item.node,
         };
-        parameters.push(entry);
+        result.parameters.value!.push(entry);
 
-        const valueNode = item.value;
-        if (!isMap(valueNode)) {
+        const map = item.value;
+        if (map.node.kind !== 'map') {
             entry.node.problems.push(YAML_PROBLEMS.generic.expectedObject);
             continue;
         }
 
-        const typeNode = parsePairStringEnum(valueNode, 'type', ['string', 'int', 'float', 'boolean'], tpm, true);
-        entry.node.type = typeNode.yamlNode;
-        entry.node.problems.push(...typeNode.problemsAtParent);
-        if (typeNode.value !== undefined) {
-            entry.type = typeNode.value;
-        }
+        entry.type = assignStringEnumFromScalarPair(map, 'type', ['string', 'int', 'float', 'boolean'], true, entry.node.problems);
+        entry.description = assignFromScalarPair(map, 'description', 'string');
 
-        const descriptionNode = parsePair(valueNode, 'description', 'string', tpm, false);
-        entry.node!.description = descriptionNode.yamlNode;
-        entry.node.problems.push(...descriptionNode.problemsAtParent);
-        if (descriptionNode.value !== undefined) {
-            entry.description = descriptionNode.value;
-        }
-
-        const defaultNode = valueNode.items.find(x => isScalar(x.key) && x.key.toString() === 'default');
-        if (defaultNode) {
-            entry.node.default = toYAMLNode(defaultNode, tpm);
-            if (entry.type) {
-                let problem: Problem | undefined;
-                const defaultValue = isScalar(defaultNode.value)
-                    ? defaultNode.value.value
-                    : null /* this makes sure one of the following if-statements will catch the mis-typed default value */;
-                if (entry.type === 'string' && typeof defaultValue !== 'string') {
-                    problem = YAML_PROBLEMS.config.wrongDefaultType('string');
-                }
-                else if (entry.type === 'boolean' && typeof defaultValue !== 'boolean') {
-                    problem = YAML_PROBLEMS.config.wrongDefaultType('boolean');
-                }
-                else if (entry.type === 'int' && (typeof defaultValue !== 'number' || !Number.isInteger(defaultValue))) {
-                    problem = YAML_PROBLEMS.config.wrongDefaultType('int');
-                }
-                else if (entry.type === 'float' && typeof defaultValue !== 'number') {
-                    problem = YAML_PROBLEMS.config.wrongDefaultType('float');
-                }
-
-                if (problem) {
-                    entry.node!.default.problems.push(problem);
-                } else {
-                    (entry as any).default = defaultValue;
+        const defaultValue = assignAnyFromScalarPair(map, 'default');
+        if (defaultValue?.value !== undefined) {
+            entry.default = defaultValue;
+            if (entry.type?.value !== undefined) {
+                if (
+                    entry.type.value === 'string' && typeof entry.default.value !== 'string'
+                    || entry.type.value === 'boolean' && typeof entry.default.value !== 'boolean'
+                    || entry.type.value === 'float' && typeof entry.default.value !== 'number'
+                    || entry.type.value === 'int' && (typeof entry.default.value !== 'number' || !Number.isInteger(defaultValue.value))
+                ) {
+                    entry.default.value = undefined; // Dropping invalid value.
+                    entry.default.node.problems.push(YAML_PROBLEMS.config.wrongDefaultType(entry.type.value));
                 }
             } else {
-                // There's no valid type for the parameter, so we should check if the default value is not essentially invalid.
-                if (!isScalar(defaultNode.value)
-                    || !(
-                        typeof defaultNode.value.value === 'string'
-                        || typeof defaultNode.value.value === 'number'
-                        || typeof defaultNode.value.value === 'boolean'
-                    )
+                // Parameter has no `type`, so we should check if the default value is not essentially invalid.
+                if (
+                    typeof entry.default.value !== 'string'
+                    && typeof entry.default.value !== 'boolean'
+                    && typeof entry.default.value !== 'number'
                 ) {
-                    entry.node!.default.problems.push(YAML_PROBLEMS.config.invalidDefault);
-                } else {
-                    entry.default = defaultNode.value.value;
+                    entry.default.value = undefined; // Dropping invalid value.
+                    entry.default.node.problems.push(YAML_PROBLEMS.config.invalidDefault);
                 }
             }
         }
     }
 
-    return { raw, parameters, problems: [] };
+    return result;
 }
 
 const _METADATA_PROBLEMS = {
