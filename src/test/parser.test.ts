@@ -25,7 +25,7 @@ function newRange(startLine: number, startCharacter: number, endLine: number, en
 suite(YAMLParser.name, function () {
     suite(YAMLParser.prototype.parse.name, function () {
         function parse(content: string) {
-            return new YAMLParser(content).parse();
+            return new YAMLParser(content).parse().tree;
         }
 
         suite('empty', function () {
@@ -407,7 +407,7 @@ suite(parseCharmActionsYAML.name, function () {
         assert.strictEqual(c.current.name, 'action-array-empty');
         assert.strictEqual(c.current.symbol, 'action_array_empty');
         assert.strictEqual(c.current.node!.text, 'action-array-empty: []');
-        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
         assert.isUndefined(c.current.description?.value);
         assert.isUndefined(c.current.description?.node);
 
@@ -415,7 +415,7 @@ suite(parseCharmActionsYAML.name, function () {
         assert.strictEqual(c.current.name, 'action-array');
         assert.strictEqual(c.current.symbol, 'action_array');
         assert.strictEqual(c.current.node!.text, 'action-array:\n  - element');
-        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
         assert.isUndefined(c.current.description?.value);
         assert.isUndefined(c.current.description?.node);
 
@@ -423,7 +423,7 @@ suite(parseCharmActionsYAML.name, function () {
         assert.strictEqual(c.current.name, 'action-string');
         assert.strictEqual(c.current.symbol, 'action_string');
         assert.strictEqual(c.current.node!.text, 'action-string: something');
-        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
         assert.isUndefined(c.current.description?.value);
         assert.isUndefined(c.current.description?.node);
 
@@ -431,7 +431,7 @@ suite(parseCharmActionsYAML.name, function () {
         assert.strictEqual(c.current.name, 'action-number');
         assert.strictEqual(c.current.symbol, 'action_number');
         assert.strictEqual(c.current.node!.text, 'action-number: 0');
-        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedObject', message: 'Must be an object.' }]);
+        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
         assert.isUndefined(c.current.description?.value);
         assert.isUndefined(c.current.description?.node);
 
@@ -901,27 +901,27 @@ suite(parseCharmConfigYAML.name, function () {
             {
                 name: 'non-object `options` (empty array)',
                 content: 'options: []',
-                expectedProblems: [{ id: 'expectedObject', message: 'Must be an object.' }],
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
             },
             {
                 name: 'non-object `options` (array)',
                 content: 'options:\n  - element',
-                expectedProblems: [{ id: 'expectedObject', message: 'Must be an object.' }],
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
             },
             {
                 name: 'non-object parameter',
                 content: 'options:\n  param: 999',
-                expectedProblems: [{ id: 'expectedObject', message: 'Must be an object.' }],
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
             },
             {
                 name: 'non-object parameter (empty array)',
                 content: 'options:\n  param: []',
-                expectedProblems: [{ id: 'expectedObject', message: 'Must be an object.' }],
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
             },
             {
                 name: 'non-object parameter (array)',
                 content: 'options:\n  param:\n    - element',
-                expectedProblems: [{ id: 'expectedObject', message: 'Must be an object.' }],
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
             },
         ];
 

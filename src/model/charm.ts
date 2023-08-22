@@ -15,9 +15,12 @@ export const YAML_PROBLEMS = {
         invalidYAML: { id: 'invalidYAML', message: "Invalid YAML file." },
         missingField: (key: string) => ({ id: 'missingField', key, message: `Missing \`${key}\` field.` }),
         unexpectedScalarType: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'unexpectedScalarType', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
-        expectedObject: { id: 'expectedObject', message: `Must be an object.` },
-        expectedArray: { id: 'expectedArray', message: `Must be an array.` },
+        expectedSequenceOfScalars: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'expectedSequenceOfScalars', expected, message: `Must be a sequence of ${expected} values.` }),
+        expectedScalarOrSequence: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'expectedScalarOrSequence', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected} or a sequence of them.` }),
+        expectedMap: { id: 'expectedMap', message: `Must be a map.` },
+        expectedSequence: { id: 'expectedSequence', message: `Must be a sequence.` },
         expectedEnumValue: (expectedValues: string[]) => ({ id: 'expectedEnumValue', message: `Must be one of the following: ${expectedValues.join(', ')}.` }),
+        expectedNull: { id: 'expectedNull', message: 'Must be null' },
     },
     /**
      * Problems specific to `config.yaml`.
@@ -29,6 +32,21 @@ export const YAML_PROBLEMS = {
          */
         invalidDefault: { id: 'invalidDefault', message: `Default value must have a valid type; boolean, string, integer, or float.` },
         wrongDefaultType: (expected: CharmConfigParameterType) => ({ id: 'wrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
+    },
+    /**
+     * Problems specific to `metadata.yaml`.
+     */
+    metadata: {
+        assumptionExpectedAnyOfOrAllOf: { id: 'assumptionExpectedAnyOfOrAllOf', message: `Must include only one of \`any-of\` or \`all-of\` keys.` },
+        assumptionExpected: { id: 'assumptionExpected', message: 'Expected a string entry or a map with only \`any-of\` or \`all-of\` keys.' },
+        resourceExpectedFilenameForFileResource: { id: 'resourceExpectedFilenameForFileResource', message: `Field \`filename\` is required since resource type is \`file\`.` },
+        resourceUnexpectedFilenameForNonFileResource: { id: 'resourceUnexpectedFilenameForNonFileResource', message: `Field \`filename\` is only valid when resource type if \`file\`.` },
+        storageMultipleInvalid: { id: 'storageMultipleInvalid', message: `Should be one of \`n\`, \`n+\`, \`n-\`, or \`n-m\`, where \`n\` and \`m\` are integers.` },
+        storageMinimumSizeInvalid: { id: 'storageMinimumSizeInvalid', message: `Should be either of \`n\` or \`nM\`, where \`n\` is an integer and M is a one of M, G, T, P, E, Z or Y.` },
+        containerExpectedResourceOrBases: { id: 'containerExpectedResourceOrBases', message: `One of \`resource\` or \`bases\` fields must be assigned.` },
+        containerExpectedOnlyResourceOrBases: { id: 'containerExpectedOnlyResourceOrBases', message: `Only one of \`resource\` or \`bases\` fields must be assigned.` },
+        containerResourceUndefined: (expectedResource: string) => ({ id: 'containerResourceUndefined', expectedResource, message: `Container resource \`${expectedResource}\` is not defined.` }),
+        containerMountStorageUndefined: (expectedStorage: string) => ({ id: 'containerMountStorageUndefined', expectedStorage, message: `Container mount storage \`${expectedStorage}\` is not defined.` }),
     },
 } satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
 
@@ -48,8 +66,12 @@ export type WithNode<T> = AttachedNode & {
     value?: T;
 };
 
-export type OptionalWithNode<T> = AttachedNode & {
-    value?: T;
+export type SequenceWithNode<T> = AttachedNode & {
+    elements?: WithNode<T>[];
+};
+
+export type MapWithNode<T> = AttachedNode & {
+    entries?: { [key: string]: WithNode<T> };
 };
 
 export interface CharmConfigParameter {
@@ -72,137 +94,101 @@ export type CharmEndpointScope = 'global' | 'container';
 
 export interface CharmEndpoint {
     name: string;
-    interface: string;
-    limit?: number;
-    optional?: boolean;
-    scope?: CharmEndpointScope;
-    problems: Problem[];
+    interface?: WithNode<string>;
+    limit?: WithNode<number>;
+    optional?: WithNode<boolean>;
+    scope?: WithNode<CharmEndpointScope>;
 }
 
-export type CharmResourceType = 'file' | 'oci-image' | 'unknown';
+export type CharmResourceType = 'file' | 'oci-image';
 
 export interface CharmResource {
     name: string;
-    type: CharmResourceType;
-    description?: string;
-    filename?: string;
-    problems: Problem[];
+    type?: WithNode<CharmResourceType>;
+    description?: WithNode<string>;
+    filename?: WithNode<string>;
 }
 
+export type CharmDeviceType = 'gpu' | 'nvidia.com/gpu' | 'amd.com/gpu';
 
-export type CharmDeviceType = 'gpu' | 'nvidia.com/gpu' | 'amd.com/gpu' | 'unknown';
 export interface CharmDevice {
     name: string;
-    type: CharmDeviceType;
-    description?: string;
-    countMin?: number;
-    countMax?: number;
-    problems: Problem[];
+    type?: WithNode<CharmDeviceType>;
+    description?: WithNode<string>;
+    countMin?: WithNode<number>;
+    countMax?: WithNode<number>;
 }
 
-export type CharmStorageType = 'filesystem' | 'block' | 'unknown';
+export type CharmStorageType = 'filesystem' | 'block';
 
-export type CharmStorageProperty = 'transient' | 'unknown';
+export type CharmStorageProperty = 'transient';
 
 export interface CharmStorage {
     name: string;
-    type: CharmStorageType;
-    description?: string;
-    location?: string;
-    shared?: boolean;
-    readOnly?: boolean;
-    multiple?: string;
-    minimumSize?: string;
-    properties?: CharmStorageProperty[];
-    problems: Problem[];
+    type?: WithNode<CharmStorageType>;
+    description?: WithNode<string>;
+    location?: WithNode<string>;
+    shared?: WithNode<boolean>;
+    readOnly?: WithNode<boolean>;
+    multiple?: WithNode<string>;
+    minimumSize?: WithNode<string>;
+    properties?: SequenceWithNode<CharmStorageProperty>;
 }
 
 export interface CharmExtraBinding {
     name: string;
-    problems: Problem[];
 }
 
 export interface CharmContainerBase {
-    name: string;
-    channel: string;
-    architectures: string[];
-    problems: Problem[];
+    name?: WithNode<string>;
+    channel?: WithNode<string>;
+    architectures?: SequenceWithNode<string>;
 }
 
 export interface CharmContainerMount {
-    storage: string;
-    location?: string;
-    problems: Problem[];
+    storage?: WithNode<string>;
+    location?: WithNode<string>;
 }
 
 export interface CharmContainer {
     name: string;
-    resource?: string;
-    bases?: CharmContainerBase[];
-    mounts?: CharmContainerMount[];
-    problems: Problem[];
+    resource?: WithNode<string>;
+    bases?: SequenceWithNode<CharmContainerBase>;
+    mounts?: SequenceWithNode<CharmContainerMount>;
 }
 
-export interface CharmAssumptions {
-    singles?: string[];
-    allOf?: string[];
-    anyOf?: string[];
-    problems: Problem[];
+export interface CharmAssumption {
+    single?: WithNode<string>;
+    allOf?: SequenceWithNode<string>;
+    anyOf?: SequenceWithNode<string>;
 }
 
 export interface CharmMetadata {
-    node: YAMLNode;
-    raw: string;
-    name: string;
-    displayName: string
-    description: string
-    summary: string;
-    source?: string | string[];
-    issues?: string | string[];
-    website?: string | string[];
-    maintainers?: string[];
-    terms?: string[];
-    docs?: string;
-    subordinate?: boolean;
-    requires?: CharmEndpoint[];
-    provides?: CharmEndpoint[];
-    peers?: CharmEndpoint[];
-    resources?: CharmResource[];
-    devices?: CharmDevice[];
-    storage?: CharmStorage[];
-    extraBindings?: CharmExtraBinding[];
-    containers?: CharmContainer[];
-    assumes?: CharmAssumptions;
-    customFields: { [key: string]: any };
+    name?: WithNode<string>;
+    displayName?: WithNode<string>;
+    description?: WithNode<string>;
+    summary?: WithNode<string>;
+    source?: WithNode<string> | SequenceWithNode<string>;
+    issues?: WithNode<string> | SequenceWithNode<string>;
+    website?: WithNode<string> | SequenceWithNode<string>;
+    maintainers?: SequenceWithNode<string>;
+    terms?: SequenceWithNode<string>;
+    docs?: WithNode<string>;
+    subordinate?: WithNode<boolean>;
+    requires?: MapWithNode<CharmEndpoint>;
+    provides?: MapWithNode<CharmEndpoint>;
+    peers?: MapWithNode<CharmEndpoint>;
+    resources?: MapWithNode<CharmResource>;
+    devices?: MapWithNode<CharmDevice>;
+    storage?: MapWithNode<CharmStorage>;
+    extraBindings?: MapWithNode<CharmExtraBinding>;
+    containers?: MapWithNode<CharmContainer>;
+    assumes?: SequenceWithNode<CharmAssumption>;
+    customFields?: { [key: string]: any };
     /**
-     * File-level problems (e.g., invalid file format).
+     * Root node.
      */
-    problems: Problem[];
-}
-
-export interface CharmMetadataNode {
-    entire: YAMLNode;
-    name?: YAMLNode;
-    displayName?: YAMLNode;
-    description?: YAMLNode;
-    summary?: YAMLNode;
-    source?: YAMLNode;
-    issues?: YAMLNode;
-    website?: YAMLNode;
-    maintainers?: YAMLNode;
-    terms?: YAMLNode;
-    docs?: YAMLNode;
-    subordinate?: YAMLNode;
-    requires?: YAMLNode;
-    provides?: YAMLNode;
-    peers?: YAMLNode;
-    resources?: YAMLNode;
-    devices?: YAMLNode;
-    storage?: YAMLNode;
-    extraBindings?: YAMLNode;
-    containers?: YAMLNode;
-    assumes?: YAMLNode;
-    problems: Problem[];
+    node: YAMLNode;
 }
 
 export type CharmEventSource = 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides' | 'storage' | 'container' | 'action' | 'built-in';
@@ -842,14 +828,7 @@ export function emptyConfig(): CharmConfig {
 
 export function emptyMetadata(): CharmMetadata {
     return {
-        raw: '',
         node: emptyYAMLNode(),
-        problems: [],
-        name: '',
-        description: '',
-        displayName: '',
-        summary: '',
-        customFields: {},
     };
 }
 
@@ -917,11 +896,11 @@ export class Charm {
             ...Array.from(CHARM_LIFECYCLE_EVENTS),
             ...Array.from(CHARM_SECRET_EVENTS),
             ...this._actions.actions.map(action => CHARM_ACTION_EVENT_TEMPLATE(action)).flat(1),
-            ...this._metadata.storage?.map(storage => CHARM_STORAGE_EVENTS_TEMPLATE(storage)).flat(1) ?? [],
-            ...this._metadata.containers?.map(container => CHARM_CONTAINER_EVENTS_TEMPLATE(container)).flat(1) ?? [],
-            ...this._metadata.peers?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/peer')).flat(1) ?? [],
-            ...this._metadata.provides?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/provides')).flat(1) ?? [],
-            ...this._metadata.requires?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/requires')).flat(1) ?? [],
+            ...Object.entries(this._metadata.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => CHARM_STORAGE_EVENTS_TEMPLATE(storage.value!)).flat(1),
+            ...Object.entries(this._metadata.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => CHARM_CONTAINER_EVENTS_TEMPLATE(container.value!)).flat(1),
+            ...Object.entries(this._metadata.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/peer')).flat(1),
+            ...Object.entries(this._metadata.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/provides')).flat(1),
+            ...Object.entries(this._metadata.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/requires')).flat(1),
         ];
 
         this._eventSymbolMap.clear();
