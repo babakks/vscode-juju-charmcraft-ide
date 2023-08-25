@@ -1,11 +1,23 @@
 import { spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
-import * as yaml from 'js-yaml';
 import { tmpdir } from 'os';
-import { Document, Range as YAMLRange, Node, Pair, ParsedNode, YAMLMap, isMap, isPair, isScalar, isSeq, parseDocument, YAMLSeq, Scalar, Alias } from 'yaml';
+import {
+    Alias,
+    Pair,
+    ParsedNode,
+    Scalar,
+    YAMLMap,
+    Range as YAMLRange,
+    YAMLSeq,
+    isMap,
+    isScalar,
+    isSeq,
+    parseDocument
+} from 'yaml';
 import {
     CharmAction,
     CharmActions,
+    CharmAssumption,
     CharmConfig,
     CharmConfigParameter,
     CharmContainer,
@@ -17,85 +29,15 @@ import {
     CharmMetadata,
     CharmResource,
     CharmStorage,
+    MapWithNode,
     Problem,
-    YAMLNode,
-    YAML_PROBLEMS,
-    getTextOverRange,
-    WithNode,
-    CharmAssumption,
     SequenceWithNode,
-    MapWithNode
+    WithNode,
+    YAML_PROBLEMS,
+    getTextOverRange
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
-
-function tryParseYAML(content: string): any {
-    try {
-        return yaml.load(content);
-    } catch {
-        return undefined;
-    }
-}
-
-function yamlRangeToRange(nodeRange: YAMLRange | null | undefined, tpm: TextPositionMapper): Range {
-    if (!nodeRange) {
-        return { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
-    }
-    return {
-        start: tpm.indexToPosition(nodeRange[0]),
-        end: tpm.indexToPosition(nodeRange[2]),
-    };
-}
-
-function getYAMLPairNodeRange(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPositionMapper): Range {
-    return {
-        start: tpm.indexToPosition(node.key.range[0]),
-        end: node.value ? tpm.indexToPosition(node.value.range[2]) : tpm.indexToPosition(node.key.range[2]),
-    };
-}
-
-function pairToYAMLNode(node: Pair<ParsedNode, ParsedNode | null>, tpm: TextPositionMapper): YAMLNode {
-    const range = getYAMLPairNodeRange(node, tpm);
-    return {
-        range,
-        text: getTextOverRange(tpm.lines, range),
-        raw: node,
-        pairKeyRange: yamlRangeToRange(node.key.range, tpm),
-        pairValueRange: node.value ? yamlRangeToRange(node.value.range, tpm) : undefined,
-        problems: [],
-    };
-}
-
-type SupportedType = 'string' | 'boolean' | 'number' | 'integer';
-
-type ParsePairResult = {
-    problemsAtParent: Problem[],
-    /**
-     * If the field was not found, this will be missing/`undefined`.
-     */
-    yamlNode?: YAMLNode;
-    /**
-     * Will not be `undefined` (not `null`), if parsing was unsuccessful.
-     */
-    value?: any
-};
-
-function parsePairWithScalarValue(node: YAMLMap<ParsedNode, ParsedNode | null>, key: string, t: SupportedType, tpm: TextPositionMapper, required?: boolean): ParsePairResult {
-    const pairNode = node.items.find(x => isScalar(x.key) && x.key.toString() === key);
-    if (!pairNode) {
-        return { problemsAtParent: required ? [YAML_PROBLEMS.generic.missingField(key)] : [] };
-    }
-    const result = {
-        yamlNode: pairToYAMLNode(pairNode, tpm),
-        problemsAtParent: [],
-    };
-    if (pairNode.value && isScalar(pairNode.value) && (typeof pairNode.value.value === t || t === 'integer' && typeof pairNode.value.value === 'number' && Number.isInteger(pairNode.value.value))) {
-        (result as ParsePairResult).value = pairNode.value.value;
-    } else {
-        result.yamlNode.problems.push(YAML_PROBLEMS.generic.unexpectedScalarType(t));
-    }
-    return result;
-}
 
 /**
  * A generic YAML parser that returns a tree of objects/arrays of type {@link WithNode<any>}.
@@ -217,6 +159,8 @@ export class YAMLParser {
         };
     }
 }
+
+type SupportedType = 'string' | 'boolean' | 'number' | 'integer';
 
 /**
  * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
@@ -376,9 +320,9 @@ function assignScalarOrArrayOfScalarsFromPair<T>(map: WithNode<any>, key: string
     let result: SequenceWithNode<T> | WithNode<T> | undefined;
 
     if (initial.node.kind === 'sequence') {
-        result = assignArrayOfScalarsFromPair(map, key, t);
+        return assignArrayOfScalarsFromPair(map, key, t);
     } else if (initial.node.kind === 'scalar') {
-        result = assignScalarFromPair(map, key, t, required, parentNodeProblems);
+        return assignScalarFromPair(map, key, t, required, parentNodeProblems);
     } else {
         initial.node.problems.push(YAML_PROBLEMS.generic.expectedScalarOrSequence(t));
         return {
@@ -426,7 +370,7 @@ export function parseCharmActionsYAML(text: string): CharmActions {
             continue;
         }
 
-        entry.description = assignScalarFromPair(map, 'description', 'string');
+        entry.description = assignScalarFromPair(map.value, 'description', 'string');
     }
 
     return result;
@@ -484,10 +428,10 @@ export function parseCharmConfigYAML(text: string): CharmConfig {
             continue;
         }
 
-        entry.type = assignStringEnumFromScalarPair(map, 'type', ['string', 'int', 'float', 'boolean'], true, entry.node.problems);
-        entry.description = assignScalarFromPair(map, 'description', 'string');
+        entry.type = assignStringEnumFromScalarPair(map.value, 'type', ['string', 'int', 'float', 'boolean'], true, entry.node.problems);
+        entry.description = assignScalarFromPair(map.value, 'description', 'string');
 
-        const defaultValue = assignAnyFromPair(map, 'default');
+        const defaultValue = assignAnyFromPair(map.value, 'default');
         if (defaultValue?.value !== undefined) {
             entry.default = defaultValue;
             if (entry.type?.value !== undefined) {
