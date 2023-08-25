@@ -230,6 +230,7 @@ export interface YAMLNode {
      * Raw text content, corresponding to the {@link range `range`} property.
      */
     text: string;
+    pairText?: string;
 }
 
 export interface Problem {

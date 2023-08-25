@@ -33,6 +33,7 @@ import {
     Problem,
     SequenceWithNode,
     WithNode,
+    YAMLNode,
     YAML_PROBLEMS,
     getTextOverRange
 } from './model/charm';
@@ -162,6 +163,16 @@ export class YAMLParser {
 
 type SupportedType = 'string' | 'boolean' | 'number' | 'integer';
 
+
+function valueNodeFromPairNode(pairNode: YAMLNode, valueNode: YAMLNode): YAMLNode {
+    return {
+        ...valueNode,
+        pairKeyRange: pairNode.pairKeyRange,
+        pairValueRange: pairNode.pairValueRange,
+        pairText: pairNode.text,
+    };
+}
+
 /**
  * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
  * @returns `undefined` if the field was missing.
@@ -183,7 +194,7 @@ function assignScalarFromPair<T>(map: WithNode<any>, key: string, t: SupportedTy
     }
 
     const result: WithNode<T> = {
-        node: pair.value.node,
+        node: valueNodeFromPairNode(pair.node, pair.value.node)
     };
     const value = pair.value.value;
 
@@ -216,7 +227,7 @@ function assignAnyFromPair(map: WithNode<any>, key: string, required?: boolean, 
     }
 
     return {
-        node: pair.value.node,
+        node: valueNodeFromPairNode(pair.node, pair.value.node),
         value: pair.value.value,
     };
 }
@@ -330,6 +341,43 @@ function assignScalarOrArrayOfScalarsFromPair<T>(map: WithNode<any>, key: string
         };
     }
 }
+
+function readMap<T>(map: WithNode<any>, cb: ((value: WithNode<any>, key: string, entry: WithNode<T>) => void)): MapWithNode<T> | undefined {
+    const result: MapWithNode<T> = {
+        node: map.node,
+    };
+
+    if (!map.value || map.node.kind !== 'map') {
+        result.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+        return result;
+    }
+
+    result.entries = {};
+    const m: { [key: string]: WithNode<any> } = map.value;
+    for (const [name, pair] of Object.entries(m)) {
+        const entry: WithNode<T> = {
+            node: pair.node,
+        };
+        result.entries[name] = entry;
+        cb(pair.value, name, entry);
+    }
+    return result;
+}
+
+function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: string, entry: WithNode<T>) => void)): MapWithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key);
+    if (!initial || initial.value === undefined) {
+        return undefined;
+    }
+    return readMap<T>(initial, (value, key, entry) => {
+        if (value.node.kind !== 'map' || !value.value) {
+            entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+            return;
+        }
+        cb(value.value, key, entry);
+    });
+}
+
 
 export function parseCharmActionsYAML(text: string): CharmActions {
     const { tree } = new YAMLParser(text).parse();
@@ -562,44 +610,8 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
 
     return result;
 
-    function _readMap<T>(map: WithNode<any>, key: string, cb: ((value: WithNode<any>, key: string, entry: WithNode<T>) => void)): MapWithNode<T> | undefined {
-        const initial = assignAnyFromPair(map, key);
-        if (!initial || initial.value === undefined) {
-            return undefined;
-        }
-        const result: MapWithNode<T> = {
-            node: initial.node,
-        };
-
-        if (!initial.value || initial.node.kind !== 'map') {
-            result.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
-            return result;
-        }
-
-        result.entries = {};
-        const m: { [key: string]: WithNode<any> } = initial.value;
-        for (const [name, pair] of Object.entries(m)) {
-            const entry: WithNode<T> = {
-                node: pair.node,
-            };
-            result.entries[name] = entry;
-            cb(pair.value, name, entry);
-        }
-        return result;
-    }
-
-    function _readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: string, entry: WithNode<T>) => void)): MapWithNode<T> | undefined {
-        return _readMap<T>(map, key, (value, key, entry) => {
-            if (value.node.kind !== 'map' || !value.value) {
-                entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
-                return;
-            }
-            cb(value.value, key, entry);
-        });
-    }
-
     function _endpoints(map: WithNode<any>, key: string): MapWithNode<CharmEndpoint> | undefined {
-        return _readMapOfMap<CharmEndpoint>(map, key, (map, key, entry) => {
+        return readMapOfMap<CharmEndpoint>(map, key, (map, key, entry) => {
             entry.value = {
                 name: key,
                 limit: assignScalarFromPair(map, 'limit', 'integer'),
@@ -611,7 +623,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
     }
 
     function _resources<T>(map: WithNode<any>, key: string): MapWithNode<CharmResource> | undefined {
-        return _readMapOfMap<CharmResource>(map, key, (map, key, entry) => {
+        return readMapOfMap<CharmResource>(map, key, (map, key, entry) => {
             entry.value = {
                 name: key,
                 description: assignScalarFromPair(map, 'description', 'string'),
@@ -631,7 +643,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
     }
 
     function _devices(map: WithNode<any>, key: string): MapWithNode<CharmDevice> | undefined {
-        return _readMapOfMap<CharmDevice>(map, key, (map, key, entry) => {
+        return readMapOfMap<CharmDevice>(map, key, (map, key, entry) => {
             entry.value = {
                 name: key,
                 description: assignScalarFromPair(map, 'description', 'string'),
@@ -643,7 +655,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
     }
 
     function _storage(map: WithNode<any>, key: string): MapWithNode<CharmStorage> | undefined {
-        return _readMapOfMap<CharmStorage>(map, key, (map, key, entry) => {
+        return readMapOfMap<CharmStorage>(map, key, (map, key, entry) => {
             entry.value = {
                 name: key,
                 description: assignScalarFromPair(map, 'description', 'string'),
@@ -699,7 +711,11 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
     }
 
     function _extraBindings(map: WithNode<any>, key: string): MapWithNode<CharmExtraBinding> | undefined {
-        return _readMap<CharmExtraBinding>(map, key, (value, key, entry) => {
+        const initial = assignAnyFromPair(map, key);
+        if (!initial || initial.value === undefined) {
+            return undefined;
+        }
+        return readMap<CharmExtraBinding>(initial, (value, key, entry) => {
             entry.value = {
                 name: key,
             };
@@ -710,7 +726,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
     }
 
     function _containers(map: WithNode<any>, key: string): MapWithNode<CharmContainer> | undefined {
-        return _readMapOfMap<CharmContainer>(map, key, (map, key, entry) => {
+        return readMapOfMap<CharmContainer>(map, key, (map, key, entry) => {
             entry.value = {
                 name: key,
                 resource: assignScalarFromPair(map, 'resource', 'string'),

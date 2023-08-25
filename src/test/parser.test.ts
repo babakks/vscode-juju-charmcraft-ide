@@ -371,14 +371,16 @@ suite(parseCharmActionsYAML.name, function () {
         assert.equal(c.current.symbol, 'action_with_description_empty');
         assert.equal(c.current.node!.text, 'action-with-description-empty:\n  description: ""');
         assert.equal(c.current.description?.value, '');
-        assert.equal(c.current.description?.node.text, 'description: ""');
+        assert.equal(c.current.description?.node.pairText, 'description: ""');
+        assert.equal(c.current.description?.node.text, '""');
 
         c.next();
         assert.equal(c.current.name, 'action-with-description');
         assert.equal(c.current.symbol, 'action_with_description');
         assert.equal(c.current.node!.text, 'action-with-description:\n  description: description');
         assert.equal(c.current.description?.value, 'description');
-        assert.equal(c.current.description?.node.text, 'description: description');
+        assert.equal(c.current.description?.node.pairText, 'description: description');
+        assert.equal(c.current.description?.node.text, 'description');
     });
 
     test('invalid', function () {
@@ -446,7 +448,8 @@ suite(parseCharmActionsYAML.name, function () {
             message: 'Must be a string.',
         }]);
         assert.isUndefined(c.current.description?.value);
-        assert.strictEqual(c.current.description?.node.text, 'description: []');
+        assert.strictEqual(c.current.description?.node.pairText, 'description: []');
+        assert.strictEqual(c.current.description?.node.text, '[]');
 
         c.next();
         assert.strictEqual(c.current.name, 'action-invalid-description-array');
@@ -459,7 +462,8 @@ suite(parseCharmActionsYAML.name, function () {
             message: 'Must be a string.',
         }]);
         assert.isUndefined(c.current.description?.value);
-        assert.strictEqual(c.current.description?.node.text, 'description:\n    - element');
+        assert.strictEqual(c.current.description?.node.pairText, 'description:\n    - element');
+        assert.strictEqual(c.current.description?.node.text, '- element');
 
         c.next();
         assert.strictEqual(c.current.name, 'action-invalid-description-number');
@@ -472,7 +476,8 @@ suite(parseCharmActionsYAML.name, function () {
             message: 'Must be a string.',
         }]);
         assert.isUndefined(c.current.description?.value);
-        assert.strictEqual(c.current.description?.node.text, 'description: 0');
+        assert.strictEqual(c.current.description?.node.pairText, 'description: 0');
+        assert.strictEqual(c.current.description?.node.text, '0');
     });
 
     suite('special cases (with no action data)', function () {
