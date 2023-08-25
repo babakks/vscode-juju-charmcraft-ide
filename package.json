@@ -70,7 +70,6 @@
     "dependencies": {
         "@vscode/extension-telemetry": "^0.8.2",
         "handlebars": "^4.7.7",
-        "js-yaml": "^4.1.0",
         "yaml": "^2.3.1"
     }
 }
