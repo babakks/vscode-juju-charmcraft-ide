@@ -1183,6 +1183,9 @@ suite(parseCharmMetadataYAML.name, function () {
 
         const metadata = parseCharmMetadataYAML(content);
 
+        assert.isEmpty(metadata.node.problems, 'expected no file-scope problem');
+        assert.strictEqual(metadata.node.text, content);
+
         assert.strictEqual(metadata.name?.value, 'my-charm');
         assert.strictEqual(metadata.description?.value, 'my-charm-description');
         assert.strictEqual(metadata.summary?.value, 'my-charm-summary');
@@ -1190,8 +1193,6 @@ suite(parseCharmMetadataYAML.name, function () {
         assert.strictEqual(metadata.subordinate?.value, false);
         assert.strictEqual(metadata.docs?.value, 'https://docs.url');
 
-        assert.isEmpty(metadata.node.problems, 'expected no file-scope problem');
-        assert.strictEqual(metadata.node.text, content);
         assert.strictEqual(metadata.assumes?.elements?.[0].value?.single?.value, 'juju >= 2.9');
         assert.strictEqual(metadata.assumes?.elements?.[1].value?.single?.value, 'k8s-api');
         assert.strictEqual(metadata.assumes?.elements?.[2].value?.allOf?.elements?.[0].value, 'juju >= 2.9');
