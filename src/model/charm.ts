@@ -79,11 +79,10 @@ export interface CharmConfigParameter {
     type?: WithNode<CharmConfigParameterType>;
     description?: WithNode<string>;
     default?: WithNode<string | number | boolean>;
-    node: YAMLNode;
 }
 
 export interface CharmConfig {
-    parameters?: WithNode<CharmConfigParameter[]>;
+    parameters?: MapWithNode<CharmConfigParameter>;
     /**
      * Root node.
      */
@@ -205,11 +204,10 @@ export interface CharmAction {
     name: string;
     symbol: string;
     description?: WithNode<string>;
-    node: YAMLNode;
 }
 
 export interface CharmActions {
-    actions: CharmAction[];
+    actions?: MapWithNode<CharmAction>;
     /**
      * Root node.
      */
@@ -816,7 +814,6 @@ export function emptyYAMLNode(): YAMLNode {
 
 export function emptyActions(): CharmActions {
     return {
-        actions: [],
         node: emptyYAMLNode(),
     };
 }
@@ -835,7 +832,6 @@ export function emptyMetadata(): CharmMetadata {
 
 export class Charm {
     private _config: CharmConfig = emptyConfig();
-    private _configMap = new Map<string, CharmConfigParameter>();
 
     private _eventSymbolMap = new Map<string, CharmEvent>();
     private _actions: CharmActions = emptyActions();
@@ -848,10 +844,6 @@ export class Charm {
 
     get config(): CharmConfig {
         return this._config;
-    }
-
-    getConfigParameterByName(name: string): CharmConfigParameter | undefined {
-        return this._configMap.get(name);
     }
 
     get events(): CharmEvent[] {
@@ -877,10 +869,6 @@ export class Charm {
 
     async updateConfig(config: CharmConfig) {
         this._config = config;
-        this._configMap.clear();
-        for (const p of this._config.parameters?.value ?? []) {
-            this._configMap.set(p.name, p);
-        }
     }
 
     async updateMetadata(metadata: CharmMetadata) {
@@ -896,7 +884,7 @@ export class Charm {
         this._events = [
             ...Array.from(CHARM_LIFECYCLE_EVENTS),
             ...Array.from(CHARM_SECRET_EVENTS),
-            ...this._actions.actions.map(action => CHARM_ACTION_EVENT_TEMPLATE(action)).flat(1),
+            ...Object.entries(this._actions.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => CHARM_ACTION_EVENT_TEMPLATE(action.value!)).flat(1),
             ...Object.entries(this._metadata.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => CHARM_STORAGE_EVENTS_TEMPLATE(storage.value!)).flat(1),
             ...Object.entries(this._metadata.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => CHARM_CONTAINER_EVENTS_TEMPLATE(container.value!)).flat(1),
             ...Object.entries(this._metadata.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/peer')).flat(1),

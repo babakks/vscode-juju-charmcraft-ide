@@ -75,7 +75,11 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         const needsCloseQuote = openQuote && !trailingText.startsWith(openQuote);
 
         const result: CompletionItem[] = [];
-        for (const p of workspaceCharm.model.config.parameters?.value ?? []) {
+        for (const [, v] of Object.entries(workspaceCharm.model.config.parameters?.entries ?? {})) {
+            if (!v.value) {
+                continue;
+            }
+            const p = v.value;
             const completion: CompletionItem = {
                 label: p.name,
                 sortText: "0",

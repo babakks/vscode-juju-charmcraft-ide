@@ -15,11 +15,9 @@ import {
     parseDocument
 } from 'yaml';
 import {
-    CharmAction,
     CharmActions,
     CharmAssumption,
     CharmConfig,
-    CharmConfigParameter,
     CharmContainer,
     CharmContainerBase,
     CharmContainerMount,
@@ -181,14 +179,14 @@ function assignScalarFromPair<T>(map: WithNode<any>, key: string, t: SupportedTy
     if (required && parentNodeProblems === undefined) {
         throw Error('`parentNodeProblems` cannot be `undefined` when `required` is `true`.');
     }
-    if (!(key in map)) {
+    if (!map.value || !(key in map.value)) {
         if (required) {
             parentNodeProblems!.push(YAML_PROBLEMS.generic.missingField(key));
         }
         return undefined;
     }
 
-    const pair: WithNode<any> = (map as any)[key];
+    const pair: WithNode<any> = map.value[key];
     if (pair.node.kind !== 'pair') {
         return undefined;
     }
@@ -214,14 +212,14 @@ function assignAnyFromPair(map: WithNode<any>, key: string, required?: boolean, 
     if (required && parentNodeProblems === undefined) {
         throw Error('`parentNodeProblems` cannot be `undefined` when `required` is `true`.');
     }
-    if (!(key in map)) {
+    if (!map.value || !(key in map.value)) {
         if (required) {
             parentNodeProblems!.push(YAML_PROBLEMS.generic.missingField(key));
         }
         return undefined;
     }
 
-    const pair: WithNode<any> = (map as any)[key];
+    const pair: WithNode<any> = map.value[key];
     if (pair.node.kind !== 'pair') {
         return undefined;
     }
@@ -328,8 +326,6 @@ function assignScalarOrArrayOfScalarsFromPair<T>(map: WithNode<any>, key: string
         };
     }
 
-    let result: SequenceWithNode<T> | WithNode<T> | undefined;
-
     if (initial.node.kind === 'sequence') {
         return assignArrayOfScalarsFromPair(map, key, t);
     } else if (initial.node.kind === 'scalar') {
@@ -374,7 +370,7 @@ function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: s
             entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
             return;
         }
-        cb(value.value, key, entry);
+        cb(value, key, entry);
     });
 }
 
@@ -383,7 +379,6 @@ export function parseCharmActionsYAML(text: string): CharmActions {
     const { tree } = new YAMLParser(text).parse();
     if (!tree) {
         return {
-            actions: [],
             node: {
                 kind: 'map',
                 problems: [],
@@ -394,33 +389,20 @@ export function parseCharmActionsYAML(text: string): CharmActions {
     }
 
     const result: CharmActions = {
-        actions: [],
         node: tree.node,
     };
 
-    if (tree.node.kind !== 'map') {
-        result.node.problems.push(YAML_PROBLEMS.generic.invalidYAML);
-        return result;
-    }
-
-    for (const name in tree.value) {
-        const item: WithNode<any> = tree.value[name];
-        const entry: CharmAction = {
-            name,
-            symbol: toValidSymbol(name),
-            node: item.node,
+    result.actions = readMap(tree, (value, key, entry) => {
+        entry.value = {
+            name: key,
+            symbol: toValidSymbol(key),
         };
-        result.actions.push(entry);
-
-        const map = item.value;
-        if (map.node.kind !== 'map') {
+        if (value.node.kind !== 'map') {
             entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
-            continue;
+            return;
         }
-
-        entry.description = assignScalarFromPair(map.value, 'description', 'string');
-    }
-
+        entry.value.description = assignScalarFromPair(value, 'description', 'string');
+    });
     return result;
 }
 
@@ -442,70 +424,44 @@ export function parseCharmConfigYAML(text: string): CharmConfig {
     };
 
     if (tree.node.kind !== 'map') {
-        result.node.problems.push(YAML_PROBLEMS.generic.invalidYAML);
+        result.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
         return result;
     }
 
-    if (!('options' in tree.value)) {
-        return result;
-    }
-
-    const optionsPair: WithNode<any> = tree.value['options'];
-    result.parameters = {
-        value: [],
-        node: optionsPair.node,
-    };
-
-    const options = optionsPair.value;
-    if (options.node.kind !== 'map') {
-        result.parameters.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
-        return result;
-    }
-
-    for (const name in options.value) {
-        const item: WithNode<any> = options.value[name];
-        const entry: CharmConfigParameter = {
-            name,
-            node: item.node,
+    result.parameters = readMapOfMap(tree, 'options', (map, key, entry) => {
+        entry.value = {
+            name: key,
+            description: assignScalarFromPair(map, 'description', 'string'),
         };
-        result.parameters.value!.push(entry);
 
-        const map = item.value;
-        if (map.node.kind !== 'map') {
-            entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
-            continue;
-        }
+        entry.value.type = assignStringEnumFromScalarPair(map, 'type', ['string', 'int', 'float', 'boolean'], true, entry.node.problems);
 
-        entry.type = assignStringEnumFromScalarPair(map.value, 'type', ['string', 'int', 'float', 'boolean'], true, entry.node.problems);
-        entry.description = assignScalarFromPair(map.value, 'description', 'string');
-
-        const defaultValue = assignAnyFromPair(map.value, 'default');
+        const defaultValue = assignAnyFromPair(map, 'default');
         if (defaultValue?.value !== undefined) {
-            entry.default = defaultValue;
-            if (entry.type?.value !== undefined) {
+            entry.value.default = defaultValue;
+            if (entry.value.type?.value !== undefined) {
                 if (
-                    entry.type.value === 'string' && typeof entry.default.value !== 'string'
-                    || entry.type.value === 'boolean' && typeof entry.default.value !== 'boolean'
-                    || entry.type.value === 'float' && typeof entry.default.value !== 'number'
-                    || entry.type.value === 'int' && (typeof entry.default.value !== 'number' || !Number.isInteger(defaultValue.value))
+                    entry.value.type.value === 'string' && typeof entry.value.default.value !== 'string'
+                    || entry.value.type.value === 'boolean' && typeof entry.value.default.value !== 'boolean'
+                    || entry.value.type.value === 'float' && typeof entry.value.default.value !== 'number'
+                    || entry.value.type.value === 'int' && (typeof entry.value.default.value !== 'number' || !Number.isInteger(defaultValue.value))
                 ) {
-                    entry.default.value = undefined; // Dropping invalid value.
-                    entry.default.node.problems.push(YAML_PROBLEMS.config.wrongDefaultType(entry.type.value));
+                    entry.value.default.value = undefined; // Dropping invalid value.
+                    entry.value.default.node.problems.push(YAML_PROBLEMS.config.wrongDefaultType(entry.value.type.value));
                 }
             } else {
                 // Parameter has no `type`, so we should check if the default value is not essentially invalid.
                 if (
-                    typeof entry.default.value !== 'string'
-                    && typeof entry.default.value !== 'boolean'
-                    && typeof entry.default.value !== 'number'
+                    typeof entry.value.default.value !== 'string'
+                    && typeof entry.value.default.value !== 'boolean'
+                    && typeof entry.value.default.value !== 'number'
                 ) {
-                    entry.default.value = undefined; // Dropping invalid value.
-                    entry.default.node.problems.push(YAML_PROBLEMS.config.invalidDefault);
+                    entry.value.default.value = undefined; // Dropping invalid value.
+                    entry.value.default.node.problems.push(YAML_PROBLEMS.config.invalidDefault);
                 }
             }
         }
-    }
-
+    });
     return result;
 }
 
@@ -530,34 +486,33 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
         result.node.problems.push(YAML_PROBLEMS.generic.invalidYAML);
         return result;
     }
-    const map = tree.value;
 
-    result.name = assignScalarFromPair(map, 'name', 'string', true, result.node.problems);
-    result.displayName = assignScalarFromPair(map, 'display-name', 'string', true, result.node.problems);
-    result.description = assignScalarFromPair(map, 'description', 'string', true, result.node.problems);
-    result.summary = assignScalarFromPair(map, 'summary', 'string', true, result.node.problems);
+    result.name = assignScalarFromPair(tree, 'name', 'string', true, result.node.problems);
+    result.displayName = assignScalarFromPair(tree, 'display-name', 'string', true, result.node.problems);
+    result.description = assignScalarFromPair(tree, 'description', 'string', true, result.node.problems);
+    result.summary = assignScalarFromPair(tree, 'summary', 'string', true, result.node.problems);
 
-    result.source = assignScalarOrArrayOfScalarsFromPair(map, 'source', 'string');
-    result.issues = assignScalarOrArrayOfScalarsFromPair(map, 'issues', 'string');
-    result.website = assignScalarOrArrayOfScalarsFromPair(map, 'website', 'string');
+    result.source = assignScalarOrArrayOfScalarsFromPair(tree, 'source', 'string');
+    result.issues = assignScalarOrArrayOfScalarsFromPair(tree, 'issues', 'string');
+    result.website = assignScalarOrArrayOfScalarsFromPair(tree, 'website', 'string');
 
-    result.maintainers = assignArrayOfScalarsFromPair(map, 'maintainers', 'string');
-    result.terms = assignArrayOfScalarsFromPair(map, 'terms', 'string');
+    result.maintainers = assignArrayOfScalarsFromPair(tree, 'maintainers', 'string');
+    result.terms = assignArrayOfScalarsFromPair(tree, 'terms', 'string');
 
-    result.docs = assignScalarFromPair(map, 'docs', 'string');
-    result.subordinate = assignScalarFromPair(map, 'subordinate', 'boolean');
+    result.docs = assignScalarFromPair(tree, 'docs', 'string');
+    result.subordinate = assignScalarFromPair(tree, 'subordinate', 'boolean');
 
-    result.assumes = _assumes(map, 'assumes');
+    result.assumes = _assumes(tree, 'assumes');
 
-    result.requires = _endpoints(map, 'requires');
-    result.provides = _endpoints(map, 'provides');
-    result.peers = _endpoints(map, 'peers');
+    result.requires = _endpoints(tree, 'requires');
+    result.provides = _endpoints(tree, 'provides');
+    result.peers = _endpoints(tree, 'peers');
 
-    result.resources = _resources(map, 'resources');
-    result.devices = _devices(map, 'devices');
-    result.storage = _storage(map, 'storage');
-    result.extraBindings = _extraBindings(map, 'extra-bindings');
-    result.containers = _containers(map, 'containers');
+    result.resources = _resources(tree, 'resources');
+    result.devices = _devices(tree, 'devices');
+    result.storage = _storage(tree, 'storage');
+    result.extraBindings = _extraBindings(tree, 'extra-bindings');
+    result.containers = _containers(tree, 'containers');
 
     result.customFields = Object.fromEntries(Object.entries(plain).filter(([x]) => ![
         'name',
@@ -740,10 +695,10 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                         node: e.node,
                         value: e.value === undefined ? undefined : ((e: WithNode<any>) => {
                             const result: CharmContainerBase = {
-                                architectures: assignArrayOfScalarsFromPair(e.value, 'architectures', 'string'),
+                                architectures: assignArrayOfScalarsFromPair(e, 'architectures', 'string'),
                             };
-                            result.name = assignScalarFromPair(e.value, 'name', 'string', true, e.node.problems);
-                            result.channel = assignScalarFromPair(e.value, 'channel', 'string', true, e.node.problems);
+                            result.name = assignScalarFromPair(e, 'name', 'string', true, e.node.problems);
+                            result.channel = assignScalarFromPair(e, 'channel', 'string', true, e.node.problems);
                             return result;
                         })(e),
                     })),
@@ -764,9 +719,9 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                         node: e.node,
                         value: e.value === undefined ? undefined : ((e: WithNode<any>) => {
                             const result: CharmContainerMount = {
-                                location: assignScalarFromPair(e.value, 'location', 'string'),
+                                location: assignScalarFromPair(e, 'location', 'string'),
                             };
-                            result.storage = assignScalarFromPair(e.value, 'storage', 'string', true, e.node.problems);
+                            result.storage = assignScalarFromPair(e, 'storage', 'string', true, e.node.problems);
                             return result;
                         })(e),
                     })),
@@ -807,8 +762,8 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                     },
                 };
             } else if (element.value !== undefined && element.node.kind === 'map') {
-                const map = element.value;
-                const keys = Object.keys(map);
+                const map = element;
+                const keys = Object.keys(map.value);
                 if (keys.length === 1 && keys[0] === 'all-of') {
                     // TODO check for value format.
                     entry.value = {

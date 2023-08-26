@@ -1,7 +1,7 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { Problem, CharmMetadata, CharmAction, CharmConfigParameter, emptyYAMLNode, CharmConfig, SequenceWithNode } from "../model/charm";
+import { Problem, CharmMetadata, CharmAction, CharmConfigParameter, emptyYAMLNode, CharmConfig, SequenceWithNode, CharmActions, WithNode, MapWithNode } from "../model/charm";
 import { YAMLParser, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from "../parser";
 import path = require("path");
 import { readFileSync } from "fs";
@@ -12,6 +12,15 @@ function cursor<T>(list: T[]) {
     return {
         next() { return list[++index]; },
         get current() { return list[index]; },
+    };
+}
+
+function cursorOverMap<T>(map: MapWithNode<T> | undefined) {
+    let index = -1;
+    const entries = Object.entries(map?.entries ?? {});
+    return {
+        next() { return entries[++index][1]; },
+        get current() { return entries[index][1]; },
     };
 }
 
@@ -341,6 +350,16 @@ suite(YAMLParser.name, function () {
 });
 
 suite(parseCharmActionsYAML.name, function () {
+    function allProblems(actions: CharmActions): Problem[] {
+        return [
+            ...actions.node.problems,
+            ...Object.entries(actions.actions?.entries ?? {}).map(([, x]) => [
+                ...x.node.problems,
+                ...x.value?.description?.node.problems || [],
+            ]).flat(),
+        ];
+    }
+
     test('valid', function () {
         const content = [
             `action-empty: {}`,
@@ -350,37 +369,39 @@ suite(parseCharmActionsYAML.name, function () {
             `  description: description`,
         ].join('\n');
 
-        const { actions, node } = parseCharmActionsYAML(content);
+        const actions = parseCharmActionsYAML(content);
 
-        assert.isEmpty(node.problems, 'expected no file-scope problem');
-        assert.lengthOf(actions, 3);
-        assert.isEmpty(actions.map(x => [
-            ...x.node!.problems,
-            ...x.description?.node.problems || [],
-        ]).flat(), 'problem in some action(s)');
+        assert.hasAllKeys(actions.actions?.entries, [
+            'action-empty',
+            'action-with-description-empty',
+            'action-with-description',
+        ]);
+        assert.isEmpty(allProblems(actions), 'problem in some action(s)');
 
-        const c = cursor(actions);
-
-        c.next();
-        assert.equal(c.current.name, 'action-empty');
-        assert.equal(c.current.symbol, 'action_empty');
-        assert.equal(c.current.node!.text, 'action-empty: {}');
+        const c = cursorOverMap(actions.actions);
 
         c.next();
-        assert.equal(c.current.name, 'action-with-description-empty');
-        assert.equal(c.current.symbol, 'action_with_description_empty');
-        assert.equal(c.current.node!.text, 'action-with-description-empty:\n  description: ""');
-        assert.equal(c.current.description?.value, '');
-        assert.equal(c.current.description?.node.pairText, 'description: ""');
-        assert.equal(c.current.description?.node.text, '""');
+        assert.equal(c.current.value?.name, 'action-empty');
+        assert.equal(c.current.value?.symbol, 'action_empty');
+        assert.isUndefined(c.current.value?.description);
+        assert.equal(c.current.node.text, 'action-empty: {}');
+
 
         c.next();
-        assert.equal(c.current.name, 'action-with-description');
-        assert.equal(c.current.symbol, 'action_with_description');
-        assert.equal(c.current.node!.text, 'action-with-description:\n  description: description');
-        assert.equal(c.current.description?.value, 'description');
-        assert.equal(c.current.description?.node.pairText, 'description: description');
-        assert.equal(c.current.description?.node.text, 'description');
+        assert.equal(c.current.value?.name, 'action-with-description-empty');
+        assert.equal(c.current.value?.symbol, 'action_with_description_empty');
+        assert.equal(c.current.node.text, 'action-with-description-empty:\n  description: ""');
+        assert.equal(c.current.value?.description?.value, '');
+        assert.equal(c.current.value?.description?.node.pairText, 'description: ""');
+        assert.equal(c.current.value?.description?.node.text, '""');
+
+        c.next();
+        assert.equal(c.current.value?.name, 'action-with-description');
+        assert.equal(c.current.value?.symbol, 'action_with_description');
+        assert.equal(c.current.node.text, 'action-with-description:\n  description: description');
+        assert.equal(c.current.value?.description?.value, 'description');
+        assert.equal(c.current.value?.description?.node.pairText, 'description: description');
+        assert.equal(c.current.value?.description?.node.text, 'description');
     });
 
     test('invalid', function () {
@@ -399,103 +420,113 @@ suite(parseCharmActionsYAML.name, function () {
             `  description: 0`,
         ].join('\n');
 
-        const { actions, node } = parseCharmActionsYAML(content);
-        assert.lengthOf(node.problems, 0, 'expected no file-scope problem');
-        assert.lengthOf(actions, 7);
+        const actions = parseCharmActionsYAML(content);
+        assert.lengthOf(actions.node.problems, 0, 'expected no file-scope problem');
 
-        const c = cursor(actions);
-
-        c.next();
-        assert.strictEqual(c.current.name, 'action-array-empty');
-        assert.strictEqual(c.current.symbol, 'action_array_empty');
-        assert.strictEqual(c.current.node!.text, 'action-array-empty: []');
-        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
-        assert.isUndefined(c.current.description?.value);
-        assert.isUndefined(c.current.description?.node);
+        const c = cursorOverMap(actions.actions);
 
         c.next();
-        assert.strictEqual(c.current.name, 'action-array');
-        assert.strictEqual(c.current.symbol, 'action_array');
-        assert.strictEqual(c.current.node!.text, 'action-array:\n  - element');
-        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
-        assert.isUndefined(c.current.description?.value);
-        assert.isUndefined(c.current.description?.node);
+        assert.strictEqual(c.current.value?.name, 'action-array-empty');
+        assert.strictEqual(c.current.value?.symbol, 'action_array_empty');
+        assert.strictEqual(c.current.node.text, 'action-array-empty: []');
+        assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
+        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.name, 'action-string');
-        assert.strictEqual(c.current.symbol, 'action_string');
-        assert.strictEqual(c.current.node!.text, 'action-string: something');
-        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
-        assert.isUndefined(c.current.description?.value);
-        assert.isUndefined(c.current.description?.node);
+        assert.strictEqual(c.current.value?.name, 'action-array');
+        assert.strictEqual(c.current.value?.symbol, 'action_array');
+        assert.strictEqual(c.current.node.text, 'action-array:\n  - element');
+        assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
+        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.name, 'action-number');
-        assert.strictEqual(c.current.symbol, 'action_number');
-        assert.strictEqual(c.current.node!.text, 'action-number: 0');
-        assert.deepStrictEqual(c.current.node!.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
-        assert.isUndefined(c.current.description?.value);
-        assert.isUndefined(c.current.description?.node);
+        assert.strictEqual(c.current.value?.name, 'action-string');
+        assert.strictEqual(c.current.value?.symbol, 'action_string');
+        assert.strictEqual(c.current.node.text, 'action-string: something');
+        assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
+        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.name, 'action-invalid-description-array-empty');
-        assert.strictEqual(c.current.symbol, 'action_invalid_description_array_empty');
-        assert.strictEqual(c.current.node!.text, 'action-invalid-description-array-empty:\n  description: []');
-        assert.isEmpty(c.current.node!.problems);
-        assert.deepStrictEqual(c.current.description?.node.problems, [{
+        assert.strictEqual(c.current.value?.name, 'action-number');
+        assert.strictEqual(c.current.value?.symbol, 'action_number');
+        assert.strictEqual(c.current.node.text, 'action-number: 0');
+        assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
+        assert.isUndefined(c.current.value?.description);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'action-invalid-description-array-empty');
+        assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_array_empty');
+        assert.strictEqual(c.current.node.text, 'action-invalid-description-array-empty:\n  description: []');
+        assert.isEmpty(c.current.node.problems);
+        assert.deepStrictEqual(c.current.value?.description?.node.problems, [{
             expected: 'string',
             id: 'unexpectedScalarType',
             message: 'Must be a string.',
         }]);
-        assert.isUndefined(c.current.description?.value);
-        assert.strictEqual(c.current.description?.node.pairText, 'description: []');
-        assert.strictEqual(c.current.description?.node.text, '[]');
+        assert.isUndefined(c.current.value?.description?.value);
+        assert.strictEqual(c.current.value?.description?.node.pairText, 'description: []');
+        assert.strictEqual(c.current.value?.description?.node.text, '[]');
 
         c.next();
-        assert.strictEqual(c.current.name, 'action-invalid-description-array');
-        assert.strictEqual(c.current.symbol, 'action_invalid_description_array');
-        assert.strictEqual(c.current.node!.text, 'action-invalid-description-array:\n  description:\n    - element');
-        assert.isEmpty(c.current.node!.problems);
-        assert.deepStrictEqual(c.current.description?.node.problems, [{
+        assert.strictEqual(c.current.value?.name, 'action-invalid-description-array');
+        assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_array');
+        assert.strictEqual(c.current.node.text, 'action-invalid-description-array:\n  description:\n    - element');
+        assert.isEmpty(c.current.node.problems);
+        assert.deepStrictEqual(c.current.value?.description?.node.problems, [{
             expected: 'string',
             id: 'unexpectedScalarType',
             message: 'Must be a string.',
         }]);
-        assert.isUndefined(c.current.description?.value);
-        assert.strictEqual(c.current.description?.node.pairText, 'description:\n    - element');
-        assert.strictEqual(c.current.description?.node.text, '- element');
+        assert.isUndefined(c.current.value?.description?.value);
+        assert.strictEqual(c.current.value?.description?.node.pairText, 'description:\n    - element');
+        assert.strictEqual(c.current.value?.description?.node.text, '- element');
 
         c.next();
-        assert.strictEqual(c.current.name, 'action-invalid-description-number');
-        assert.strictEqual(c.current.symbol, 'action_invalid_description_number');
-        assert.strictEqual(c.current.node!.text, 'action-invalid-description-number:\n  description: 0');
-        assert.isEmpty(c.current.node!.problems);
-        assert.deepStrictEqual(c.current.description?.node.problems, [{
+        assert.strictEqual(c.current.value?.name, 'action-invalid-description-number');
+        assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_number');
+        assert.strictEqual(c.current.node.text, 'action-invalid-description-number:\n  description: 0');
+        assert.isEmpty(c.current.node.problems);
+        assert.deepStrictEqual(c.current.value?.description?.node.problems, [{
             expected: 'string',
             id: 'unexpectedScalarType',
             message: 'Must be a string.',
         }]);
-        assert.isUndefined(c.current.description?.value);
-        assert.strictEqual(c.current.description?.node.pairText, 'description: 0');
-        assert.strictEqual(c.current.description?.node.text, '0');
+        assert.isUndefined(c.current.value?.description?.value);
+        assert.strictEqual(c.current.value?.description?.node.pairText, 'description: 0');
+        assert.strictEqual(c.current.value?.description?.node.text, '0');
     });
 
     suite('special cases (with no action data)', function () {
-        const tests: { name: string; content: string; expectedProblems: Problem[]; }[] = [
+        const tests: { name: string; content: string; expectedProblems: Problem[]; expectedEntries: any; }[] = [
             {
                 name: 'empty',
                 content: '',
                 expectedProblems: [],
+                expectedEntries: {},
             },
             {
                 name: 'whitespace',
                 content: ' \n \n ',
                 expectedProblems: [],
+                expectedEntries: {},
             },
             {
-                name: 'non-map',
+                name: 'scalar',
                 content: '123',
-                expectedProblems: [{ id: 'invalidYAML', message: "Invalid YAML file." }],
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+                expectedEntries: undefined,
+            },
+            {
+                name: 'sequence (empty)',
+                content: '[]',
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+                expectedEntries: undefined,
+            },
+            {
+                name: 'sequence',
+                content: '- element',
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+                expectedEntries: undefined,
             },
         ];
 
@@ -503,7 +534,7 @@ suite(parseCharmActionsYAML.name, function () {
             const tt = t;
             test(tt.name, function () {
                 const { actions, node } = parseCharmActionsYAML(tt.content);
-                assert.isEmpty(actions);
+                assert.deepStrictEqual(actions?.entries, tt.expectedEntries);
                 assert.includeDeepMembers(node.problems, tt.expectedProblems);
             });
         }
@@ -516,12 +547,12 @@ suite(parseCharmConfigYAML.name, function () {
         return [
             ...config.node.problems,
             ...config.parameters?.node.problems ?? [],
-            ...(config.parameters?.value?.map(x => [
+            ...(Object.entries(config.parameters?.entries ?? {})).map(([, x]) => [
                 ...x.node.problems,
-                ...x.type?.node.problems || [],
-                ...x.description?.node.problems || [],
-                ...x.default?.node.problems || [],
-            ]).flat() ?? []),
+                ...x.value?.type?.node.problems || [],
+                ...x.value?.description?.node.problems || [],
+                ...x.value?.default?.node.problems || [],
+            ]).flat(),
         ];
     }
 
@@ -585,106 +616,123 @@ suite(parseCharmConfigYAML.name, function () {
         const config = parseCharmConfigYAML(content);
 
         assert.isEmpty(config.node.problems, 'expected no file-scope problem');
-        assert.lengthOf(config.parameters?.value ?? [], 16);
-        assert.isEmpty(config.parameters!.value!.map(x => allProblems(x)).flat(), 'problem in some parameter(s)');
+        assert.isEmpty(allProblems(config), 'problem in some parameter(s)');
+        assert.hasAllKeys(config.parameters?.entries, [
+            'int-param-full',
+            'float-param-full',
+            'string-param-full',
+            'boolean-param-full',
+            'int-param-minimal',
+            'float-param-minimal',
+            'string-param-minimal',
+            'boolean-param-minimal',
+            'int-param-with-default',
+            'float-param-with-default',
+            'string-param-with-default',
+            'boolean-param-with-default',
+            'int-param-with-description',
+            'float-param-with-description',
+            'string-param-with-description',
+            'boolean-param-with-description',
+        ]);
 
-        const c = cursor(config.parameters!.value!);
-
-        c.next();
-        assert.strictEqual(c.current.name, 'int-param-full');
-        assert.strictEqual(c.current.type?.value, 'int');
-        assert.strictEqual(c.current.description?.value, 'some description');
-        assert.strictEqual(c.current.default?.value, -1);
-
-        c.next();
-        assert.strictEqual(c.current.name, 'float-param-full');
-        assert.strictEqual(c.current.type?.value, 'float');
-        assert.strictEqual(c.current.description?.value, 'some description');
-        assert.strictEqual(c.current.default?.value, -1e-1);
-
-        c.next();
-        assert.strictEqual(c.current.name, 'string-param-full');
-        assert.strictEqual(c.current.type?.value, 'string');
-        assert.strictEqual(c.current.description?.value, 'some description');
-        assert.strictEqual(c.current.default?.value, 'hello');
-
-        c.next();
-        assert.strictEqual(c.current.name, 'boolean-param-full');
-        assert.strictEqual(c.current.type?.value, 'boolean');
-        assert.strictEqual(c.current.description?.value, 'some description');
-        assert.strictEqual(c.current.default?.value, false);
+        const c = cursorOverMap(config.parameters);
 
         c.next();
-        assert.strictEqual(c.current.name, 'int-param-minimal');
-        assert.strictEqual(c.current.type?.value, 'int');
-        assert.isUndefined(c.current.description);
-        assert.isUndefined(c.current.default);
+        assert.strictEqual(c.current.value?.name, 'int-param-full');
+        assert.strictEqual(c.current.value?.type?.value, 'int');
+        assert.strictEqual(c.current.value?.description?.value, 'some description');
+        assert.strictEqual(c.current.value?.default?.value, -1);
 
         c.next();
-        assert.strictEqual(c.current.name, 'float-param-minimal');
-        assert.strictEqual(c.current.type?.value, 'float');
-        assert.isUndefined(c.current.description);
-        assert.isUndefined(c.current.default);
+        assert.strictEqual(c.current.value?.name, 'float-param-full');
+        assert.strictEqual(c.current.value?.type?.value, 'float');
+        assert.strictEqual(c.current.value?.description?.value, 'some description');
+        assert.strictEqual(c.current.value?.default?.value, -1e-1);
 
         c.next();
-        assert.strictEqual(c.current.name, 'string-param-minimal');
-        assert.strictEqual(c.current.type?.value, 'string');
-        assert.isUndefined(c.current.description);
-        assert.isUndefined(c.current.default);
+        assert.strictEqual(c.current.value?.name, 'string-param-full');
+        assert.strictEqual(c.current.value?.type?.value, 'string');
+        assert.strictEqual(c.current.value?.description?.value, 'some description');
+        assert.strictEqual(c.current.value?.default?.value, 'hello');
 
         c.next();
-        assert.strictEqual(c.current.name, 'boolean-param-minimal');
-        assert.strictEqual(c.current.type?.value, 'boolean');
-        assert.isUndefined(c.current.description);
-        assert.isUndefined(c.current.default);
+        assert.strictEqual(c.current.value?.name, 'boolean-param-full');
+        assert.strictEqual(c.current.value?.type?.value, 'boolean');
+        assert.strictEqual(c.current.value?.description?.value, 'some description');
+        assert.strictEqual(c.current.value?.default?.value, false);
 
         c.next();
-        assert.strictEqual(c.current.name, 'int-param-with-default');
-        assert.strictEqual(c.current.type?.value, 'int');
-        assert.strictEqual(c.current.default?.value, -1);
-        assert.isUndefined(c.current.description);
+        assert.strictEqual(c.current.value?.name, 'int-param-minimal');
+        assert.strictEqual(c.current.value?.type?.value, 'int');
+        assert.isUndefined(c.current.value?.description);
+        assert.isUndefined(c.current.value?.default);
 
         c.next();
-        assert.strictEqual(c.current.name, 'float-param-with-default');
-        assert.strictEqual(c.current.type?.value, 'float');
-        assert.strictEqual(c.current.default?.value, -1e-1);
-        assert.isUndefined(c.current.description);
+        assert.strictEqual(c.current.value?.name, 'float-param-minimal');
+        assert.strictEqual(c.current.value?.type?.value, 'float');
+        assert.isUndefined(c.current.value?.description);
+        assert.isUndefined(c.current.value?.default);
 
         c.next();
-        assert.strictEqual(c.current.name, 'string-param-with-default');
-        assert.strictEqual(c.current.type?.value, 'string');
-        assert.strictEqual(c.current.default?.value, 'hello');
-        assert.isUndefined(c.current.description);
+        assert.strictEqual(c.current.value?.name, 'string-param-minimal');
+        assert.strictEqual(c.current.value?.type?.value, 'string');
+        assert.isUndefined(c.current.value?.description);
+        assert.isUndefined(c.current.value?.default);
 
         c.next();
-        assert.strictEqual(c.current.name, 'boolean-param-with-default');
-        assert.strictEqual(c.current.type?.value, 'boolean');
-        assert.strictEqual(c.current.default?.value, false);
-        assert.isUndefined(c.current.description);
+        assert.strictEqual(c.current.value?.name, 'boolean-param-minimal');
+        assert.strictEqual(c.current.value?.type?.value, 'boolean');
+        assert.isUndefined(c.current.value?.description);
+        assert.isUndefined(c.current.value?.default);
 
         c.next();
-        assert.strictEqual(c.current.name, 'int-param-with-description');
-        assert.strictEqual(c.current.type?.value, 'int');
-        assert.strictEqual(c.current.description?.value, 'some description');
-        assert.isUndefined(c.current.default);
+        assert.strictEqual(c.current.value?.name, 'int-param-with-default');
+        assert.strictEqual(c.current.value?.type?.value, 'int');
+        assert.strictEqual(c.current.value?.default?.value, -1);
+        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.name, 'float-param-with-description');
-        assert.strictEqual(c.current.type?.value, 'float');
-        assert.strictEqual(c.current.description?.value, 'some description');
-        assert.isUndefined(c.current.default);
+        assert.strictEqual(c.current.value?.name, 'float-param-with-default');
+        assert.strictEqual(c.current.value?.type?.value, 'float');
+        assert.strictEqual(c.current.value?.default?.value, -1e-1);
+        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.name, 'string-param-with-description');
-        assert.strictEqual(c.current.type?.value, 'string');
-        assert.strictEqual(c.current.description?.value, 'some description');
-        assert.isUndefined(c.current.default);
+        assert.strictEqual(c.current.value?.name, 'string-param-with-default');
+        assert.strictEqual(c.current.value?.type?.value, 'string');
+        assert.strictEqual(c.current.value?.default?.value, 'hello');
+        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.name, 'boolean-param-with-description');
-        assert.strictEqual(c.current.type?.value, 'boolean');
-        assert.strictEqual(c.current.description?.value, 'some description');
-        assert.isUndefined(c.current.default);
+        assert.strictEqual(c.current.value?.name, 'boolean-param-with-default');
+        assert.strictEqual(c.current.value?.type?.value, 'boolean');
+        assert.strictEqual(c.current.value?.default?.value, false);
+        assert.isUndefined(c.current.value?.description);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'int-param-with-description');
+        assert.strictEqual(c.current.value?.type?.value, 'int');
+        assert.strictEqual(c.current.value?.description?.value, 'some description');
+        assert.isUndefined(c.current.value?.default);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'float-param-with-description');
+        assert.strictEqual(c.current.value?.type?.value, 'float');
+        assert.strictEqual(c.current.value?.description?.value, 'some description');
+        assert.isUndefined(c.current.value?.default);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'string-param-with-description');
+        assert.strictEqual(c.current.value?.type?.value, 'string');
+        assert.strictEqual(c.current.value?.description?.value, 'some description');
+        assert.isUndefined(c.current.value?.default);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'boolean-param-with-description');
+        assert.strictEqual(c.current.value?.type?.value, 'boolean');
+        assert.strictEqual(c.current.value?.description?.value, 'some description');
+        assert.isUndefined(c.current.value?.default);
     });
 
     test('type/default mismatch', function () {
@@ -728,53 +776,65 @@ suite(parseCharmConfigYAML.name, function () {
         const config = parseCharmConfigYAML(content);
 
         assert.lengthOf(config.node.problems, 0, 'expected no file-scope problem');
-        assert.lengthOf(config.parameters?.value ?? [], 11);
+        assert.hasAllKeys(config.parameters?.entries, [
+            'int-param-with-boolean-default',
+            'int-param-with-string-default',
+            'int-param-with-float-default',
+            'float-param-with-boolean-default',
+            'float-param-with-string-default',
+            'string-param-with-boolean-default',
+            'string-param-with-int-default',
+            'string-param-with-float-default',
+            'boolean-param-with-string-default',
+            'boolean-param-with-int-default',
+            'boolean-param-with-float-default',
+        ]);
 
-        const c = cursor(config.parameters!.value!);
-
-        c.next();
-        assert.strictEqual(c.current.name, 'int-param-with-boolean-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
-
-        c.next();
-        assert.strictEqual(c.current.name, 'int-param-with-string-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
-
-        c.next();
-        assert.strictEqual(c.current.name, 'int-param-with-float-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
-
-        c.next();
-        assert.strictEqual(c.current.name, 'float-param-with-boolean-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a float.' }]);
+        const c = cursorOverMap(config.parameters);
 
         c.next();
-        assert.strictEqual(c.current.name, 'float-param-with-string-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a float.' }]);
+        assert.strictEqual(c.current.value?.name, 'int-param-with-boolean-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'string-param-with-boolean-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'int-param-with-string-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'string-param-with-int-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'int-param-with-float-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'string-param-with-float-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'float-param-with-boolean-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a float.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'boolean-param-with-string-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
+        assert.strictEqual(c.current.value?.name, 'float-param-with-string-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a float.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'boolean-param-with-int-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
+        assert.strictEqual(c.current.value?.name, 'string-param-with-boolean-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'boolean-param-with-float-default');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
+        assert.strictEqual(c.current.value?.name, 'string-param-with-int-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'string-param-with-float-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'boolean-param-with-string-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'boolean-param-with-int-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
+
+        c.next();
+        assert.strictEqual(c.current.value?.name, 'boolean-param-with-float-default');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'wrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
     });
 
     test('invalid parameter', function () {
@@ -814,57 +874,70 @@ suite(parseCharmConfigYAML.name, function () {
         const config = parseCharmConfigYAML(content);
 
         assert.lengthOf(config.node.problems, 0, 'expected no file-scope problem');
-        assert.lengthOf(config.parameters?.value ?? [], 12);
+        assert.hasAllKeys(config.parameters?.entries, [
+            'type-missing',
+            'type-invalid-string',
+            'type-invalid-int',
+            'type-invalid-array',
+            'type-invalid-object',
+            'type-invalid-boolean',
+            'description-invalid-int',
+            'description-invalid-array',
+            'description-invalid-object',
+            'description-invalid-boolean',
+            'default-invalid-object',
+            'default-invalid-array',
+        ]);
 
-        const c = cursor(config.parameters!.value!);
+        const c = cursorOverMap(config.parameters);
 
         c.next();
-        assert.strictEqual(c.current.name, 'type-missing');
+        assert.strictEqual(c.current.value?.name, 'type-missing');
         assert.deepEqual(c.current.node.problems, [{ id: 'missingField', key: 'type', message: 'Missing `type` field.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'type-invalid-string');
-        assert.deepEqual(c.current.type?.node.problems, [{ id: 'expectedEnumValue', message: 'Must be one of the following: string, int, float, boolean.' }]);
+        assert.strictEqual(c.current.value?.name, 'type-invalid-string');
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', message: 'Must be one of the following: string, int, float, boolean.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'type-invalid-int');
-        assert.deepEqual(c.current.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'type-invalid-int');
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'type-invalid-array');
-        assert.deepEqual(c.current.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'type-invalid-array');
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'type-invalid-object');
-        assert.deepEqual(c.current.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'type-invalid-object');
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'type-invalid-boolean');
-        assert.deepEqual(c.current.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'type-invalid-boolean');
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'description-invalid-int');
-        assert.deepEqual(c.current.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'description-invalid-int');
+        assert.deepEqual(c.current.value?.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'description-invalid-array');
-        assert.deepEqual(c.current.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'description-invalid-array');
+        assert.deepEqual(c.current.value?.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'description-invalid-object');
-        assert.deepEqual(c.current.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'description-invalid-object');
+        assert.deepEqual(c.current.value?.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'description-invalid-boolean');
-        assert.deepEqual(c.current.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.strictEqual(c.current.value?.name, 'description-invalid-boolean');
+        assert.deepEqual(c.current.value?.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'default-invalid-object');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'invalidDefault', message: 'Default value must have a valid type; boolean, string, integer, or float.' }]);
+        assert.strictEqual(c.current.value?.name, 'default-invalid-object');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'invalidDefault', message: 'Default value must have a valid type; boolean, string, integer, or float.' }]);
 
         c.next();
-        assert.strictEqual(c.current.name, 'default-invalid-array');
-        assert.deepEqual(c.current.default?.node.problems, [{ id: 'invalidDefault', message: 'Default value must have a valid type; boolean, string, integer, or float.' }]);
+        assert.strictEqual(c.current.value?.name, 'default-invalid-array');
+        assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'invalidDefault', message: 'Default value must have a valid type; boolean, string, integer, or float.' }]);
     });
 
     suite('special cases (with no config data)', function () {
@@ -880,15 +953,25 @@ suite(parseCharmConfigYAML.name, function () {
                 expectedProblems: [],
             },
             {
-                name: 'non-map',
+                name: 'scalar',
                 content: '123',
-                expectedProblems: [{ id: 'invalidYAML', message: "Invalid YAML file." }],
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+            },
+            {
+                name: 'sequence (empty)',
+                content: '[]',
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+            },
+            {
+                name: 'sequence',
+                content: '- element',
+                expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
             },
             {
                 name: 'no `options` key',
                 content: 'parent:\n  key: value',
                 expectedProblems: [],
-            }
+            },
         ];
 
         for (const t of tests) {
@@ -1250,6 +1333,3 @@ suite(parseCharmMetadataYAML.name, function () {
         });
     });
 });
-
-
-

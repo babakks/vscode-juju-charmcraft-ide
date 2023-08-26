@@ -40,12 +40,12 @@ export class CharmConfigHoverProvider implements HoverProvider {
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
-        const parameter = workspaceCharm.model.getConfigParameterByName(name);
-        if (!parameter) {
+        const parameter = workspaceCharm.model.config.parameters?.entries?.[name];
+        if (!parameter?.value) {
             return;
         }
 
-        return new Hover(getConfigParamDocumentation(parameter, true));
+        return new Hover(getConfigParamDocumentation(parameter.value, true));
     }
 }
 
