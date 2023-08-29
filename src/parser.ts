@@ -235,7 +235,7 @@ function assignAnyFromPair(map: WithNode<any>, key: string, required?: boolean, 
  * @returns `undefined` if the field was missing.
  */
 function assignStringEnumFromScalarPair<T>(map: WithNode<any>, key: string, enumValues: string[], required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
-    const result = assignScalarFromPair<T>(map, key, 'string', required, parentNodeProblems);
+    const result = assignAnyFromPair(map, key,required, parentNodeProblems);
     if (!result || result.value === undefined || result.node.problems.length) {
         return result;
     }

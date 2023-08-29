@@ -7,14 +7,6 @@ import path = require("path");
 import { readFileSync } from "fs";
 import { Range } from "../model/common";
 
-function cursor<T>(list: T[]) {
-    let index = -1;
-    return {
-        next() { return list[++index]; },
-        get current() { return list[index]; },
-    };
-}
-
 function cursorOverMap<T>(map: MapWithNode<T> | undefined) {
     let index = -1;
     const entries = Object.entries(map?.entries ?? {});
@@ -29,6 +21,26 @@ function newRange(startLine: number, startCharacter: number, endLine: number, en
         start: { line: startLine, character: startCharacter },
         end: { line: endLine, character: endCharacter },
     };
+}
+
+function unindent(s: string): string {
+    const lines = s.split('\n');
+    if (lines[0] !== '') {
+        throw new Error('First line should be empty');
+    }
+    lines.splice(0, 1);
+
+    let indent = 0;
+    let index = 0;
+    const pattern = /^(\s+)/;
+    for (; index < lines.length; index++) {
+        const match = lines[index].match(pattern);
+        if (match) {
+            indent = match[1].length;
+            break;
+        }
+    }
+    return lines.map((x, i) => i >= index ? x.substring(indent) : x).join('\n').trimEnd();
 }
 
 suite(YAMLParser.name, function () {
@@ -80,13 +92,13 @@ suite(YAMLParser.name, function () {
         });
 
         test('map', function () {
-            const content = [
-                `a:`,
-                `  aa: 0`,
-                `b:`,
-                `  bb: 0`,
-                `c: 0`,
-            ].join('\n');
+            const content = unindent(`
+                a:
+                  aa: 0
+                b:
+                  bb: 0
+                c: 0
+            `);
 
             const root = parse(content)!;
 
@@ -189,10 +201,10 @@ suite(YAMLParser.name, function () {
         });
 
         test('sequence', function () {
-            const content = [
-                `- 0`,
-                `- 1`,
-            ].join('\n');
+            const content = unindent(`
+                - 0
+                - 1
+            `);
 
             const root = parse(content)!;
 
@@ -224,14 +236,14 @@ suite(YAMLParser.name, function () {
         });
 
         test('scalar types', function () {
-            const content = [
-                `a-null:`,
-                `an-empty-string: ""`,
-                `a-string: something`,
-                `a-number: 999`,
-                `a-false: false`,
-                `a-true: true`,
-            ].join('\n');
+            const content = unindent(`
+                a-null:
+                an-empty-string: ""
+                a-string: something
+                a-number: 999
+                a-false: false
+                a-true: true
+            `);
 
             const root = parse(content)!;
 
@@ -361,13 +373,13 @@ suite(parseCharmActionsYAML.name, function () {
     }
 
     test('valid', function () {
-        const content = [
-            `action-empty: {}`,
-            `action-with-description-empty:`,
-            `  description: ""`,
-            `action-with-description:`,
-            `  description: description`,
-        ].join('\n');
+        const content = unindent(`
+            action-empty: {}
+            action-with-description-empty:
+              description: ""
+            action-with-description:
+              description: description
+        `);
 
         const actions = parseCharmActionsYAML(content);
 
@@ -405,20 +417,20 @@ suite(parseCharmActionsYAML.name, function () {
     });
 
     test('invalid', function () {
-        const content = [
-            `action-array-empty: []`,
-            `action-array:`,
-            `  - element`,
-            `action-string: something`,
-            `action-number: 0`,
-            `action-invalid-description-array-empty:`,
-            `  description: []`,
-            `action-invalid-description-array:`,
-            `  description:`,
-            `    - element`,
-            `action-invalid-description-number:`,
-            `  description: 0`,
-        ].join('\n');
+        const content = unindent(`
+            action-array-empty: []
+            action-array:
+              - element
+            action-string: something
+            action-number: 0
+            action-invalid-description-array-empty:
+              description: []
+            action-invalid-description-array:
+              description:
+                - element
+            action-invalid-description-number:
+              description: 0
+        `);
 
         const actions = parseCharmActionsYAML(content);
         assert.lengthOf(actions.node.problems, 0, 'expected no file-scope problem');
@@ -557,61 +569,57 @@ suite(parseCharmConfigYAML.name, function () {
     }
 
     test('valid', function () {
-        const content = [
-            `options:`,
-            // Full params (type, description, default)
-            `  int-param-full:`,
-            `    type: int`,
-            `    description: some description`,
-            `    default: -1`,
-            `  float-param-full:`,
-            `    type: float`,
-            `    description: some description`,
-            `    default: -1e-1`,
-            `  string-param-full:`,
-            `    type: string`,
-            `    description: some description`,
-            `    default: hello`,
-            `  boolean-param-full:`,
-            `    type: boolean`,
-            `    description: some description`,
-            `    default: false`,
-            // Minimal params (type)
-            `  int-param-minimal:`,
-            `    type: int`,
-            `  float-param-minimal:`,
-            `    type: float`,
-            `  string-param-minimal:`,
-            `    type: string`,
-            `  boolean-param-minimal:`,
-            `    type: boolean`,
-            // Partial params (type, default)
-            `  int-param-with-default:`,
-            `    type: int`,
-            `    default: -1`,
-            `  float-param-with-default:`,
-            `    type: float`,
-            `    default: -1e-1`,
-            `  string-param-with-default:`,
-            `    type: string`,
-            `    default: hello`,
-            `  boolean-param-with-default:`,
-            `    type: boolean`,
-            `    default: false`,
-            // Partial params (type, description)
-            `  int-param-with-description:`,
-            `    type: int`,
-            `    description: some description`,
-            `  float-param-with-description:`,
-            `    type: float`,
-            `    description: some description`,
-            `  string-param-with-description:`,
-            `    type: string`,
-            `    description: some description`,
-            `  boolean-param-with-description:`,
-            `    type: boolean`,
-            `    description: some description`,
-        ].join('\n');
+        const content = unindent(`
+            options:
+              int-param-full:
+                type: int
+                description: some description
+                default: -1
+              float-param-full:
+                type: float
+                description: some description
+                default: -1e-1
+              string-param-full:
+                type: string
+                description: some description
+                default: hello
+              boolean-param-full:
+                type: boolean
+                description: some description
+                default: false
+              int-param-minimal:
+                type: int
+              float-param-minimal:
+                type: float
+              string-param-minimal:
+                type: string
+              boolean-param-minimal:
+                type: boolean
+              int-param-with-default:
+                type: int
+                default: -1
+              float-param-with-default:
+                type: float
+                default: -1e-1
+              string-param-with-default:
+                type: string
+                default: hello
+              boolean-param-with-default:
+                type: boolean
+                default: false
+              int-param-with-description:
+                type: int
+                description: some description
+              float-param-with-description:
+                type: float
+                description: some description
+              string-param-with-description:
+                type: string
+                description: some description
+              boolean-param-with-description:
+                type: boolean
+                description: some description
+        `);
 
         const config = parseCharmConfigYAML(content);
 
@@ -736,42 +744,42 @@ suite(parseCharmConfigYAML.name, function () {
     });
 
     test('type/default mismatch', function () {
-        const content = [
-            `options:`,
-            `  int-param-with-boolean-default:`,
-            `    type: int`,
-            `    default: false`,
-            `  int-param-with-string-default:`,
-            `    type: int`,
-            `    default: hello`,
-            `  int-param-with-float-default:`,
-            `    type: int`,
-            `    default: 0.5`,
-            `  float-param-with-boolean-default:`,
-            `    type: float`,
-            `    default: false`,
-            `  float-param-with-string-default:`,
-            `    type: float`,
-            `    default: hello`,
-            `  string-param-with-boolean-default:`,
-            `    type: string`,
-            `    default: false`,
-            `  string-param-with-int-default:`,
-            `    type: string`,
-            `    default: 1`,
-            `  string-param-with-float-default:`,
-            `    type: string`,
-            `    default: 0.5`,
-            `  boolean-param-with-string-default:`,
-            `    type: boolean`,
-            `    default: hello`,
-            `  boolean-param-with-int-default:`,
-            `    type: boolean`,
-            `    default: 1`,
-            `  boolean-param-with-float-default:`,
-            `    type: boolean`,
-            `    default: 0.5`,
-        ].join('\n');
+        const content = unindent(`
+            options:
+              int-param-with-boolean-default:
+                type: int
+                default: false
+              int-param-with-string-default:
+                type: int
+                default: hello
+              int-param-with-float-default:
+                type: int
+                default: 0.5
+              float-param-with-boolean-default:
+                type: float
+                default: false
+              float-param-with-string-default:
+                type: float
+                default: hello
+              string-param-with-boolean-default:
+                type: string
+                default: false
+              string-param-with-int-default:
+                type: string
+                default: 1
+              string-param-with-float-default:
+                type: string
+                default: 0.5
+              boolean-param-with-string-default:
+                type: boolean
+                default: hello
+              boolean-param-with-int-default:
+                type: boolean
+                default: 1
+              boolean-param-with-float-default:
+                type: boolean
+                default: 0.5
+        `);
 
         const config = parseCharmConfigYAML(content);
 
@@ -838,38 +846,38 @@ suite(parseCharmConfigYAML.name, function () {
     });
 
     test('invalid parameter', function () {
-        const content = [
-            `options:`,
-            `  type-missing: {}`,
-            `  type-invalid-string:`,
-            `    type: invalid-value-for-type`,
-            `  type-invalid-int:`,
-            `    type: 0`,
-            `  type-invalid-array:`,
-            `    type: []`,
-            `  type-invalid-object:`,
-            `    type: {}`,
-            `  type-invalid-boolean:`,
-            `    type: false`,
-            `  description-invalid-int:`,
-            `    type: string`,
-            `    description: 0`,
-            `  description-invalid-array:`,
-            `    type: string`,
-            `    description: []`,
-            `  description-invalid-object:`,
-            `    type: string`,
-            `    description: {}`,
-            `  description-invalid-boolean:`,
-            `    type: string`,
-            `    description: false`,
-            `  # Invalid default values when type is missing (Note that when the type field`,
-            `  # is present, the default value should match the that type)`,
-            `  default-invalid-object:`,
-            `    default: {}`,
-            `  default-invalid-array:`,
-            `    default: []`,
-        ].join('\n');
+        const content = unindent(`
+            options:
+              type-missing: {}
+              type-invalid-string:
+                type: invalid-value-for-type
+              type-invalid-int:
+                type: 0
+              type-invalid-array:
+                type: []
+              type-invalid-object:
+                type: {}
+              type-invalid-boolean:
+                type: false
+              description-invalid-int:
+                type: string
+                description: 0
+              description-invalid-array:
+                type: string
+                description: []
+              description-invalid-object:
+                type: string
+                description: {}
+              description-invalid-boolean:
+                type: string
+                description: false
+              # Invalid default values when type is missing (Note that when the type field
+              # is present, the default value should match the that type)
+              default-invalid-object:
+                default: {}
+              default-invalid-array:
+                default: []
+        `);
 
         const config = parseCharmConfigYAML(content);
 
@@ -897,23 +905,23 @@ suite(parseCharmConfigYAML.name, function () {
 
         c.next();
         assert.strictEqual(c.current.value?.name, 'type-invalid-string');
-        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', message: 'Must be one of the following: string, int, float, boolean.' }]);
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean'], message: 'Must be one of the following: string, int, float, boolean.' }]);
 
         c.next();
         assert.strictEqual(c.current.value?.name, 'type-invalid-int');
-        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean'], message: 'Must be one of the following: string, int, float, boolean.' }]);
 
         c.next();
         assert.strictEqual(c.current.value?.name, 'type-invalid-array');
-        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean'], message: 'Must be one of the following: string, int, float, boolean.' }]);
 
         c.next();
         assert.strictEqual(c.current.value?.name, 'type-invalid-object');
-        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean'], message: 'Must be one of the following: string, int, float, boolean.' }]);
 
         c.next();
         assert.strictEqual(c.current.value?.name, 'type-invalid-boolean');
-        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+        assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean'], message: 'Must be one of the following: string, int, float, boolean.' }]);
 
         c.next();
         assert.strictEqual(c.current.value?.name, 'description-invalid-int');
@@ -1024,7 +1032,17 @@ suite(parseCharmConfigYAML.name, function () {
 });
 
 suite(parseCharmMetadataYAML.name, function () {
-    test('valid-complete', function () {
+    /**
+     * Bare minimum content, with required fields assigned.
+     */
+    const bareMinimum = unindent(`
+        name: my-charm
+        display-name: my-charm-display-name
+        summary: my-charm-summary
+        description: my-charm-description
+    `);
+
+    test('valid (complete)', function () {
         /**
          * Here:
          * - Keys are ordered alphabetically.
@@ -1033,153 +1051,153 @@ suite(parseCharmMetadataYAML.name, function () {
          * - Fields that accept an array of values or a map of key/value pairs, are
          *   assigned with more than one element/pair.
          */
-        const content = [
-            `assumes:`,
-            `  - juju >= 2.9`,
-            `  - k8s-api`,
-            `  - all-of:`,
-            `      - juju >= 2.9`,
-            `      - k8s-api`,
-            `  - any-of:`,
-            `      - juju >= 2.9`,
-            `      - k8s-api`,
-            `containers:`,
-            `  container-one:`,
-            `    resource: resource-one`,
-            `    mounts:`,
-            `      - storage: storage-one`,
-            `        location: /some/location`,
-            `      - storage: storage-two`,
-            `        location: /some/location`,
-            `  container-two:`,
-            `    bases:`,
-            `      - name: base-one`,
-            `        channel: channel-one`,
-            `        architectures:`,
-            `          - architecture-one`,
-            `          - architecture-two`,
-            `      - name: base-two`,
-            `        channel: channel-two`,
-            `        architectures:`,
-            `          - architecture-one`,
-            `          - architecture-two`,
-            `    mounts:`,
-            `      - storage: storage-one`,
-            `        location: /some/location`,
-            `      - storage: storage-two`,
-            `        location: /some/location`,
-            `description: my-charm-description`,
-            `devices:`,
-            `  device-one:`,
-            `    type: gpu`,
-            `    description: device-one-description`,
-            `    countmin: 1`,
-            `    countmax: 2`,
-            `  device-two:`,
-            `    type: nvidia.com/gpu`,
-            `    description: device-two-description`,
-            `    countmin: 1`,
-            `    countmax: 2`,
-            `  device-three:`,
-            `    type: amd.com/gpu`,
-            `    description: device-three-description`,
-            `    countmin: 1`,
-            `    countmax: 2`,
-            `display-name: my-charm-display-name`,
-            `docs: https://docs.url`,
-            `extra-bindings:`,
-            `  binding-one:`,
-            `  binding-two:`,
-            `issues:`,
-            `  - https://one.issues.url`,
-            `  - https://two.issues.url`,
-            `maintainers:`,
-            `  - John Doe <john.doe@company.com>`,
-            `  - Jane Doe <jane.doe@company.com>`,
-            `name: my-charm`,
-            `peers:`,
-            `  peer-one:`,
-            `    interface: interface-one`,
-            `    limit: 1`,
-            `    optional: false`,
-            `    scope: global`,
-            `  peer-two:`,
-            `    interface: interface-two`,
-            `    limit: 2`,
-            `    optional: true`,
-            `    scope: container`,
-            `provides:`,
-            `  provides-one:`,
-            `    interface: interface-one`,
-            `    limit: 1`,
-            `    optional: false`,
-            `    scope: global`,
-            `  provides-two:`,
-            `    interface: interface-two`,
-            `    limit: 2`,
-            `    optional: true`,
-            `    scope: container`,
-            `requires:`,
-            `  requires-one:`,
-            `    interface: interface-one`,
-            `    limit: 1`,
-            `    optional: false`,
-            `    scope: global`,
-            `  requires-two:`,
-            `    interface: interface-two`,
-            `    limit: 2`,
-            `    optional: true`,
-            `    scope: container`,
-            `resources:`,
-            `  resource-one:`,
-            `    type: oci-image`,
-            `    description: resource-one-description`,
-            `  resource-two:`,
-            `    type: file`,
-            `    description: resource-two-description`,
-            `    filename: some-file-name`,
-            `source:`,
-            `  - https://one.source.url`,
-            `  - https://two.source.url`,
-            `storage:`,
-            `  storage-one:`,
-            `    type: filesystem`,
-            `    description: storage-one-description`,
-            `    location: /some/location`,
-            `    shared: false`,
-            `    read-only: false`,
-            `    multiple: 1`,
-            `    minimum-size: 1`,
-            `    properties:`,
-            `      - transient`,
-            `  storage-two:`,
-            `    type: block`,
-            `    description: storage-two-description`,
-            `    location: /some/location`,
-            `    shared: true`,
-            `    read-only: true`,
-            `    multiple: 1+`,
-            `    minimum-size: 1G`,
-            `    properties:`,
-            `      - transient`,
-            `subordinate: false`,
-            `summary: my-charm-summary`,
-            `terms:`,
-            `  - term-one`,
-            `  - term-two`,
-            `website:`,
-            `  - https://one.website.url`,
-            `  - https://two.website.url`,
-            `z-custom-field-array:`,
-            `  - custom-value-one`,
-            `  - custom-value-two`,
-            `z-custom-field-boolean: true`,
-            `z-custom-field-map:`,
-            `  key-one: value-one`,
-            `  key-two: value-two`,
-            `z-custom-field-number: 0`,
-            `z-custom-field-string: some-string-value`,
-        ].join('\n');
+        const content = unindent(`
+            assumes:
+              - juju >= 2.9
+              - k8s-api
+              - all-of:
+                  - juju >= 2.9
+                  - k8s-api
+              - any-of:
+                  - juju >= 2.9
+                  - k8s-api
+            containers:
+              container-one:
+                resource: resource-one
+                mounts:
+                  - storage: storage-one
+                    location: /some/location
+                  - storage: storage-two
+                    location: /some/location
+              container-two:
+                bases:
+                  - name: base-one
+                    channel: channel-one
+                    architectures:
+                      - architecture-one
+                      - architecture-two
+                  - name: base-two
+                    channel: channel-two
+                    architectures:
+                      - architecture-one
+                      - architecture-two
+                mounts:
+                  - storage: storage-one
+                    location: /some/location
+                  - storage: storage-two
+                    location: /some/location
+            description: my-charm-description
+            devices:
+              device-one:
+                type: gpu
+                description: device-one-description
+                countmin: 1
+                countmax: 2
+              device-two:
+                type: nvidia.com/gpu
+                description: device-two-description
+                countmin: 1
+                countmax: 2
+              device-three:
+                type: amd.com/gpu
+                description: device-three-description
+                countmin: 1
+                countmax: 2
+            display-name: my-charm-display-name
+            docs: https://docs.url
+            extra-bindings:
+              binding-one:
+              binding-two:
+            issues:
+              - https://one.issues.url
+              - https://two.issues.url
+            maintainers:
+              - John Doe <john.doe@company.com>
+              - Jane Doe <jane.doe@company.com>
+            name: my-charm
+            peers:
+              peer-one:
+                interface: interface-one
+                limit: 1
+                optional: false
+                scope: global
+              peer-two:
+                interface: interface-two
+                limit: 2
+                optional: true
+                scope: container
+            provides:
+              provides-one:
+                interface: interface-one
+                limit: 1
+                optional: false
+                scope: global
+              provides-two:
+                interface: interface-two
+                limit: 2
+                optional: true
+                scope: container
+            requires:
+              requires-one:
+                interface: interface-one
+                limit: 1
+                optional: false
+                scope: global
+              requires-two:
+                interface: interface-two
+                limit: 2
+                optional: true
+                scope: container
+            resources:
+              resource-one:
+                type: oci-image
+                description: resource-one-description
+              resource-two:
+                type: file
+                description: resource-two-description
+                filename: some-file-name
+            source:
+              - https://one.source.url
+              - https://two.source.url
+            storage:
+              storage-one:
+                type: filesystem
+                description: storage-one-description
+                location: /some/location
+                shared: false
+                read-only: false
+                multiple: 1
+                minimum-size: 1
+                properties:
+                  - transient
+              storage-two:
+                type: block
+                description: storage-two-description
+                location: /some/location
+                shared: true
+                read-only: true
+                multiple: 1+
+                minimum-size: 1G
+                properties:
+                  - transient
+            subordinate: false
+            summary: my-charm-summary
+            terms:
+              - term-one
+              - term-two
+            website:
+              - https://one.website.url
+              - https://two.website.url
+            z-custom-field-array:
+              - custom-value-one
+              - custom-value-two
+            z-custom-field-boolean: true
+            z-custom-field-map:
+              key-one: value-one
+              key-two: value-two
+            z-custom-field-number: 0
+            z-custom-field-string: some-string-value
+        `);
 
         const metadata = parseCharmMetadataYAML(content);
 
@@ -1333,4 +1351,522 @@ suite(parseCharmMetadataYAML.name, function () {
             /* eslint-enable */
         });
     });
+
+    test('missing required fields', function () {
+        const content = unindent(`
+            z-custom-field: something
+        `);
+
+        const metadata = parseCharmMetadataYAML(content);
+
+        assert.isUndefined(metadata.name);
+        assert.isUndefined(metadata.displayName);
+        assert.isUndefined(metadata.description);
+        assert.isUndefined(metadata.summary);
+        assert.includeDeepMembers(metadata.node.problems, [
+            {
+                id: 'missingField',
+                key: 'name',
+                message: 'Missing `name` field.',
+            },
+            {
+                id: 'missingField',
+                key: 'display-name',
+                message: 'Missing `display-name` field.',
+            },
+            {
+                id: 'missingField',
+                key: 'description',
+                message: 'Missing `description` field.',
+            },
+            {
+                id: 'missingField',
+                key: 'summary',
+                message: 'Missing `summary` field.',
+            }
+        ]);
+    });
+
+    test('assign scalar when scalar or sequence expected', function () {
+        const content = unindent(`
+            source: https://source.url
+            issues: https://issues.url
+            website: https://website.url
+        `);
+
+        const metadata = parseCharmMetadataYAML(content);
+
+        assert.deepStrictEqual((metadata.source as WithNode<string>)?.value, 'https://source.url');
+        assert.deepStrictEqual((metadata.issues as WithNode<string>)?.value, 'https://issues.url');
+        assert.deepStrictEqual((metadata.website as WithNode<string>)?.value, 'https://website.url');
+    });
+
+    test('assign sequence when scalar or sequence expected', function () {
+        const content = unindent(`
+            source:
+              - https://one.source.url
+              - https://two.source.url
+            issues:
+              - https://one.issues.url
+              - https://two.issues.url
+            website:
+              - https://one.website.url
+              - https://two.website.url
+        `);
+
+        const metadata = parseCharmMetadataYAML(content);
+
+        assert.deepStrictEqual((metadata.source as SequenceWithNode<string>)?.elements?.map(x => x.value), [
+            'https://one.source.url',
+            'https://two.source.url',
+        ]);
+        assert.deepStrictEqual((metadata.issues as SequenceWithNode<string>)?.elements?.map(x => x.value), [
+            'https://one.issues.url',
+            'https://two.issues.url',
+        ]);
+        assert.deepStrictEqual((metadata.website as SequenceWithNode<string>)?.elements?.map(x => x.value), [
+            'https://one.website.url',
+            'https://two.website.url',
+        ]);
+    });
+
+    test('assign non-scalar when scalar expected', function () {
+        const content = unindent(`
+            name: []
+            display-name: {}
+            description:
+              - element
+            summary:
+              some-key: 0
+        `);
+
+        const metadata = parseCharmMetadataYAML(content);
+
+        assert.deepStrictEqual(metadata.name?.node.problems, [{
+            id: 'unexpectedScalarType',
+            expected: 'string',
+            message: 'Must be a string.',
+        }]);
+        assert.deepStrictEqual(metadata.displayName?.node.problems, [{
+            id: 'unexpectedScalarType',
+            expected: 'string',
+            message: 'Must be a string.',
+        }]);
+        assert.deepStrictEqual(metadata.description?.node.problems, [{
+            id: 'unexpectedScalarType',
+            expected: 'string',
+            message: 'Must be a string.',
+        }]);
+        assert.deepStrictEqual(metadata.summary?.node.problems, [{
+            id: 'unexpectedScalarType',
+            expected: 'string',
+            message: 'Must be a string.',
+        }]);
+    });
+
+    suite('assumes', function () {
+        test('neither all-of nor any-of', function () {
+            const content = unindent(`
+                assumes:
+                  - some-key:
+                      - element
+                      - element
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.assumes?.elements?.[0]?.node.problems, [{
+                id: 'assumptionExpectedAnyOfOrAllOf',
+                message: 'Must include only one of `any-of` or `all-of` keys.',
+            }]);
+        });
+
+        test('both all-of and any-of', function () {
+            const content = unindent(`
+                assumes:
+                  - all-of:
+                      - juju >= 2.9
+                      - k8s
+                    any-of:
+                      - juju >= 2.9
+                      - k8s
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.assumes?.elements?.[0]?.node.problems, [{
+                id: 'assumptionExpectedAnyOfOrAllOf',
+                message: 'Must include only one of `any-of` or `all-of` keys.',
+            }]);
+        });
+
+        test('extra key along all-of', function () {
+            const content = unindent(`
+                assumes:
+                  - all-of:
+                      - juju >= 2.9
+                      - k8s
+                    some-key: []
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.assumes?.elements?.[0]?.node.problems, [{
+                id: 'assumptionExpectedAnyOfOrAllOf',
+                message: 'Must include only one of `any-of` or `all-of` keys.',
+            }]);
+        });
+
+        test('extra key along any-of', function () {
+            const content = unindent(`
+                assumes:
+                  - any-of:
+                      - juju >= 2.9
+                      - k8s
+                    some-key: []
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.assumes?.elements?.[0]?.node.problems, [{
+                id: 'assumptionExpectedAnyOfOrAllOf',
+                message: 'Must include only one of `any-of` or `all-of` keys.',
+            }]);
+        });
+    });
+
+    suite('endpoint', function () {
+        test('invalid', function () {
+            const content = unindent(`
+                peers: []
+                provides:
+                  - element
+                requires: some-value
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.isUndefined(metadata.peers?.entries);
+            assert.deepStrictEqual(metadata.peers?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.isUndefined(metadata.provides?.entries);
+            assert.deepStrictEqual(metadata.provides?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.isUndefined(metadata.requires?.entries);
+            assert.deepStrictEqual(metadata.requires?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+        });
+
+        test('invalid entry', function () {
+            const content = unindent(`
+                peers:
+                  peers-endpoint-0: []
+                  peers-endpoint-1:
+                    - element
+                  peers-endpoint-2: 0
+                provides:
+                  provides-endpoint-0: []
+                  provides-endpoint-1:
+                    - element
+                  provides-endpoint-2: 0
+                requires:
+                  requires-endpoint-0: []
+                  requires-endpoint-1:
+                    - element
+                  requires-endpoint-2: 0
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.peers?.entries?.['peers-endpoint-0']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.peers?.entries?.['peers-endpoint-1']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.peers?.entries?.['peers-endpoint-2']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.provides?.entries?.['provides-endpoint-0']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.provides?.entries?.['provides-endpoint-1']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.provides?.entries?.['provides-endpoint-2']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.requires?.entries?.['requires-endpoint-0']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.requires?.entries?.['requires-endpoint-1']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.requires?.entries?.['requires-endpoint-2']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+        });
+
+        test('invalid entry fields', function () {
+            const content = unindent(`
+                peers:
+                  peers-endpoint:
+                    interface: 0
+                    limit: something
+                    optional: []
+                    scope: some-random-value
+                provides:
+                  provides-endpoint:
+                    interface: {}
+                    limit:
+                    optional:
+                      - element
+                    scope: 0
+                requires:
+                  requires-endpoint:
+                    interface: []
+                    limit: true
+                    optional:
+                      some-key: some-value
+                    scope:
+                      - element
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.peers?.entries?.['peers-endpoint']?.value?.interface?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+            assert.deepStrictEqual(metadata.peers?.entries?.['peers-endpoint']?.value?.limit?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'integer',
+                message: 'Must be an integer.',
+            }]);
+            assert.deepStrictEqual(metadata.peers?.entries?.['peers-endpoint']?.value?.optional?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'boolean',
+                message: 'Must be a boolean.',
+            }]);
+            assert.deepStrictEqual(metadata.peers?.entries?.['peers-endpoint']?.value?.scope?.node.problems, [{
+                id: 'expectedEnumValue',
+                expected: ['global', 'container'],
+                message: 'Must be one of the following: global, container.',
+            }]);
+            assert.deepStrictEqual(metadata.provides?.entries?.['provides-endpoint']?.value?.interface?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+            assert.deepStrictEqual(metadata.provides?.entries?.['provides-endpoint']?.value?.limit?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'integer',
+                message: 'Must be an integer.',
+            }]);
+            assert.deepStrictEqual(metadata.provides?.entries?.['provides-endpoint']?.value?.optional?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'boolean',
+                message: 'Must be a boolean.',
+            }]);
+            assert.deepStrictEqual(metadata.provides?.entries?.['provides-endpoint']?.value?.scope?.node.problems, [{
+                id: 'expectedEnumValue',
+                expected: ['global', 'container'],
+                message: 'Must be one of the following: global, container.',
+            }]);
+            assert.deepStrictEqual(metadata.requires?.entries?.['requires-endpoint']?.value?.interface?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+            assert.deepStrictEqual(metadata.requires?.entries?.['requires-endpoint']?.value?.limit?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'integer',
+                message: 'Must be an integer.',
+            }]);
+            assert.deepStrictEqual(metadata.requires?.entries?.['requires-endpoint']?.value?.optional?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'boolean',
+                message: 'Must be a boolean.',
+            }]);
+            assert.deepStrictEqual(metadata.requires?.entries?.['requires-endpoint']?.value?.scope?.node.problems, [{
+                id: 'expectedEnumValue',
+                expected: ['global', 'container'],
+                message: 'Must be one of the following: global, container.',
+            }]);
+
+        });
+
+        test('missing `interface`', function () {
+            const content = unindent(`
+            peers:
+              peers-endpoint:
+                limit: 1
+                optional: false
+                scope: global
+            provides:
+              provides-endpoint:
+                limit: 1
+                optional: false
+                scope: global
+            requires:
+              requires-endpoint:
+                limit: 1
+                optional: false
+                scope: global
+        `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.isDefined(metadata.peers?.entries?.['peers-endpoint'].value);
+            assert.deepStrictEqual(metadata.peers?.entries?.['peers-endpoint']?.node.problems, [{
+                id: 'missingField',
+                key: 'interface',
+                message: 'Missing `interface` field.',
+            }]);
+            assert.isDefined(metadata.provides?.entries?.['provides-endpoint'].value);
+            assert.deepStrictEqual(metadata.provides?.entries?.['provides-endpoint']?.node.problems, [{
+                id: 'missingField',
+                key: 'interface',
+                message: 'Missing `interface` field.',
+            }]);
+            assert.isDefined(metadata.requires?.entries?.['requires-endpoint'].value);
+            assert.deepStrictEqual(metadata.requires?.entries?.['requires-endpoint']?.node.problems, [{
+                id: 'missingField',
+                key: 'interface',
+                message: 'Missing `interface` field.',
+            }]);
+        });
+    });
+
+    suite('resources', function () {
+        test('invalid', function () {
+            const content = unindent(`
+                resources: []
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.isUndefined(metadata.resources?.entries);
+            assert.deepStrictEqual(metadata.resources?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+        });
+
+        test('invalid entry', function () {
+            const content = unindent(`
+                resources:
+                  resource-0: []
+                  resource-1:
+                    - element
+                  resource-2: 0
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-0']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-1']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-2']?.node.problems, [{ id: 'expectedMap', message: 'Must be a map.', }]);
+        });
+
+        test('invalid entry fields', function () {
+            const content = unindent(`
+                resources:
+                  resource-0:
+                    type: 0
+                    description: 0
+                    filename: 0
+                  resource-1:
+                    type: []
+                    description: []
+                    filename:
+                      - element
+                  resource-2:
+                    type: {}
+                    description:
+                    filename:
+                      some-key: some-value
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-0']?.value?.type?.node.problems, [{
+                id: 'expectedEnumValue',
+                expected: ['file', 'oci-image'],
+                message: 'Must be one of the following: file, oci-image.',
+            }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-0']?.value?.description?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-0']?.value?.filename?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-1']?.value?.type?.node.problems, [{
+                id: 'expectedEnumValue',
+                expected: ['file', 'oci-image'],
+                message: 'Must be one of the following: file, oci-image.',
+            }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-1']?.value?.description?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-1']?.value?.filename?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-2']?.value?.type?.node.problems, [{
+                id: 'expectedEnumValue',
+                expected: ['file', 'oci-image'],
+                message: 'Must be one of the following: file, oci-image.',
+            }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-2']?.value?.description?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource-2']?.value?.filename?.node.problems, [{
+                id: 'unexpectedScalarType',
+                expected: 'string',
+                message: 'Must be a string.',
+            }]);
+        });
+
+        test('missing type', function () {
+            const content = unindent(`
+                resources:
+                  resource:
+                    description: description
+                    filename: filename
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource']?.node.problems, [{
+                id: 'missingField',
+                key: 'type',
+                message: 'Missing `type` field.',
+            }]);
+        });
+
+        test('unexpected `filename` when type is `oci-image`', function () {
+            const content = unindent(`
+                resources:
+                  resource:
+                    type: oci-image
+                    filename: some-filename
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource']?.value?.filename?.node.problems, [{
+                id: 'resourceUnexpectedFilenameForNonFileResource',
+                message: 'Field `filename` must be assigned only if resource type is `file`.',
+            }]);
+        });
+
+        test('missing `filename` when type is `file`', function () {
+            const content = unindent(`
+                resources:
+                  resource:
+                    type: file
+            `);
+
+            const metadata = parseCharmMetadataYAML(content);
+
+            assert.deepStrictEqual(metadata.resources?.entries?.['resource']?.node.problems, [{
+                id: 'resourceExpectedFilenameForFileResource',
+                message: 'Field `filename` is required since resource type is `file`.',
+            }]);
+        });
+    });
+
+    // TODO add tests for 'devices'.
+    // TODO add tests for 'storage'.
+    // TODO add tests for 'extra-bindings'.
+    // TODO add tests for 'containers'.
+    // TODO add tests for 'containers/resource' match.
+    // TODO add tests for 'containers/storage' match.
 });
