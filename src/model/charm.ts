@@ -194,7 +194,11 @@ export type CharmEventSource = 'endpoints/peer' | 'endpoints/requires' | 'endpoi
 
 export interface CharmEvent {
     name: string;
-    source: CharmEventSource,
+    source: CharmEventSource;
+    /**
+     * Name of the action, if the source of this event is an action. 
+     */
+    sourceActionName?: string;
     symbol: string;
     preferredHandlerSymbol: string;
     description?: string;
@@ -797,8 +801,9 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
             source: 'action',
             name: `${action.name}-action`,
             symbol: `${action.symbol}_action`,
+            sourceActionName: action.name,
             preferredHandlerSymbol: `_on_${action.symbol}_action`,
-            description: (action.description ? action.description + '\n\n' : '') + `Fired when \`${action.name}\` action is called.`,
+            description: (action.description?.value !== undefined ? action.description.value + '\n\n' : '') + `Fired when \`${action.name}\` action is called.`,
         }
     ];
 };
@@ -844,6 +849,10 @@ export class Charm {
 
     get config(): CharmConfig {
         return this._config;
+    }
+
+    get actions(): CharmActions {
+        return this._actions;
     }
 
     get events(): CharmEvent[] {

@@ -1,5 +1,5 @@
 import { TextDecoder } from 'util';
-import { MarkdownString, Uri, workspace } from 'vscode';
+import { MarkdownString, Uri, Range as VSCodeRange, workspace } from 'vscode';
 import { CharmConfigParameter, CharmEvent, escapeRegex } from './model/charm';
 import { Range } from './model/common';
 
@@ -59,4 +59,8 @@ export async function tryReadWorkspaceFileAsText(uri: Uri): Promise<undefined | 
     } catch {
         return undefined;
     }
+}
+
+export function rangeToVSCodeRange(range: Range): VSCodeRange {
+    return new VSCodeRange(range.start.line, range.start.character, range.end.line, range.end.character);
 }

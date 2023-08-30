@@ -31,15 +31,14 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
             return;
         }
 
-        if (!workspaceCharm.model.src.isMain(relativeSourcePath)) {
+        if (!workspaceCharm.live.src.isMain(relativeSourcePath)) {
             return;
         }
 
-        const file = workspaceCharm.getLatestCachedLiveSourceCodeFile(document.uri);
+        const file = workspaceCharm.live.src.getFile(relativeSourcePath);
         if (!file) {
             return;
         }
-
 
         if (!file.analyzer.mainCharmClass) {
             return;
@@ -75,7 +74,7 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         const needsCloseQuote = openQuote && !trailingText.startsWith(openQuote);
 
         const result: CompletionItem[] = [];
-        for (const [, v] of Object.entries(workspaceCharm.model.config.parameters?.entries ?? {})) {
+        for (const [, v] of Object.entries(workspaceCharm.live.config.parameters?.entries ?? {})) {
             if (!v.value) {
                 continue;
             }
@@ -143,11 +142,11 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
             return;
         }
 
-        if (!workspaceCharm.model.src.isMain(relativeSourcePath)) {
+        if (!workspaceCharm.live.src.isMain(relativeSourcePath)) {
             return;
         }
 
-        const file = workspaceCharm.getLatestCachedLiveSourceCodeFile(document.uri);
+        const file = workspaceCharm.live.src.getFile(relativeSourcePath);
         if (!file) {
             return;
         }
@@ -181,7 +180,7 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
         const isNextCharClosedBracket = (isFullEventSubscription || isPartialEventSubscription) && remainingLineText.startsWith(')');
 
         const result: CompletionItem[] = [];
-        for (const e of workspaceCharm.model.events) {
+        for (const e of workspaceCharm.live.events) {
             const item: CompletionItem = {
                 label: e.symbol,
                 insertText: e.symbol,

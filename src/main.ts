@@ -14,6 +14,7 @@ import { registerSchemas } from './schema';
 import { DocumentWatcher } from './watcher';
 import path = require('path');
 import TelemetryReporter from '@vscode/extension-telemetry';
+import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './definition';
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 
@@ -23,10 +24,10 @@ const RED_HAT_YAML_EXT = 'redhat.vscode-yaml';
 const GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT = 'never-ask-yaml-extension';
 
 export async function activate(context: ExtensionContext) {
-    const reporter = new TelemetryReporter(TELEMETRY_INSTRUMENTATION_KEY);
+    const reporter = new TelemetryReporter(context.extensionMode === ExtensionMode.Production ? TELEMETRY_INSTRUMENTATION_KEY : '');
     context.subscriptions.push(reporter);
 
-    const output = window.createOutputChannel('Charms IDE');
+    const output = window.createOutputChannel('Charmcraft IDE');
     context.subscriptions.push(output);
 
     const registry = new Registry(output);
@@ -36,7 +37,8 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(
         ...registerCodeActionProviders(registry, reporter),
         ...registerCompletionProviders(registry, reporter),
-        ...registerHoverProviders(registry, reporter)
+        ...registerHoverProviders(registry, reporter),
+        ...registerDefinitionProviders(registry, reporter),
     );
 
     const dw = new DocumentWatcher(registry);
@@ -148,6 +150,19 @@ function registerCodeActionProviders(registry: Registry, reporter: TelemetryRepo
         languages.registerCodeActionsProvider(
             { scheme: 'file', language: 'python' },
             new EventHandlerCodeActionProvider(registry, reporter),
+        ),
+    ];
+}
+
+function registerDefinitionProviders(registry: Registry, reporter: TelemetryReporter): Disposable[] {
+    return [
+        languages.registerDefinitionProvider(
+            { scheme: 'file', language: 'python' },
+            new CharmConfigDefinitionProvider(registry, reporter),
+        ),
+        languages.registerDefinitionProvider(
+            { scheme: 'file', language: 'python' },
+            new CharmEventDefinitionProvider(registry, reporter),
         ),
     ];
 }
