@@ -1,4 +1,13 @@
-import { Disposable, ExtensionContext, ExtensionMode, commands, extensions, languages, window } from 'vscode';
+import TelemetryReporter from '@vscode/extension-telemetry';
+import {
+    Disposable,
+    ExtensionContext,
+    ExtensionMode,
+    commands,
+    extensions,
+    languages,
+    window
+} from 'vscode';
 import { EventHandlerCodeActionProvider } from './codeAction';
 import {
     CHARM_CONFIG_COMPLETION_TRIGGER_CHARS,
@@ -6,15 +15,13 @@ import {
     CharmConfigParametersCompletionProvider,
     CharmEventCompletionProvider
 } from './completion';
+import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './definition';
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
-import { PythonExtension } from './include/ms-python.python';
 import { ExtensionAPI } from './include/redhat.vscode-yaml';
 import { Registry } from './registry';
 import { registerSchemas } from './schema';
 import { DocumentWatcher } from './watcher';
 import path = require('path');
-import TelemetryReporter from '@vscode/extension-telemetry';
-import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './definition';
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 
