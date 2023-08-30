@@ -54,12 +54,6 @@ export async function activate(context: ExtensionContext) {
 
     context.subscriptions.push(...registerCommands(context, reporter));
 
-    // const python = extensions.getExtension('ms-python.python')?.exports as PythonExtension;
-    // if (!python) {
-    //     // throw new Error('Failed to retrieve `ms-python.python` extension API');
-    // } else {
-    // }
-
     // Note that we shouldn't `await` on this call, because it could ask for user decision (e.g., to install the YAML
     // extension) and get blocked for an unknown time duration (possibly never, if user decides to skip the message).
     integrateWithYAMLExtension(context).catch(reason => {
