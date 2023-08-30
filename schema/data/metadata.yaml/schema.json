@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/schema",
-    "$id": "charms://schema/metadata.json",
+    "$id": "charmcraft://schema/metadata.json",
     "$defs": {
         "assumes-entry": {
             "type": "string",
