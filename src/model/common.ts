@@ -34,6 +34,14 @@ export interface Range {
     end: Position;
 }
 
+export function zeroPosition(): Position {
+    return { line: 0, character: 0 };
+}
+
+export function zeroRange(): Range {
+    return { start: zeroPosition(), end: zeroPosition() };
+}
+
 export function comparePositions(a: Position, b: Position): -1 | 0 | 1 {
     return a.line === b.line && a.character === b.character ? 0 :
         a.line < b.line || a.line === b.line && a.character < b.character ? -1 : 1;

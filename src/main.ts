@@ -37,7 +37,10 @@ export async function activate(context: ExtensionContext) {
     const output = window.createOutputChannel('Charmcraft IDE');
     context.subscriptions.push(output);
 
-    const registry = new Registry(output);
+    const diagnostics = languages.createDiagnosticCollection('Charmcraft IDE');
+    context.subscriptions.push(diagnostics);
+
+    const registry = new Registry(output, diagnostics);
     context.subscriptions.push(registry);
     await registry.refresh();
 

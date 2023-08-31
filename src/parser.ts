@@ -235,7 +235,7 @@ function assignAnyFromPair(map: WithNode<any>, key: string, required?: boolean, 
  * @returns `undefined` if the field was missing.
  */
 function assignStringEnumFromScalarPair<T>(map: WithNode<any>, key: string, enumValues: string[], required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
-    const result = assignAnyFromPair(map, key,required, parentNodeProblems);
+    const result = assignAnyFromPair(map, key, required, parentNodeProblems);
     if (!result || result.value === undefined || result.node.problems.length) {
         return result;
     }
@@ -546,8 +546,12 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
             // Checking container resources, if any, are already defined.
             if (container.value.resource?.value !== undefined) {
                 const resource = container.value.resource?.value;
-                if (resource !== undefined && !Object.entries(result.resources?.entries ?? {}).find(([, v]) => v.value?.name === resource)) {
-                    container.node.problems.push(YAML_PROBLEMS.metadata.containerResourceUndefined(resource));
+                if (resource !== undefined) {
+                    if (!Object.values(result.resources?.entries ?? {}).find(v => v.value?.name === resource)) {
+                        container.node.problems.push(YAML_PROBLEMS.metadata.containerResourceUndefined(resource));
+                    } else if (!Object.values(result.resources?.entries ?? {}).find(v => v.value?.name === resource && v.value?.type?.value === 'oci-image')) {
+                        container.node.problems.push(YAML_PROBLEMS.metadata.containerResourceOCIImageExpected(resource));
+                    }
                 }
             }
             // Checking container mount storages, if any, are already defined.
@@ -555,7 +559,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 for (let i = 0; i < container.value.mounts.elements.length; i++) {
                     const mount = container.value.mounts.elements[i];
                     const storage = mount.value?.storage?.value;
-                    if (storage !== undefined && !Object.entries(result.storage?.entries ?? {}).find(([, v]) => v.value?.name === storage)) {
+                    if (storage !== undefined && !Object.values(result.storage?.entries ?? {}).find(v => v.value?.name === storage)) {
                         mount.node.problems.push(YAML_PROBLEMS.metadata.containerMountStorageUndefined(storage));
                     }
                 }
@@ -687,7 +691,8 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 resource: assignScalarFromPair(map, 'resource', 'string'),
             };
 
-            const bases = assignArrayOfMapsFromPair(map, 'bases');
+            entry.value.bases = assignArrayOfMapsFromPair(map, 'bases');
+            const bases = entry.value.bases;
             if (bases?.elements) {
                 entry.value.bases = {
                     node: bases.node,
@@ -711,7 +716,8 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 entry.node.problems.push(YAML_PROBLEMS.metadata.containerExpectedOnlyResourceOrBases);
             }
 
-            const mounts = assignArrayOfMapsFromPair(map, 'mounts');
+            entry.value.mounts = assignArrayOfMapsFromPair(map, 'mounts');
+            const mounts = entry.value.mounts;
             if (mounts?.elements) {
                 entry.value.mounts = {
                     node: mounts.node,
