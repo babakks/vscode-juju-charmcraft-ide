@@ -18,3 +18,4 @@ This is a VS Code extension to provide tools for Juju Charms development. To lea
   - Schema validation (e.g., `metadata.yaml` or `config.yaml`).
   - Auto-completions (e.g., configurations or actions).
   - Documentation hovers.
+  - Diagnostics.
