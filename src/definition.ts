@@ -1,24 +1,27 @@
 import {
     CancellationToken,
+    Definition,
+    DefinitionProvider,
     Hover,
     HoverProvider,
+    LocationLink,
     Position,
     ProviderResult,
     Range,
     TextDocument
 } from 'vscode';
 import { Registry } from './registry';
-import { getConfigParamDocumentation, getEventDocumentation } from './util';
+import { getConfigParamDocumentation, getEventDocumentation, rangeToVSCodeRange } from './util';
 import TelemetryReporter from '@vscode/extension-telemetry';
 
 const REGEX_SELF_CONFIG_BRACKET = /self(?:\.model)?\.config\[(['"])(?<name>.*?)\1/;
 const REGEX_SELF_CONFIG_GET_SET = /self(?:\.model)?\.config\.(?:get|set)\((['"])(?<name>.*?)\1/;
-export class CharmConfigHoverProvider implements HoverProvider {
-    private static readonly _telemetryEvent = 'v0.hover.config';
+export class CharmConfigDefinitionProvider implements DefinitionProvider {
+    private static readonly _telemetryEvent = 'v0.definition.config';
 
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
-    provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
+    provideDefinition(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Definition | LocationLink[]> {
         const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
@@ -35,27 +38,30 @@ export class CharmConfigHoverProvider implements HoverProvider {
             return;
         }
 
-        this.reporter.sendTelemetryEvent(CharmConfigHoverProvider._telemetryEvent);
-
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
         const parameter = workspaceCharm.live.config.parameters?.entries?.[name];
-        if (!parameter?.value) {
+        if (!parameter || !parameter.node.range) {
             return;
         }
 
-        return new Hover(getConfigParamDocumentation(parameter.value, true));
+        this.reporter.sendTelemetryEvent(CharmConfigDefinitionProvider._telemetryEvent);
+
+        return {
+            uri: workspaceCharm.configUri,
+            range: rangeToVSCodeRange(parameter.node.range),
+        };
     }
 }
 
 const REGEX_SELF_ON = /self\.on\.(?<symbol>\w*)/;
-export class CharmEventHoverProvider implements HoverProvider {
-    private static readonly _telemetryEvent = 'v0.hover.event';
+export class CharmEventDefinitionProvider implements DefinitionProvider {
+    private static readonly _telemetryEvent = 'v0.definition.event';
 
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
-    provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
+    provideDefinition(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Definition | LocationLink[]> {
         const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
@@ -74,8 +80,20 @@ export class CharmEventHoverProvider implements HoverProvider {
             return;
         }
 
-        this.reporter.sendTelemetryEvent(CharmEventHoverProvider._telemetryEvent);
+        if (event.source !== 'action' || event.sourceActionName === undefined) {
+            return;
+        }
 
-        return new Hover(getEventDocumentation(event, true));
+        const action = workspaceCharm.live.actions.actions?.entries?.[event.sourceActionName];
+        if (!action || !action.node.range) {
+            return;
+        }
+
+        this.reporter.sendTelemetryEvent(CharmEventDefinitionProvider._telemetryEvent);
+
+        return {
+            uri: workspaceCharm.actionsUri,
+            range: rangeToVSCodeRange(action.node.range),
+        };
     }
 }

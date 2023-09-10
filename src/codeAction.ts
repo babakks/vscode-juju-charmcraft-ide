@@ -28,7 +28,7 @@ export class EventHandlerCodeActionProvider implements CodeActionProvider {
             return;
         }
 
-        const file = workspaceCharm.getLatestCachedLiveSourceCodeFile(document.uri);
+        const file = workspaceCharm.live.src.getFile(relativeSourcePath);
         if (!file) {
             return;
         }

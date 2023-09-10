@@ -1,10 +1,10 @@
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
 import { Disposable, Uri } from 'vscode';
-import { Charm, CharmSourceCode, CharmSourceCodeFile, CharmSourceCodeTree, emptyActions, emptyConfig, emptyMetadata } from './model/charm';
-import * as constant from './model/common';
+import { Charm, CharmActions, CharmConfig, CharmMetadata, CharmSourceCode, CharmSourceCodeFile, CharmSourceCodeTree, MapWithNode, Problem, SequenceWithNode, WithNode, YAMLNode, emptyActions, emptyConfig, emptyMetadata } from './model/charm';
+import { CHARM_DIR_SRC, CHARM_FILE_ACTIONS_YAML, CHARM_FILE_CONFIG_YAML, CHARM_FILE_METADATA_YAML, Range, zeroRange } from './model/common';
 import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from './parser';
-import { tryReadWorkspaceFileAsText } from './util';
+import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import path = require('path');
 
 export async function getCharmSourceCodeTree(charmHome: vscode.Uri, token?: vscode.CancellationToken): Promise<CharmSourceCodeTree | undefined> {
@@ -46,20 +46,41 @@ export async function createCharmSourceCodeFileFromContent(content: string): Pro
     return new CharmSourceCodeFile(content, ast, ast !== undefined);
 }
 
-const WATCH_GLOB_PATTERN = `{${constant.CHARM_FILE_CONFIG_YAML},${constant.CHARM_FILE_METADATA_YAML},${constant.CHARM_FILE_ACTIONS_YAML},${constant.CHARM_DIR_SRC}/**/*.py}`;
+const WATCH_GLOB_PATTERN = `{${CHARM_FILE_CONFIG_YAML},${CHARM_FILE_METADATA_YAML},${CHARM_FILE_ACTIONS_YAML},${CHARM_DIR_SRC}/**/*.py}`;
 
 export class WorkspaceCharm implements vscode.Disposable {
     private _disposables: Disposable[] = [];
-    private _liveFileCache = new Map<string, CharmSourceCodeFile>();
 
+    /**
+     * Persisted model of the charm. 
+     */
     readonly model: Charm;
+
+    /**
+     * *Live* instance of the charm model (i.e., content is in sync with the
+     * latest un-persisted changes).
+     */
+    readonly live: Charm;
+
     private readonly _srcDir: Uri;
 
     private readonly watcher: vscode.FileSystemWatcher;
 
-    constructor(readonly home: Uri, readonly output: vscode.OutputChannel) {
+    readonly configUri: Uri;
+    readonly actionsUri: Uri;
+    readonly metadataUri: Uri;
+
+    constructor(
+        readonly home: Uri,
+        readonly output: vscode.OutputChannel,
+        readonly diagnostics: vscode.DiagnosticCollection
+    ) {
         this.model = new Charm();
-        this._srcDir = Uri.joinPath(this.home, constant.CHARM_DIR_SRC);
+        this.live = new Charm();
+        this.configUri = Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
+        this.actionsUri = Uri.joinPath(this.home, CHARM_FILE_ACTIONS_YAML);
+        this.metadataUri = Uri.joinPath(this.home, CHARM_FILE_METADATA_YAML);
+        this._srcDir = Uri.joinPath(this.home, CHARM_DIR_SRC);
         this._disposables.push(
             this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(home, WATCH_GLOB_PATTERN)),
             this.watcher.onDidChange(async e => await this._onFileSystemEvent('change', e)),
@@ -83,11 +104,11 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     private async _onFileSystemEvent(kind: 'change' | 'create' | 'delete', uri: vscode.Uri) {
-        if (uri.path.endsWith(constant.CHARM_FILE_ACTIONS_YAML)) {
+        if (uri.path.endsWith(CHARM_FILE_ACTIONS_YAML)) {
             await this._refreshActions();
-        } else if (uri.path.endsWith(constant.CHARM_FILE_CONFIG_YAML)) {
+        } else if (uri.path.endsWith(CHARM_FILE_CONFIG_YAML)) {
             await this._refreshConfig();
-        } else if (uri.path.endsWith(constant.CHARM_FILE_METADATA_YAML)) {
+        } else if (uri.path.endsWith(CHARM_FILE_METADATA_YAML)) {
             await this._refreshMetadata();
         }
 
@@ -100,6 +121,11 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
     }
 
+    private _updateDiagnostics(uri: Uri, entries: vscode.Diagnostic[]) {
+        this.diagnostics.delete(uri);
+        this.diagnostics.set(uri, entries);
+    }
+
     async refresh() {
         await Promise.allSettled([
             this._refreshActions(),
@@ -110,24 +136,27 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     private async _refreshActions() {
-        const uri = vscode.Uri.joinPath(this.home, constant.CHARM_FILE_ACTIONS_YAML);
+        const uri = vscode.Uri.joinPath(this.home, CHARM_FILE_ACTIONS_YAML);
         const content = await tryReadWorkspaceFileAsText(uri) || "";
         const actions = (content ? parseCharmActionsYAML(content) : undefined) || emptyActions();
         this.model.updateActions(actions);
+        await this.updateLiveActionsFile();
     }
 
     private async _refreshConfig() {
-        const uri = vscode.Uri.joinPath(this.home, constant.CHARM_FILE_CONFIG_YAML);
+        const uri = vscode.Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
         const content = await tryReadWorkspaceFileAsText(uri) || "";
         const config = (content ? parseCharmConfigYAML(content) : undefined) || emptyConfig();
         this.model.updateConfig(config);
+        await this.updateLiveConfigFile();
     }
 
     private async _refreshMetadata() {
-        const uri = vscode.Uri.joinPath(this.home, constant.CHARM_FILE_METADATA_YAML);
+        const uri = vscode.Uri.joinPath(this.home, CHARM_FILE_METADATA_YAML);
         const content = await tryReadWorkspaceFileAsText(uri) || "";
         const metadata = (content ? parseCharmMetadataYAML(content) : undefined) || emptyMetadata();
         this.model.updateMetadata(metadata);
+        await this.updateLiveMetadataFile();
     }
 
     private async _refreshSourceCodeFile(uri: Uri) {
@@ -148,7 +177,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
 
         this.model.src.updateFile(relativePath, file);
-        this._liveFileCache.delete(relativePath);
+        await this.updateLiveSourceCodeFile(uri);
     }
 
     private _makeFileWithOldAST(relativePath: string, newFile: CharmSourceCodeFile): CharmSourceCodeFile | undefined {
@@ -165,24 +194,25 @@ export class WorkspaceCharm implements vscode.Disposable {
             return;
         }
         this.model.updateSourceCode(new CharmSourceCode(tree));
-        this._liveFileCache.clear();
+        this.live.updateSourceCode(new CharmSourceCode(tree));
     }
 
-    getLatestCachedLiveSourceCodeFile(uri: Uri): CharmSourceCodeFile | undefined {
-        const relativePath = this._getRelativePathToSrc(uri);
-        if (!relativePath) {
-            return undefined;
+    async updateLiveFile(uri: Uri) {
+        if (this._getRelativePathToSrc(uri) !== undefined) {
+            await this.updateLiveSourceCodeFile(uri);
+        } else if (uri.path === this.configUri.path) {
+            await this.updateLiveConfigFile();
+        } else if (uri.path === this.actionsUri.path) {
+            await this.updateLiveActionsFile();
+        } else if (uri.path === this.metadataUri.path) {
+            await this.updateLiveMetadataFile();
         }
-        return this._liveFileCache.get(relativePath) ?? this.model.src.getFile(relativePath);
     }
 
-    async updateLiveSourceCodeFile(uri: Uri): Promise<CharmSourceCodeFile | undefined> {
-        const relativePath = this._getRelativePathToSrc(uri);
-        if (!relativePath) {
-            return undefined;
-        }
-
-        let content: string | undefined;
+    /**
+     * @returns `undefined` when there's no dirty document with the given URI. 
+     */
+    private _getDirtyDocumentContent(uri: Uri): string | undefined {
         const docs = Array.from(vscode.workspace.textDocuments);
         for (const doc of docs) {
             if (doc.isClosed) {
@@ -190,23 +220,195 @@ export class WorkspaceCharm implements vscode.Disposable {
             }
             if (doc.uri.toString() === uri.toString()) {
                 if (doc.isDirty) {
-                    content = doc.getText();
+                    return doc.getText();
                 }
-                break;
             }
         }
+        return undefined;
+    }
 
+    async updateLiveConfigFile() {
+        const content = this._getDirtyDocumentContent(this.configUri);
         if (content === undefined) {
-            return this.model.src.getFile(relativePath);
+            this.live.updateConfig(this.model.config);
+            this._updateDiagnostics(this.configUri, this._getConfigDiagnostics(this.live.config));
+            return;
+        }
+
+        this._log('config refreshed');
+        this.live.updateConfig(parseCharmConfigYAML(content));
+        this._updateDiagnostics(this.configUri, this._getConfigDiagnostics(this.live.config));
+    }
+
+    private _getConfigDiagnostics(config: CharmConfig): vscode.Diagnostic[] {
+        return [
+            ...config.node.problems.map(p => createDiagnostics(p, config.node.range)),
+            ...Object.values(config.parameters?.entries ?? {}).map(config => [
+                ...config.node.problems.map(p => createDiagnostics(p, config.node.pairKeyRange)),
+                ...config.value?.type?.node.problems.map(p => createDiagnostics(p, config.value!.type!.node.range)) ?? [],
+                ...config.value?.description?.node.problems.map(p => createDiagnostics(p, config.value!.description!.node.range)) ?? [],
+                ...config.value?.default?.node.problems.map(p => createDiagnostics(p, config.value!.default!.node.range)) ?? [],
+            ]).flat(1),
+        ];
+    }
+
+    async updateLiveActionsFile() {
+        const content = this._getDirtyDocumentContent(this.actionsUri);
+        if (content === undefined) {
+            this.live.updateActions(this.model.actions);
+            this._updateDiagnostics(this.actionsUri, this._getActionsDiagnostics(this.live.actions));
+            return;
+        }
+
+        this._log('actions refreshed');
+        this.live.updateActions(parseCharmActionsYAML(content));
+        this._updateDiagnostics(this.actionsUri, this._getActionsDiagnostics(this.live.actions));
+    }
+
+    private _getActionsDiagnostics(actions: CharmActions): vscode.Diagnostic[] {
+        return [
+            ...actions.node.problems.map(p => createDiagnostics(p, actions.node.range)),
+            ...Object.values(actions.actions?.entries ?? {}).map(action => [
+                ...action.node.problems.map(p => createDiagnostics(p, action.node.pairKeyRange)),
+                ...action.value?.description?.node.problems.map(p => createDiagnostics(p, action.value!.description!.node.range)) ?? [],
+            ]).flat(1),
+        ];
+    }
+
+    async updateLiveMetadataFile() {
+        const content = this._getDirtyDocumentContent(this.metadataUri);
+        if (content === undefined) {
+            this.live.updateMetadata(this.model.metadata);
+            this._updateDiagnostics(this.metadataUri, this._getMetadataDiagnostics(this.live.metadata));
+            return;
+        }
+
+        this._log('metadata refreshed');
+        this.live.updateMetadata(parseCharmMetadataYAML(content));
+        this._updateDiagnostics(this.metadataUri, this._getMetadataDiagnostics(this.live.metadata));
+    }
+
+    private _getMetadataDiagnostics(metadata: CharmMetadata): vscode.Diagnostic[] {
+        return [
+            ...metadata.node.problems.map(x => createDiagnostics(x, metadata.node.range)),
+            ...fs(metadata.assumes, x => [
+                ...f(x.single),
+                ...fs(x.allOf),
+                ...fs(x.anyOf),
+            ]),
+            ...fm(metadata.containers, x => [
+                ...fs(x.bases, x => [
+                    ...fs(x.architectures),
+                    ...f(x.channel),
+                    ...f(x.name),
+                ]),
+                ...fs(x.mounts, x => [
+                    ...f(x.location),
+                    ...f(x.storage),
+                ]),
+                ...f(x.resource),
+            ]),
+            ...f(metadata.description),
+            ...fm(metadata.devices, x => [
+                ...f(x.countMin),
+                ...f(x.countMax),
+                ...f(x.description),
+                ...f(x.type),
+            ]),
+            ...f(metadata.displayName),
+            ...f(metadata.docs),
+            ...fm(metadata.extraBindings),
+            ...(metadata.issues ? (metadata.issues.node.kind === 'sequence' ? fs(metadata.issues as SequenceWithNode<string>) : f(metadata.issues as WithNode<string>)) : []),
+            ...fs(metadata.maintainers),
+            ...f(metadata.name),
+            ...fm(metadata.peers, x => [
+                ...f(x.interface),
+                ...f(x.limit),
+                ...f(x.optional),
+                ...f(x.scope),
+            ]),
+            ...fm(metadata.provides, x => [
+                ...f(x.interface),
+                ...f(x.limit),
+                ...f(x.optional),
+                ...f(x.scope),
+            ]),
+            ...fm(metadata.requires, x => [
+                ...f(x.interface),
+                ...f(x.limit),
+                ...f(x.optional),
+                ...f(x.scope),
+            ]),
+            ...fm(metadata.resources, x => [
+                ...f(x.description),
+                ...f(x.filename),
+                ...f(x.type),
+            ]),
+            ...(metadata.source ? (metadata.source.node.kind === 'sequence' ? fs(metadata.source as SequenceWithNode<string>) : f(metadata.source as WithNode<string>)) : []),
+            ...fm(metadata.storage, x => [
+                ...f(x.description),
+                ...f(x.location),
+                ...f(x.minimumSize),
+                ...f(x.multiple),
+                ...fs(x.properties),
+                ...f(x.readOnly),
+                ...f(x.type),
+            ]),
+            ...f(metadata.subordinate),
+            ...f(metadata.summary),
+            ...fs(metadata.terms),
+            ...(metadata.website ? (metadata.website.node.kind === 'sequence' ? fs(metadata.website as SequenceWithNode<string>) : f(metadata.website as WithNode<string>)) : []),
+        ];
+
+        function fs<T>(e: SequenceWithNode<T> | undefined, cb?: ((e: T) => vscode.Diagnostic[])) {
+            return !e ? [] : [
+                ...f(e),
+                ...(e.elements ?? []).map(x => [
+                    ...f(x),
+                    ...(x.value !== undefined && cb ? cb(x.value) : [])
+                ]).flat(1),
+            ];
+        }
+
+        function fm<T>(e: MapWithNode<T> | undefined, cb?: ((m: T) => vscode.Diagnostic[])) {
+            return !e ? [] : [
+                ...f(e),
+                ...Object.values(e.entries ?? {}).map(x => [
+                    ...f(x),
+                    ...(x.value !== undefined && cb ? cb(x.value) : [])
+                ]).flat(1),
+            ];
+        }
+
+        function f(e: WithNode<any> | MapWithNode<any> | SequenceWithNode<any> | undefined): vscode.Diagnostic[] {
+            return !e ? [] : [
+                ...e.node.problems.map(p => createDiagnostics(p, e.node.range)),
+            ];
+        }
+    }
+
+    async updateLiveSourceCodeFile(uri: Uri) {
+        const relativePath = this._getRelativePathToSrc(uri);
+        if (!relativePath) {
+            return undefined;
+        }
+
+        const content = this._getDirtyDocumentContent(uri);
+        if (content === undefined) {
+            const file = this.model.src.getFile(relativePath);
+            if (file) {
+                this.live.src.updateFile(relativePath, file);
+            }
+            return;
         }
 
         // using cached data to avoid unnecessary running of python AST parser.
-        const cached = this._liveFileCache.get(relativePath);
+        const cached = this.live.src.getFile(relativePath);
         if (cached?.content === content) {
-            return cached;
+            return;
         }
 
-        this._log(`content refreshed: ${relativePath}`);
+        this._log(`source refreshed: ${relativePath}`);
         let file = await createCharmSourceCodeFileFromContent(content);
 
         // Keeping old AST data if there's no AST available (e.g., due to Python parser error in the middle of
@@ -218,12 +420,16 @@ export class WorkspaceCharm implements vscode.Disposable {
                 this._log(`failed to generate AST; keeping old AST data: ${relativePath}`);
             }
         }
-
-        this._liveFileCache.set(relativePath, file);
-        return file;
+        this.live.src.updateFile(relativePath, file);
     }
 
     private _log(s: string) {
         this.output.appendLine(`${new Date().toISOString()} ${this.home.path} ${s}`);
     }
+}
+
+function createDiagnostics(problem: Problem, range?: Range): vscode.Diagnostic {
+    const result = new vscode.Diagnostic(rangeToVSCodeRange(range ?? zeroRange()), problem.message);
+    result.code = problem.id;
+    return result;
 }

@@ -1,15 +1,23 @@
 import { spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
-import * as yaml from 'js-yaml';
 import { tmpdir } from 'os';
 import {
-    CharmAction,
-    CharmActionProblem,
+    Alias,
+    Pair,
+    ParsedNode,
+    Scalar,
+    YAMLMap,
+    Range as YAMLRange,
+    YAMLSeq,
+    isMap,
+    isScalar,
+    isSeq,
+    parseDocument
+} from 'yaml';
+import {
     CharmActions,
-    CharmAssumptions,
+    CharmAssumption,
     CharmConfig,
-    CharmConfigParameter,
-    CharmConfigParameterProblem,
     CharmContainer,
     CharmContainerBase,
     CharmContainerMount,
@@ -17,282 +25,496 @@ import {
     CharmEndpoint,
     CharmExtraBinding,
     CharmMetadata,
-    CharmMetadataProblem,
     CharmResource,
     CharmStorage,
-    emptyMetadata,
-    isConfigParameterType
+    MapWithNode,
+    Problem,
+    SequenceWithNode,
+    WithNode,
+    YAMLNode,
+    YAML_PROBLEMS,
+    getTextOverRange
 } from './model/charm';
-import { toValidSymbol } from './model/common';
+import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
 
-function tryParseYAML(content: string): any {
-    try {
-        return yaml.load(content);
-    } catch {
+/**
+ * A generic YAML parser that returns a tree of objects/arrays of type {@link WithNode<any>}.
+ */
+export class YAMLParser {
+    readonly tpm: TextPositionMapper;
+    constructor(readonly text: string) {
+        this.tpm = new TextPositionMapper(text);
+    }
+
+    /**
+     * @returns `undefined` if given content was not a valid YAML.
+     */
+    parse(): { tree: WithNode<any> | undefined; plain: any } {
+        if (!this.text.trim().length) {
+            return {
+                plain: undefined,
+                tree: {
+                    value: {},
+                    node: {
+                        kind: 'map',
+                        problems: [],
+                        text: this.text,
+                        range: this.tpm.all(),
+                    },
+                },
+            };
+        }
+        const doc = parseDocument(this.text);
+        return {
+            tree: this._parseValue(doc.contents),
+            plain: doc.toJS(),
+        };
+    }
+
+    private _parseValue(node: Alias.Parsed | Scalar.Parsed | YAMLMap.Parsed<ParsedNode, ParsedNode | null> | YAMLSeq.Parsed<ParsedNode> | null): WithNode<any> | undefined {
+        if (isMap(node)) {
+            return this._parseMap(node);
+        }
+        if (isSeq(node)) {
+            return this._parseSeq(node);
+        }
+        if (isScalar(node)) {
+            return this._parseScalar(node);
+        }
         return undefined;
     }
-}
 
-
-const _ACTION_PROBLEMS = {
-    invalidYAMLFile: { message: "Invalid YAML file." },
-    entryMustBeObject: (key: string) => ({ action: key, message: `Action entry \`${key}\` must be an object.` }),
-    entryDescriptionMustBeValid: (key: string) => ({ action: key, message: `Description for action \`${key}\` should be a string.` }),
-} satisfies Record<string, CharmActionProblem | ((...args: any[]) => CharmActionProblem)>;
-
-export function parseCharmActionsYAML(content: string): CharmActions {
-    const problems: CharmActionProblem[] = [];
-    const doc = tryParseYAML(content);
-    if (!doc || typeof doc !== 'object') {
-        problems.push(_ACTION_PROBLEMS.invalidYAMLFile);
-        return { actions: [], problems };
-    }
-
-    const actions: CharmAction[] = [];
-    for (const [name, value] of Object.entries(doc)) {
-        const entry: CharmAction = {
-            name,
-            symbol: toValidSymbol(name),
-            problems: [],
+    private _parseMap(node: YAMLMap<ParsedNode, ParsedNode | null>): WithNode<any> {
+        const range = this._nodeRangeToRange(node.range, this.tpm);
+        return {
+            value: Object.fromEntries(node.items.filter(x => isScalar(x.key)).map(x => [x.key.toString(), this._parsePair(x)])),
+            node: {
+                kind: 'map',
+                range,
+                text: getTextOverRange(this.tpm.lines, range),
+                raw: node,
+                problems: [],
+            }
         };
-        actions.push(entry);
+    }
 
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            entry.problems.push(_ACTION_PROBLEMS.entryMustBeObject(name));
-            continue;
-        }
-
-        if ('description' in value) {
-            if (typeof value['description'] !== 'string') {
-                entry.problems.push(_ACTION_PROBLEMS.entryDescriptionMustBeValid(name));
-            } else {
-                entry.description = value.description;
+    private _parseSeq(node: YAMLSeq<ParsedNode>): WithNode<any> {
+        const range = this._nodeRangeToRange(node.range, this.tpm);
+        return {
+            value: node.items.map(x => this._parseValue(x)),
+            node: {
+                kind: 'sequence',
+                range,
+                text: getTextOverRange(this.tpm.lines, range),
+                raw: node,
+                problems: [],
             }
-        }
-    }
-
-    return { actions, problems };
-}
-
-const _CONFIG_PROBLEMS = {
-    invalidYAMLFile: { message: "Invalid YAML file." },
-    optionsFieldMissing: { message: "Missing `options` field." },
-    optionsFieldMustBeObject: { message: "The `options` field must be an object." },
-    paramEntryMustBeObject: (key: string) => ({ parameter: key, message: `Parameter entry \`${key}\` must be an object.` }),
-    paramEntryMustIncludeType: (key: string) => ({ parameter: key, message: `Parameter \`${key}\` must include \`type\` field.` }),
-    paramEntryTypeMustBeValid: (key: string) => ({ parameter: key, message: `Parameter \`${key}\` must have a valid type; \`bool\`, \`string\`, \`int\`, or \`float\`.` }),
-    paramEntryDefaultMustMatchTypeBoolean: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a boolean value.` }),
-    paramEntryDefaultMustMatchTypeString: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a string value.` }),
-    paramEntryDefaultMustMatchTypeInteger: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be an integer value.` }),
-    paramEntryDefaultMustMatchTypeFloat: (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` should be a float value.` }),
-    paramEntryDefaultMustBeValid: // This happens when there'n no `type` field to restrict the default value type
-        (key: string) => ({ parameter: key, message: `Default value for parameter \`${key}\` must have a valid type; boolean, string, integer, or float.` }),
-    paramEntryDescriptionMustBeValid: (key: string) => ({ parameter: key, message: `Description for parameter \`${key}\` should be a string.` }),
-} satisfies Record<string, CharmConfigParameterProblem | ((...args: any[]) => CharmConfigParameterProblem)>;
-
-export function parseCharmConfigYAML(content: string): CharmConfig {
-    const problems: CharmConfigParameterProblem[] = [];
-    const doc = tryParseYAML(content);
-    if (!doc || typeof doc !== 'object') {
-        problems.push(_CONFIG_PROBLEMS.invalidYAMLFile);
-        return { parameters: [], problems };
-    }
-    if (!('options' in doc)) {
-        problems.push(_CONFIG_PROBLEMS.optionsFieldMissing);
-        return { parameters: [], problems };
-    }
-    if (!doc['options'] || typeof doc['options'] !== 'object' || Array.isArray(doc['options'])) {
-        problems.push(_CONFIG_PROBLEMS.optionsFieldMustBeObject);
-        return { parameters: [], problems };
-    }
-
-    const parameters: CharmConfigParameter[] = [];
-    for (const [name, value] of Object.entries(doc['options'])) {
-        const entry: CharmConfigParameter = {
-            name,
-            problems: [],
         };
-        parameters.push(entry);
-
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            entry.problems.push(_CONFIG_PROBLEMS.paramEntryMustBeObject(name));
-            continue;
-        }
-
-        if (!('type' in value)) {
-            entry.problems.push(_CONFIG_PROBLEMS.paramEntryMustIncludeType(name));
-        } else if (!value['type'] || typeof value['type'] !== 'string' || !isConfigParameterType(value['type'])) {
-            entry.problems.push(_CONFIG_PROBLEMS.paramEntryTypeMustBeValid(name));
-        } else {
-            entry.type = value['type'];
-        }
-
-        if ('default' in value) {
-            const defaultValue = value['default'];
-            if (entry.type) {
-                let problem: CharmConfigParameterProblem | undefined;
-
-                if (entry.type === 'string' && typeof defaultValue !== 'string') {
-                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeString(name);
-                }
-                else if (entry.type === 'boolean' && typeof defaultValue !== 'boolean') {
-                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeBoolean(name);
-                }
-                else if (entry.type === 'int' && (typeof defaultValue !== 'number' || !Number.isInteger(defaultValue))) {
-                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeInteger(name);
-                }
-                else if (entry.type === 'float' && typeof defaultValue !== 'number') {
-                    problem = _CONFIG_PROBLEMS.paramEntryDefaultMustMatchTypeFloat(name);
-                }
-
-                if (problem) {
-                    entry.problems.push(problem);
-                } else if (defaultValue === undefined || typeof defaultValue === 'string' || typeof defaultValue === 'number' || typeof defaultValue === 'boolean') {
-                    entry.default = defaultValue;
-                }
-            } else {
-                // There's no valid type for the parameter, so we should check if the default value is not essentially invalid.
-                if (!(typeof defaultValue === 'string' || typeof defaultValue === 'boolean' || typeof defaultValue === 'number')) {
-                    entry.problems.push(_CONFIG_PROBLEMS.paramEntryDefaultMustBeValid(name));
-                } else {
-                    entry.default = defaultValue;
-                }
-            }
-        }
-
-        if ('description' in value) {
-            if (typeof value['description'] !== 'string') {
-                entry.problems.push(_CONFIG_PROBLEMS.paramEntryDescriptionMustBeValid(name));
-            } else {
-                entry.description = value['description'];
-            }
-        }
     }
 
-    return { parameters, problems };
+    private _parseScalar(node: Scalar.Parsed): WithNode<any> {
+        const range = this._nodeRangeToRange(node.range, this.tpm);
+        return {
+            value: node.value,
+            node: {
+                kind: 'scalar',
+                range,
+                text: getTextOverRange(this.tpm.lines, range),
+                raw: node,
+                problems: [],
+            }
+        };
+    }
+
+    private _parsePair(node: Pair<ParsedNode, ParsedNode | null>): WithNode<any> {
+        const range: Range = {
+            start: this.tpm.indexToPosition(node.key.range[0]),
+            end: node.value ? this.tpm.indexToPosition(node.value.range[2]) : this.tpm.indexToPosition(node.key.range[2]),
+        };
+        const value = this._parseValue(node.value);
+
+        return {
+            value,
+            node: {
+                kind: 'pair',
+                range,
+                text: getTextOverRange(this.tpm.lines, range),
+                raw: node,
+                pairKeyRange: this._nodeRangeToRange(node.key.range, this.tpm),
+                pairValueRange: node.value ? this._nodeRangeToRange(node.value.range, this.tpm) : undefined,
+                problems: [],
+            }
+        };
+    }
+
+    private _nodeRangeToRange(nodeRange: YAMLRange | null | undefined, tpm: TextPositionMapper): Range {
+        if (!nodeRange) {
+            return { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
+        }
+        return {
+            start: tpm.indexToPosition(nodeRange[0]),
+            end: tpm.indexToPosition(nodeRange[2]),
+        };
+    }
 }
 
-const _METADATA_PROBLEMS = {
-    invalidYAMLFile: { message: "Invalid YAML file." },
-    nameFieldMissing: { message: "Missing `name` field." },
-    nameFieldInvalid: { key: 'name', message: "Value of `name` field should be a string." },
-    displayNameFieldMissing: { message: "Missing `display-name` field." },
-    displayNameFieldInvalid: { key: 'display-name', message: "Value of `display-name` field should be a string." },
-    descriptionFieldMissing: { message: "Missing `description` field." },
-    descriptionFieldInvalid: { key: 'description', message: "Value of `description` field should be a string." },
-    summaryFieldMissing: { message: "Missing `summary` field." },
-    summaryFieldInvalid: { key: 'summary', message: "Value of `summary` field should be a string." },
-    sourceFieldInvalid: { key: 'source', message: "Value of `source` field should be a string or an array of strings." },
-    issuesFieldInvalid: { key: 'issues', message: "Value of `issues` field should be a string or an array of strings." },
-    websiteFieldInvalid: { key: 'website', message: "Value of `website` field should be a string or an array of strings." },
-    maintainersFieldInvalid: { key: 'maintainers', message: "Value of `maintainers` field should be an array of strings." },
-    tagsFieldInvalid: { key: 'tags', message: "Value of `tags` field should be an array of strings." },
-    termsFieldInvalid: { key: 'terms', message: "Value of `terms` field should be an array of strings." },
-    docsFieldInvalid: { key: 'docs', message: "Value of `docs` field should be a string." },
-    subordinateFieldInvalid: { key: 'subordinate', message: "Value of `subordinate` field should be a boolean." },
-    requiresFieldInvalid: { key: 'requires', message: "Value of `requires` field should be an object." },
-    providesFieldInvalid: { key: 'provides', message: "Value of `provides` field should be an object." },
-    peerFieldInvalid: { key: 'peers', message: "Value of `peers` field should be an object." },
-    endpointEntryInvalid: (key: string) => ({ key, message: `Value of \`${key}\` field should be an object.` }),
-    endpointInterfaceFieldMissing: (key: string) => ({ key, message: "Missing `interface` field." }),
-    endpointInterfaceFieldInvalid: (key: string) => ({ key, message: "Value of `interface` field should be a string." }),
-    endpointLimitFieldInvalid: (key: string) => ({ key, message: "Value of `limit` field should be an integer." }),
-    endpointOptionalFieldInvalid: (key: string) => ({ key, message: "Value of `optional` field should be a boolean." }),
-    endpointScopeFieldInvalid: (key: string) => ({ key, message: "Value of `scope` field should be either `global` or `container`." }),
-    endpointFieldUnknown: (key: string, field: string) => ({ key, message: `Unknown field \`${field}\`` }),
-    resourcesFieldInvalid: { key: 'resources', message: "Value of `resources` field should be an object." },
-    resourceEntryInvalid: (key: string) => ({ key, message: `Value of \`${key}\` field should be an object.` }),
-    resourceTypeFieldMissing: (key: string) => ({ key, message: "Missing `type` field." }),
-    resourceTypeFieldInvalid: (key: string) => ({ key, message: "Value of `type` field should be either `file` or `oci-image`." }),
-    resourceDescriptionFieldInvalid: (key: string) => ({ key, message: "Value of `description` field should be a string." }),
-    resourceFilenameFieldMissing: (key: string) => ({ key, message: "Missing `filename` field." }),
-    resourceFilenameFieldInvalid: (key: string) => ({ key, message: "Value of `filename` field should be a string." }),
-    resourceFilenameFieldUnrelated: (key: string) => ({ key, message: "Unrelated `filename` field." }),
-    devicesFieldInvalid: { key: 'devices', message: "Value of `devices` field should be an object." },
-    deviceEntryInvalid: (key: string) => ({ key, message: `Value of \`${key}\` field should be an object.` }),
-    deviceTypeFieldMissing: (key: string) => ({ key, message: "Missing `type` field." }),
-    deviceTypeFieldInvalid: (key: string) => ({ key, message: "Value of `type` field should be either `gpu` or `nvidia.com/gpu` or `amd.com/gpu`." }),
-    deviceDescriptionFieldInvalid: (key: string) => ({ key, message: "Value of `description` field should be a string." }),
-    deviceCountMinFieldInvalid: (key: string) => ({ key, message: "Value of `countmin` field should be an integer." }),
-    deviceCountMaxFieldInvalid: (key: string) => ({ key, message: "Value of `countmax` field should be an integer." }),
-    storageFieldInvalid: { key: 'storage', message: "Value of `storage` field should be an object." },
-    storageEntryInvalid: (key: string) => ({ key, message: `Value of \`${key}\` field should be an object.` }),
-    storageTypeFieldMissing: (key: string) => ({ key, message: "Missing `type` field." }),
-    storageTypeFieldInvalid: (key: string) => ({ key, message: "Value of `type` field should be either `filesystem` or `block`." }),
-    storageDescriptionFieldInvalid: (key: string) => ({ key, message: "Value of `description` field should be a string." }),
-    storageLocationFieldInvalid: (key: string) => ({ key, message: "Value of `location` field should be a string." }),
-    storageSharedFieldInvalid: (key: string) => ({ key, message: "Value of `shared` field should be a boolean." }),
-    storageReadOnlyFieldInvalid: (key: string) => ({ key, message: "Value of `read-only` field should be a boolean." }),
-    storageMultipleFieldInvalid: (key: string) => ({ key, message: "Value of `multiple` field should be one of n, n+, n-, or n-m, where n and m are integers." }),
-    storageMinimumSizeFieldInvalid: (key: string) => ({ key, message: "Value of `minimum-size` field should be either n or nM, where n is an integer and M is a either of these multipliers: M, G, T, P, E, Z or Y." }),
-    storagePropertiesFieldInvalid: (key: string) => ({ key, message: "Value of `properties` field should be an array of string values; only 'transient' is allowed as array elements." }),
-    extraBindingsFieldInvalid: { key: 'extra-bindings', message: "Value of `extra-bindings` field should be an object." },
-    extraBindingEntryInvalid: (key: string) => ({ key, message: `Value of \`${key}\` field should be an object.` }),
-    containersFieldInvalid: { key: 'containers', message: "Value of `containers` field should be an object." },
-    containerEntryInvalid: (key: string) => ({ key, message: `Value of \`${key}\` field should be an object.` }),
-    containerResourceFieldInvalid: (key: string) => ({ key, message: "Value of `resource` field should be a string." }),
-    containerBasesFieldInvalid: (key: string) => ({ key, message: "Value of `bases` field should be an array of objects." }),
-    containerBaseNameFieldMissing: (index: number) => ({ index, message: "Missing `name` field." }),
-    containerBaseNameFieldInvalid: (index: number) => ({ index, message: "Value of `name` field should be a string." }),
-    containerBaseChannelFieldMissing: (index: number) => ({ index, message: "Missing `channel` field." }),
-    containerBaseChannelFieldInvalid: (index: number) => ({ index, message: "Value of `channel` field should be a string." }),
-    containerBaseArchitecturesFieldMissing: (index: number) => ({ index, message: "Missing `architectures` field." }),
-    containerBaseArchitecturesFieldInvalid: (index: number) => ({ index, message: "Value of `architectures` field should be an array of strings." }),
-    containerMissingResourceAndBases: (key: string) => ({ key, message: "One of `resource` or `bases` fields should be assigned." }),
-    containerOnlyResourceOrBases: (key: string) => ({ key, message: "Only one of `resource` or `bases` fields should be assigned." }),
-    containerMountsFieldInvalid: (key: string) => ({ key, message: "Value of `mounts` field should be an array of objects." }),
-    containerMountLocationFieldInvalid: (index: number) => ({ index, message: "Value of `location` field should be a string." }),
-    containerMountStorageFieldMissing: (index: number) => ({ index, message: "Missing `storage` field." }),
-    containerMountStorageFieldInvalid: (index: number) => ({ index, message: "Value of `storage` field should be a string." }),
-    assumesFieldInvalid: { key: 'assumes', message: "Value of `assumes` field should be an array." },
-    assumesEntryInvalid: (index: number) => ({ index, message: "Value should be a string or an object with one of `all-of` or `any-of` fields." }),
-    assumesEntryExtraFields: (index: number) => ({ index, message: "Value should contain only one of `all-of` or `any-of` fields." }),
-    assumesAllOfMultipleUsage: (index: number) => ({ index, message: "An `all-of` criterion is already defined." }),
-    assumesAllOfInvalid: (index: number) => ({ index, message: "`all-of` value should be an array of strings." }),
-    assumesAnyOfMultipleUsage: (index: number) => ({ index, message: "An `any-of` criterion is already defined." }),
-    assumesAnyOfInvalid: (index: number) => ({ index, message: "`any-of` value should be an array of strings." }),
-    integrityContainerResourceUndefined: (container: string, resource: string) => ({ key: container, message: `Container resource \`${resource}\` is not defined,` }),
-    integrityContainerMountStorageUndefined: (mount: number, storage: string) => ({ index: mount, message: `Container mount storage \`${storage}\` is not defined,` }),
+type SupportedType = 'string' | 'boolean' | 'number' | 'integer';
 
-} satisfies Record<string, CharmMetadataProblem | ((...args: any[]) => CharmMetadataProblem)>;
 
-export function parseCharmMetadataYAML(content: string): CharmMetadata {
-    const doc = tryParseYAML(content);
-    const result = emptyMetadata();
-    if (!doc || typeof doc !== 'object') {
-        result.problems.push(_METADATA_PROBLEMS.invalidYAMLFile);
+function valueNodeFromPairNode(pairNode: YAMLNode, valueNode: YAMLNode): YAMLNode {
+    return {
+        ...valueNode,
+        pairKeyRange: pairNode.pairKeyRange,
+        pairValueRange: pairNode.pairValueRange,
+        pairText: pairNode.text,
+    };
+}
+
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+function assignScalarFromPair<T>(map: WithNode<any>, key: string, t: SupportedType, required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
+    if (required && parentNodeProblems === undefined) {
+        throw Error('`parentNodeProblems` cannot be `undefined` when `required` is `true`.');
+    }
+    if (!map.value || !(key in map.value)) {
+        if (required) {
+            parentNodeProblems!.push(YAML_PROBLEMS.generic.missingField(key));
+        }
+        return undefined;
+    }
+
+    const pair: WithNode<any> = map.value[key];
+    if (pair.node.kind !== 'pair') {
+        return undefined;
+    }
+
+    const result: WithNode<T> = {
+        node: valueNodeFromPairNode(pair.node, pair.value.node)
+    };
+    const value = pair.value.value;
+
+    if (value !== undefined && (typeof value === t || t === 'integer' && typeof value === 'number' && Number.isInteger(value))) {
+        result.value = value;
+    } else {
+        result.node.problems.push(YAML_PROBLEMS.generic.unexpectedScalarType(t));
+    }
+    return result;
+}
+
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+function assignAnyFromPair(map: WithNode<any>, key: string, required?: boolean, parentNodeProblems?: Problem[]): WithNode<any> | undefined {
+    if (required && parentNodeProblems === undefined) {
+        throw Error('`parentNodeProblems` cannot be `undefined` when `required` is `true`.');
+    }
+    if (!map.value || !(key in map.value)) {
+        if (required) {
+            parentNodeProblems!.push(YAML_PROBLEMS.generic.missingField(key));
+        }
+        return undefined;
+    }
+
+    const pair: WithNode<any> = map.value[key];
+    if (pair.node.kind !== 'pair') {
+        return undefined;
+    }
+
+    return {
+        node: valueNodeFromPairNode(pair.node, pair.value.node),
+        value: pair.value.value,
+    };
+}
+
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+function assignStringEnumFromScalarPair<T>(map: WithNode<any>, key: string, enumValues: string[], required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
+    const result = assignAnyFromPair(map, key, required, parentNodeProblems);
+    if (!result || result.value === undefined || result.node.problems.length) {
+        return result;
+    }
+    if (!enumValues.includes(result.value as string)) {
+        result.value = undefined;
+        result.node.problems.push(YAML_PROBLEMS.generic.expectedEnumValue(enumValues));
+    }
+    return result;
+}
+
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+function assignArrayOfScalarsFromPair<T>(map: WithNode<any>, key: string, t: SupportedType, required?: boolean, parentNodeProblems?: Problem[]): SequenceWithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key, required, parentNodeProblems);
+    if (!initial) {
+        return undefined;
+    }
+    const result: SequenceWithNode<T> = {
+        node: initial.node,
+    };
+    if (initial.value === undefined || initial.node.problems.length) {
+        return result;
+    }
+    if (initial.node.kind !== 'sequence') {
+        result.node.problems.push(YAML_PROBLEMS.generic.expectedSequenceOfScalars(t));
         return result;
     }
 
-    _required(doc, result, 'string', 'name', 'name', _METADATA_PROBLEMS.nameFieldMissing, _METADATA_PROBLEMS.nameFieldInvalid, result.problems);
-    _required(doc, result, 'string', 'display-name', 'displayName', _METADATA_PROBLEMS.displayNameFieldMissing, _METADATA_PROBLEMS.displayNameFieldInvalid, result.problems);
-    _required(doc, result, 'string', 'description', 'description', _METADATA_PROBLEMS.descriptionFieldMissing, _METADATA_PROBLEMS.descriptionFieldInvalid, result.problems);
-    _required(doc, result, 'string', 'summary', 'summary', _METADATA_PROBLEMS.summaryFieldMissing, _METADATA_PROBLEMS.summaryFieldInvalid, result.problems);
+    const sequence = initial.value;
+    result.elements = [];
+    for (const x of sequence as WithNode<any>[]) {
+        const entry: WithNode<T> = {
+            node: x.node,
+        };
+        result.elements.push(entry);
+        if (x.node.kind === 'scalar' && x.value !== undefined && (typeof x.value === t || t === 'integer' && typeof x.value === 'number' && Number.isInteger(x.value))) {
+            entry.value = x.value;
+        } else {
+            entry.node.problems.push(YAML_PROBLEMS.generic.unexpectedScalarType(t));
+        }
+    }
+    return result;
+}
 
-    _optionalValueOrArray(doc, result, 'string', 'source', 'source', _METADATA_PROBLEMS.sourceFieldInvalid, result.problems);
-    _optionalValueOrArray(doc, result, 'string', 'issues', 'issues', _METADATA_PROBLEMS.issuesFieldInvalid, result.problems);
-    _optionalValueOrArray(doc, result, 'string', 'website', 'website', _METADATA_PROBLEMS.websiteFieldInvalid, result.problems);
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+function assignArrayOfMapsFromPair<T>(map: WithNode<any>, key: string, required?: boolean, parentNodeProblems?: Problem[]): SequenceWithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key, required, parentNodeProblems);
+    if (!initial) {
+        return undefined;
+    }
+    const result: SequenceWithNode<T> = {
+        node: initial.node,
+    };
+    if (initial.value === undefined || initial.node.problems.length) {
+        return result;
+    }
+    if (initial.node.kind !== 'sequence') {
+        result.node.problems.push(YAML_PROBLEMS.generic.expectedSequence);
+        return result;
+    }
+    result.elements = (initial.value as WithNode<any>[]).map(x => {
+        if (x.node.kind !== 'map') {
+            x.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+            x.value = undefined;
+        }
+        return x;
+    });
+    return result;
+}
 
-    _optionalArray(doc, result, 'string', 'maintainers', 'maintainers', _METADATA_PROBLEMS.maintainersFieldInvalid, result.problems);
-    _optionalArray(doc, result, 'string', 'terms', 'terms', _METADATA_PROBLEMS.termsFieldInvalid, result.problems);
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+function assignScalarOrArrayOfScalarsFromPair<T>(map: WithNode<any>, key: string, t: SupportedType, required?: boolean, parentNodeProblems?: Problem[]): SequenceWithNode<T> | WithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key, required, parentNodeProblems);
+    if (!initial) {
+        return undefined;
+    }
+    if (initial.value === undefined || initial.node.problems.length) {
+        return {
+            node: initial.node,
+        };
+    }
 
-    _optional(doc, result, 'string', 'docs', 'docs', _METADATA_PROBLEMS.docsFieldInvalid, result.problems);
-    _optional(doc, result, 'boolean', 'subordinate', 'subordinate', _METADATA_PROBLEMS.subordinateFieldInvalid, result.problems);
+    if (initial.node.kind === 'sequence') {
+        return assignArrayOfScalarsFromPair(map, key, t);
+    } else if (initial.node.kind === 'scalar') {
+        return assignScalarFromPair(map, key, t, required, parentNodeProblems);
+    } else {
+        initial.node.problems.push(YAML_PROBLEMS.generic.expectedScalarOrSequence(t));
+        return {
+            node: initial.node,
+        };
+    }
+}
 
-    _optionalAssumes(doc, result, 'assumes', 'assumes', _METADATA_PROBLEMS.assumesFieldInvalid, result.problems);
+function readMap<T>(map: WithNode<any>, cb: ((value: WithNode<any>, key: string, entry: WithNode<T>) => void)): MapWithNode<T> | undefined {
+    const result: MapWithNode<T> = {
+        node: map.node,
+    };
 
-    _optionalEndpoints(doc, result, 'requires', 'requires', _METADATA_PROBLEMS.requiresFieldInvalid, result.problems);
-    _optionalEndpoints(doc, result, 'provides', 'provides', _METADATA_PROBLEMS.providesFieldInvalid, result.problems);
-    _optionalEndpoints(doc, result, 'peers', 'peers', _METADATA_PROBLEMS.peerFieldInvalid, result.problems);
+    if (!map.value || map.node.kind !== 'map') {
+        result.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+        return result;
+    }
 
-    _optionalResources(doc, result, 'resources', 'resources', _METADATA_PROBLEMS.resourcesFieldInvalid, result.problems);
-    _optionalDevices(doc, result, 'devices', 'devices', _METADATA_PROBLEMS.devicesFieldInvalid, result.problems);
-    _optionalStorage(doc, result, 'storage', 'storage', _METADATA_PROBLEMS.storageFieldInvalid, result.problems);
-    _optionalExtraBindings(doc, result, 'extra-bindings', 'extraBindings', _METADATA_PROBLEMS.extraBindingsFieldInvalid, result.problems);
-    _optionalContainers(doc, result, 'containers', 'containers', _METADATA_PROBLEMS.containersFieldInvalid, result.problems);
+    result.entries = {};
+    const m: { [key: string]: WithNode<any> } = map.value;
+    for (const [name, pair] of Object.entries(m)) {
+        const entry: WithNode<T> = {
+            node: pair.node,
+        };
+        result.entries[name] = entry;
+        cb(pair.value, name, entry);
+    }
+    return result;
+}
 
-    result.customFields = Object.fromEntries(Object.entries(doc).filter(([x]) => ![
+function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: string, entry: WithNode<T>) => void)): MapWithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key);
+    if (!initial || initial.value === undefined) {
+        return undefined;
+    }
+    return readMap<T>(initial, (value, key, entry) => {
+        if (value.node.kind !== 'map' || !value.value) {
+            entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+            return;
+        }
+        cb(value, key, entry);
+    });
+}
+
+
+export function parseCharmActionsYAML(text: string): CharmActions {
+    const { tree } = new YAMLParser(text).parse();
+    if (!tree) {
+        return {
+            node: {
+                kind: 'map',
+                problems: [],
+                text,
+                range: new TextPositionMapper(text).all(),
+            }
+        };
+    }
+
+    const result: CharmActions = {
+        node: tree.node,
+    };
+
+    result.actions = readMap(tree, (value, key, entry) => {
+        entry.value = {
+            name: key,
+            symbol: toValidSymbol(key),
+        };
+        if (value.node.kind !== 'map') {
+            entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+            return;
+        }
+        entry.value.description = assignScalarFromPair(value, 'description', 'string');
+    });
+    return result;
+}
+
+export function parseCharmConfigYAML(text: string): CharmConfig {
+    const { tree } = new YAMLParser(text).parse();
+    if (!tree) {
+        return {
+            node: {
+                kind: 'map',
+                problems: [],
+                text,
+                range: new TextPositionMapper(text).all(),
+            }
+        };
+    }
+
+    const result: CharmConfig = {
+        node: tree.node,
+    };
+
+    if (tree.node.kind !== 'map') {
+        result.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+        return result;
+    }
+
+    result.parameters = readMapOfMap(tree, 'options', (map, key, entry) => {
+        entry.value = {
+            name: key,
+            description: assignScalarFromPair(map, 'description', 'string'),
+        };
+
+        entry.value.type = assignStringEnumFromScalarPair(map, 'type', ['string', 'int', 'float', 'boolean'], true, entry.node.problems);
+
+        const defaultValue = assignAnyFromPair(map, 'default');
+        if (defaultValue?.value !== undefined) {
+            entry.value.default = defaultValue;
+            if (entry.value.type?.value !== undefined) {
+                if (
+                    entry.value.type.value === 'string' && typeof entry.value.default.value !== 'string'
+                    || entry.value.type.value === 'boolean' && typeof entry.value.default.value !== 'boolean'
+                    || entry.value.type.value === 'float' && typeof entry.value.default.value !== 'number'
+                    || entry.value.type.value === 'int' && (typeof entry.value.default.value !== 'number' || !Number.isInteger(defaultValue.value))
+                ) {
+                    entry.value.default.value = undefined; // Dropping invalid value.
+                    entry.value.default.node.problems.push(YAML_PROBLEMS.config.wrongDefaultType(entry.value.type.value));
+                }
+            } else {
+                // Parameter has no `type`, so we should check if the default value is not essentially invalid.
+                if (
+                    typeof entry.value.default.value !== 'string'
+                    && typeof entry.value.default.value !== 'boolean'
+                    && typeof entry.value.default.value !== 'number'
+                ) {
+                    entry.value.default.value = undefined; // Dropping invalid value.
+                    entry.value.default.node.problems.push(YAML_PROBLEMS.config.invalidDefault);
+                }
+            }
+        }
+    });
+    return result;
+}
+
+export function parseCharmMetadataYAML(text: string): CharmMetadata {
+    const { tree, plain } = new YAMLParser(text).parse();
+    if (!tree) {
+        return {
+            node: {
+                kind: 'map',
+                problems: [],
+                text,
+                range: new TextPositionMapper(text).all(),
+            }
+        };
+    }
+
+    const result: CharmMetadata = {
+        node: tree.node,
+    };
+
+    if (tree.node.kind !== 'map') {
+        result.node.problems.push(YAML_PROBLEMS.generic.invalidYAML);
+        return result;
+    }
+
+    result.name = assignScalarFromPair(tree, 'name', 'string', true, result.node.problems);
+    result.displayName = assignScalarFromPair(tree, 'display-name', 'string', true, result.node.problems);
+    result.description = assignScalarFromPair(tree, 'description', 'string', true, result.node.problems);
+    result.summary = assignScalarFromPair(tree, 'summary', 'string', true, result.node.problems);
+
+    result.source = assignScalarOrArrayOfScalarsFromPair(tree, 'source', 'string');
+    result.issues = assignScalarOrArrayOfScalarsFromPair(tree, 'issues', 'string');
+    result.website = assignScalarOrArrayOfScalarsFromPair(tree, 'website', 'string');
+
+    result.maintainers = assignArrayOfScalarsFromPair(tree, 'maintainers', 'string');
+    result.terms = assignArrayOfScalarsFromPair(tree, 'terms', 'string');
+
+    result.docs = assignScalarFromPair(tree, 'docs', 'string');
+    result.subordinate = assignScalarFromPair(tree, 'subordinate', 'boolean');
+
+    result.assumes = _assumes(tree, 'assumes');
+
+    result.requires = _endpoints(tree, 'requires');
+    result.provides = _endpoints(tree, 'provides');
+    result.peers = _endpoints(tree, 'peers');
+
+    result.resources = _resources(tree, 'resources');
+    result.devices = _devices(tree, 'devices');
+    result.storage = _storage(tree, 'storage');
+    result.extraBindings = _extraBindings(tree, 'extra-bindings');
+    result.containers = _containers(tree, 'containers');
+
+    result.customFields = Object.fromEntries(Object.entries(plain).filter(([x]) => ![
         'name',
         'display-name',
         'description',
@@ -315,19 +537,30 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
         'containers',
     ].includes(x)));
 
-    if (result.containers) {
-        for (const container of result.containers) {
-            // Checking container resources, if any, are already defined.
-            if (container.resource !== undefined && !result.resources?.find(x => x.name === container.resource)) {
-                container.problems.push(_METADATA_PROBLEMS.integrityContainerResourceUndefined(container.name, container.resource));
+    if (result.containers?.entries) {
+        for (const [, container] of Object.entries(result.containers.entries)) {
+            if (!container.value) {
+                continue;
             }
 
+            // Checking container resources, if any, are already defined.
+            if (container.value.resource?.value !== undefined) {
+                const resource = container.value.resource?.value;
+                if (resource !== undefined) {
+                    if (!Object.values(result.resources?.entries ?? {}).find(v => v.value?.name === resource)) {
+                        container.node.problems.push(YAML_PROBLEMS.metadata.containerResourceUndefined(resource));
+                    } else if (!Object.values(result.resources?.entries ?? {}).find(v => v.value?.name === resource && v.value?.type?.value === 'oci-image')) {
+                        container.node.problems.push(YAML_PROBLEMS.metadata.containerResourceOCIImageExpected(resource));
+                    }
+                }
+            }
             // Checking container mount storages, if any, are already defined.
-            if (container.mounts) {
-                for (let i = 0; i < container.mounts.length; i++) {
-                    const mount = container.mounts[i];
-                    if (!result.storage?.find(x => x.name === mount.storage)) {
-                        container.problems.push(_METADATA_PROBLEMS.integrityContainerMountStorageUndefined(i, mount.storage));
+            if (container.value.mounts?.elements) {
+                for (let i = 0; i < container.value.mounts.elements.length; i++) {
+                    const mount = container.value.mounts.elements[i];
+                    const storage = mount.value?.storage?.value;
+                    if (storage !== undefined && !Object.values(result.storage?.entries ?? {}).find(v => v.value?.name === storage)) {
+                        mount.node.problems.push(YAML_PROBLEMS.metadata.containerMountStorageUndefined(storage));
                     }
                 }
             }
@@ -336,419 +569,225 @@ export function parseCharmMetadataYAML(content: string): CharmMetadata {
 
     return result;
 
-    function _required<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number' | 'int', key: string, mapToKey: keyof T, missing: CharmMetadataProblem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!(key in doc)) {
-            problems.push(missing);
-        } else if (doc[key] !== undefined && doc[key] !== null && doc[key] && t === 'int' && typeof doc[key] === 'number' && Number.isInteger(doc[key])) {
-            (result as any)[mapToKey] = doc[key];
-        } else if (doc[key] === undefined || doc[key] === null || typeof doc[key] !== t) {
-            problems.push(invalid);
-        } else {
-            (result as any)[mapToKey] = doc[key];
-        }
-    }
-
-    function _optional<T>(doc: any, result: T, t: 'boolean' | 'number' | 'string' | 'int', key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!(key in doc)) {
-            return;
-        }
-        if (doc[key] !== undefined && doc[key] !== null && t === 'int' && typeof doc[key] === 'number' && Number.isInteger(doc[key])) {
-            (result as any)[mapToKey] = doc[key];
-        } else if (doc[key] !== undefined && doc[key] !== null && typeof doc[key] === t) {
-            (result as any)[mapToKey] = doc[key];
-        } else {
-            problems.push(invalid);
-        }
-    }
-
-    function _optionalValueOrArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!(key in doc)) {
-            return;
-        }
-        if (doc[key] !== undefined && doc[key] !== null && doc[key] && typeof doc[key] === t) {
-            (result as any)[mapToKey] = doc[key];
-        } else if (doc[key] !== undefined && doc[key] !== null && typeof doc[key] === 'object' && Array.isArray(doc[key]) && (doc[key] as Array<any>).every(x => typeof x === t)) {
-            (result as any)[mapToKey] = doc[key];
-        } else {
-            problems.push(invalid);
-        }
-    }
-
-    function _requiredArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, missing: CharmActionProblem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!(key in doc)) {
-            problems.push(missing);
-        } else {
-            _optionalArray(doc, result, t, key, mapToKey, invalid, problems);
-        }
-    }
-
-    function _optionalArray<T>(doc: any, result: T, t: 'string' | 'boolean' | 'number', key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!(key in doc)) {
-            return;
-        }
-        if (doc[key] !== undefined && doc[key] !== null && typeof doc[key] === 'object' && Array.isArray(doc[key]) && (doc[key] as Array<any>).every(x => typeof x === t)) {
-            (result as any)[mapToKey] = doc[key];
-        } else {
-            problems.push(invalid);
-        }
-    }
-
-    function _optionalStringEnum<T>(doc: any, result: T, enumValues: string[], key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!(key in doc)) {
-            return;
-        }
-        if (typeof doc[key] === 'string' && enumValues.includes(doc[key])) {
-            (result as any)[mapToKey] = doc[key];
-        } else {
-            problems.push(invalid);
-        }
-    }
-
-    function _requiredStringEnum<T>(doc: any, result: T, enumValues: string[], key: string, mapToKey: keyof T, missing: CharmMetadataProblem, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!(key in doc)) {
-            problems.push(missing);
-        } else {
-            _optionalStringEnum(doc, result, enumValues, key, mapToKey, invalid, problems);
-        }
-    }
-
-    function _optionalEndpoints<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!doc[key]) {
-            return;
-        }
-        const map = doc[key];
-        if (!map || typeof map !== 'object' || Array.isArray(map)) {
-            problems.push(invalid);
-            return;
-        }
-
-        const endpoints: CharmEndpoint[] = [];
-        (result as any)[mapToKey] = endpoints;
-
-        for (const [key, value] of Object.entries(map)) {
-            const entry: CharmEndpoint = {
+    function _endpoints(map: WithNode<any>, key: string): MapWithNode<CharmEndpoint> | undefined {
+        return readMapOfMap<CharmEndpoint>(map, key, (map, key, entry) => {
+            entry.value = {
                 name: key,
-                interface: '',
-                problems: [],
+                limit: assignScalarFromPair(map, 'limit', 'integer'),
+                optional: assignScalarFromPair(map, 'optional', 'boolean'),
+                scope: assignStringEnumFromScalarPair(map, 'scope', ['global', 'container']),
             };
-            endpoints.push(entry);
-
-            if (!value || typeof value !== 'object' || Array.isArray(value)) {
-                entry.problems.push(_METADATA_PROBLEMS.endpointEntryInvalid(key));
-                continue;
-            }
-
-            _required(value, entry, 'string', 'interface', 'interface', _METADATA_PROBLEMS.endpointInterfaceFieldMissing(key), _METADATA_PROBLEMS.endpointInterfaceFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'int', 'limit', 'limit', _METADATA_PROBLEMS.endpointLimitFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'boolean', 'optional', 'optional', _METADATA_PROBLEMS.endpointOptionalFieldInvalid(key), entry.problems);
-            _optionalStringEnum(value, entry, ['global', 'container'], 'scope', 'scope', _METADATA_PROBLEMS.endpointScopeFieldInvalid(key), entry.problems);
-        }
+            entry.value.interface = assignScalarFromPair(map, 'interface', 'string', true, entry.node.problems);
+        });
     }
 
-    function _optionalResources<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!doc[key]) {
-            return;
-        }
-        const map = doc[key];
-        if (!map || typeof map !== 'object' || Array.isArray(map)) {
-            problems.push(invalid);
-            return;
-        }
-
-        const resources: CharmResource[] = [];
-        (result as any)[mapToKey] = resources;
-
-        for (const [key, value] of Object.entries(map)) {
-            const entry: CharmResource = {
+    function _resources<T>(map: WithNode<any>, key: string): MapWithNode<CharmResource> | undefined {
+        return readMapOfMap<CharmResource>(map, key, (map, key, entry) => {
+            entry.value = {
                 name: key,
-                type: 'unknown',
-                problems: [],
+                description: assignScalarFromPair(map, 'description', 'string'),
+                filename: assignScalarFromPair(map, 'filename', 'string'),
             };
-            resources.push(entry);
+            entry.value.type = assignStringEnumFromScalarPair(map, 'type', ['file', 'oci-image'], true, entry.node.problems);
 
-            if (!value || typeof value !== 'object' || Array.isArray(value)) {
-                entry.problems.push(_METADATA_PROBLEMS.resourceEntryInvalid(key));
-                continue;
+            if (entry.value.type?.value) {
+                const t = entry.value.type.value;
+                if (t === 'file' && !entry.value.filename) {
+                    entry.node.problems.push(YAML_PROBLEMS.metadata.resourceExpectedFilenameForFileResource);
+                } else if (t !== 'file' && entry.value.filename) {
+                    entry.value.filename.node.problems.push(YAML_PROBLEMS.metadata.resourceUnexpectedFilenameForNonFileResource);
+                }
             }
-
-            _requiredStringEnum(value, entry, ['file', 'oci-image'], 'type', 'type', _METADATA_PROBLEMS.resourceTypeFieldMissing(key), _METADATA_PROBLEMS.resourceTypeFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'string', 'description', 'description', _METADATA_PROBLEMS.resourceDescriptionFieldInvalid(key), entry.problems);
-            if (entry.type === 'file') {
-                _required(value, entry, 'string', 'filename', 'filename', _METADATA_PROBLEMS.resourceFilenameFieldMissing(key), _METADATA_PROBLEMS.resourceFilenameFieldInvalid(key), entry.problems);
-            } else if (entry.type === 'oci-image' && (value as any)['filename'] !== undefined) {
-                entry.problems.push(_METADATA_PROBLEMS.resourceFilenameFieldUnrelated(key));
-            }
-        }
+        });
     }
 
-    function _optionalDevices<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!doc[key]) {
-            return;
-        }
-        const map = doc[key];
-        if (!map || typeof map !== 'object' || Array.isArray(map)) {
-            problems.push(invalid);
-            return;
-        }
-
-        const devices: CharmDevice[] = [];
-        (result as any)[mapToKey] = devices;
-
-        for (const [key, value] of Object.entries(map)) {
-            const entry: CharmDevice = {
+    function _devices(map: WithNode<any>, key: string): MapWithNode<CharmDevice> | undefined {
+        return readMapOfMap<CharmDevice>(map, key, (map, key, entry) => {
+            entry.value = {
                 name: key,
-                type: 'unknown',
-                problems: [],
+                description: assignScalarFromPair(map, 'description', 'string'),
+                countMin: assignScalarFromPair(map, 'countmin', 'integer'),
+                countMax: assignScalarFromPair(map, 'countmax', 'integer'),
             };
-            devices.push(entry);
-
-            if (!value || typeof value !== 'object' || Array.isArray(value)) {
-                entry.problems.push(_METADATA_PROBLEMS.deviceEntryInvalid(key));
-                continue;
-            }
-
-            _requiredStringEnum(value, entry, ['gpu', 'nvidia.com/gpu', 'amd.com/gpu'], 'type', 'type', _METADATA_PROBLEMS.deviceTypeFieldMissing(key), _METADATA_PROBLEMS.deviceTypeFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'string', 'description', 'description', _METADATA_PROBLEMS.deviceDescriptionFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'int', 'countmin', 'countMin', _METADATA_PROBLEMS.deviceCountMinFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'int', 'countmax', 'countMax', _METADATA_PROBLEMS.deviceCountMaxFieldInvalid(key), entry.problems);
-        }
+            entry.value.type = assignStringEnumFromScalarPair(map, 'type', ['gpu', 'nvidia.com/gpu', 'amd.com/gpu'], true, entry.node.problems);
+        });
     }
 
-    function _optionalStorage<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!doc[key]) {
-            return;
-        }
-        const map = doc[key];
-        if (!map || typeof map !== 'object' || Array.isArray(map)) {
-            problems.push(invalid);
-            return;
-        }
-
-        const storages: CharmStorage[] = [];
-        (result as any)[mapToKey] = storages;
-
-        for (const [key, value] of Object.entries(map)) {
-            const entry: CharmStorage = {
+    function _storage(map: WithNode<any>, key: string): MapWithNode<CharmStorage> | undefined {
+        return readMapOfMap<CharmStorage>(map, key, (map, key, entry) => {
+            entry.value = {
                 name: key,
-                type: 'unknown',
-                problems: [],
+                description: assignScalarFromPair(map, 'description', 'string'),
+                location: assignScalarFromPair(map, 'location', 'string'),
+                shared: assignScalarFromPair(map, 'shared', 'boolean'),
+                readOnly: assignScalarFromPair(map, 'read-only', 'boolean'),
             };
-            storages.push(entry);
+            entry.value.type = assignStringEnumFromScalarPair(map, 'type', ['filesystem', 'block'], true, entry.node.problems);
 
-            if (!value || typeof value !== 'object' || Array.isArray(value)) {
-                entry.problems.push(_METADATA_PROBLEMS.storageEntryInvalid(key));
-                continue;
+            entry.value.properties = assignArrayOfScalarsFromPair(map, 'properties', 'string');
+            if (entry.value.properties?.elements) {
+                const supported = ['transient'];
+                for (const e of entry.value.properties.elements) {
+                    if (e.value !== undefined && !supported.includes(e.value)) {
+                        e.node.problems.push(YAML_PROBLEMS.generic.expectedEnumValue(supported));
+                        e.value = undefined;
+                    }
+                }
             }
 
-            _requiredStringEnum(value, entry, ['filesystem', 'block'], 'type', 'type', _METADATA_PROBLEMS.storageTypeFieldMissing(key), _METADATA_PROBLEMS.storageTypeFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'string', 'description', 'description', _METADATA_PROBLEMS.storageDescriptionFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'string', 'location', 'location', _METADATA_PROBLEMS.storageLocationFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'boolean', 'shared', 'shared', _METADATA_PROBLEMS.storageSharedFieldInvalid(key), entry.problems);
-            _optional(value, entry, 'boolean', 'read-only', 'readOnly', _METADATA_PROBLEMS.storageReadOnlyFieldInvalid(key), entry.problems);
+            const multipleAsInt = assignScalarFromPair<number>(map, 'multiple', 'integer');
+            if (multipleAsInt?.value !== undefined) {
+                entry.value.multiple = {
+                    node: multipleAsInt.node,
+                    value: multipleAsInt.value.toString(),
+                };
+            } else {
+                entry.value.multiple = assignScalarFromPair<string>(map, 'multiple', 'string');
+                if (entry.value.multiple?.value !== undefined) {
+                    if (!entry.value.multiple.value.match(/\d+(\+|-)?|\d+-\d+/)) {
+                        entry.value.multiple.node.problems.push(YAML_PROBLEMS.metadata.storageMultipleInvalid);
+                        entry.value.multiple.value = undefined;
+                    }
+                }
+            }
 
-            const v = value as any;
+            const minimumSizeAsInt = assignScalarFromPair<number>(map, 'minimum-size', 'integer');
+            if (minimumSizeAsInt?.value !== undefined) {
+                entry.value.minimumSize = {
+                    node: minimumSizeAsInt.node,
+                    value: minimumSizeAsInt.value.toString(),
+                };
+            } else {
+                entry.value.minimumSize = assignScalarFromPair<string>(map, 'minimum-size', 'string');
+                if (entry.value.minimumSize?.value !== undefined) {
+                    if (!entry.value.minimumSize.value.match(/\d+[MGTPEZY]?/)) {
+                        entry.value.minimumSize.node.problems.push(YAML_PROBLEMS.metadata.storageMinimumSizeInvalid);
+                        entry.value.minimumSize.value = undefined;
+                    }
+                }
+            }
+        });
+    }
 
-            if (v['properties']) {
-                const props = v['properties'];
-                if (!props || typeof props !== 'object' || !Array.isArray(props) || !props.every(x => typeof x === 'string' && ['transient'].includes(x))) {
-                    entry.problems.push(_METADATA_PROBLEMS.storagePropertiesFieldInvalid(key));
+    function _extraBindings(map: WithNode<any>, key: string): MapWithNode<CharmExtraBinding> | undefined {
+        const initial = assignAnyFromPair(map, key);
+        if (!initial || initial.value === undefined) {
+            return undefined;
+        }
+        return readMap<CharmExtraBinding>(initial, (value, key, entry) => {
+            entry.value = {
+                name: key,
+            };
+            if (value.value !== null) {
+                entry.node.problems.push(YAML_PROBLEMS.generic.expectedNull);
+            }
+        });
+    }
+
+    function _containers(map: WithNode<any>, key: string): MapWithNode<CharmContainer> | undefined {
+        return readMapOfMap<CharmContainer>(map, key, (map, key, entry) => {
+            entry.value = {
+                name: key,
+                resource: assignScalarFromPair(map, 'resource', 'string'),
+            };
+
+            entry.value.bases = assignArrayOfMapsFromPair(map, 'bases');
+            const bases = entry.value.bases;
+            if (bases?.elements) {
+                entry.value.bases = {
+                    node: bases.node,
+                    elements: bases.elements.map(e => ({
+                        node: e.node,
+                        value: e.value === undefined ? undefined : ((e: WithNode<any>) => {
+                            const result: CharmContainerBase = {
+                                architectures: assignArrayOfScalarsFromPair(e, 'architectures', 'string'),
+                            };
+                            result.name = assignScalarFromPair(e, 'name', 'string', true, e.node.problems);
+                            result.channel = assignScalarFromPair(e, 'channel', 'string', true, e.node.problems);
+                            return result;
+                        })(e),
+                    })),
+                };
+            }
+
+            if (entry.value.resource === undefined && entry.value.bases === undefined) {
+                entry.node.problems.push(YAML_PROBLEMS.metadata.containerExpectedResourceOrBases);
+            } else if (entry.value.resource !== undefined && entry.value.bases !== undefined) {
+                entry.node.problems.push(YAML_PROBLEMS.metadata.containerExpectedOnlyResourceOrBases);
+            }
+
+            entry.value.mounts = assignArrayOfMapsFromPair(map, 'mounts');
+            const mounts = entry.value.mounts;
+            if (mounts?.elements) {
+                entry.value.mounts = {
+                    node: mounts.node,
+                    elements: mounts.elements.map(e => ({
+                        node: e.node,
+                        value: e.value === undefined ? undefined : ((e: WithNode<any>) => {
+                            const result: CharmContainerMount = {
+                                location: assignScalarFromPair(e, 'location', 'string'),
+                            };
+                            result.storage = assignScalarFromPair(e, 'storage', 'string', true, e.node.problems);
+                            return result;
+                        })(e),
+                    })),
+                };
+            }
+        });
+    }
+
+    function _assumes(map: WithNode<any>, key: string): SequenceWithNode<CharmAssumption> | undefined {
+        const initial = assignAnyFromPair(map, key);
+        if (!initial || initial.value === undefined) {
+            return undefined;
+        }
+        const result: SequenceWithNode<CharmAssumption> = {
+            node: initial.node,
+        };
+
+        if (!initial.value || initial.node.kind !== 'sequence') {
+            result.node.problems.push(YAML_PROBLEMS.generic.expectedSequence);
+            return result;
+        }
+
+        result.elements = [];
+        const sequence: WithNode<any>[] = initial.value;
+        for (let i = 0; i < sequence.length; i++) {
+            const element = sequence[i];
+            const entry: WithNode<CharmAssumption> = {
+                node: element.node,
+            };
+            result.elements.push(entry);
+
+            if (element.value !== undefined && element.node.kind === 'scalar' && typeof element.value === 'string') {
+                // TODO check for value format.
+                entry.value = {
+                    single: {
+                        node: element.node,
+                        value: element.value,
+                    },
+                };
+            } else if (element.value !== undefined && element.node.kind === 'map') {
+                const map = element;
+                const keys = Object.keys(map.value);
+                if (keys.length === 1 && keys[0] === 'all-of') {
+                    // TODO check for value format.
+                    entry.value = {
+                        allOf: assignArrayOfScalarsFromPair<string>(map, 'all-of', 'string'),
+                    };
+                } else if (keys.length === 1 && keys[0] === 'any-of') {
+                    // TODO check for value format.
+                    entry.value = {
+                        anyOf: assignArrayOfScalarsFromPair<string>(map, 'any-of', 'string'),
+                    };
                 } else {
-                    entry.properties = props;
-                }
-            }
-
-            if (v['multiple']) {
-                const multiple = v['multiple'];
-                if (multiple !== undefined && multiple !== null) {
-                    if (typeof multiple === 'number' && Number.isInteger(multiple)) {
-                        entry.multiple = multiple.toString();
-                    } else if (typeof multiple === 'string' && multiple.match(/\d+(\+|-)?|\d+-\d+/)) {
-                        entry.multiple = multiple;
-                    } else {
-                        entry.problems.push(_METADATA_PROBLEMS.storageMultipleFieldInvalid(key));
-                    }
-                } else {
-                    entry.problems.push(_METADATA_PROBLEMS.storageMultipleFieldInvalid(key));
-                }
-            }
-
-            if (v['minimum-size']) {
-                const minimumSize = v['minimum-size'];
-                if (minimumSize !== undefined && minimumSize !== null) {
-                    if (typeof minimumSize === 'number' && Number.isInteger(minimumSize)) {
-                        entry.minimumSize = minimumSize.toString();
-                    } else if (typeof minimumSize === 'string' && minimumSize.match(/\d+[MGTPEZY]?/)) {
-                        entry.minimumSize = minimumSize;
-                    } else {
-                        entry.problems.push(_METADATA_PROBLEMS.storageMinimumSizeFieldInvalid(key));
-                    }
-                } else {
-                    entry.problems.push(_METADATA_PROBLEMS.storageMinimumSizeFieldInvalid(key));
-                }
-            }
-        }
-    }
-
-    function _optionalExtraBindings<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!doc[key]) {
-            return;
-        }
-        const map = doc[key];
-        if (!map || typeof map !== 'object' || Array.isArray(map)) {
-            problems.push(invalid);
-            return;
-        }
-
-        const extraBindings: CharmExtraBinding[] = [];
-        (result as any)[mapToKey] = extraBindings;
-
-        for (const [key, value] of Object.entries(map)) {
-            const entry: CharmExtraBinding = {
-                name: key,
-                problems: [],
-            };
-            extraBindings.push(entry);
-
-            if (value !== null) {
-                entry.problems.push(_METADATA_PROBLEMS.extraBindingEntryInvalid(key));
-                continue;
-            }
-        }
-    }
-
-    function _optionalContainers<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!doc[key]) {
-            return;
-        }
-        const map = doc[key];
-        if (!map || typeof map !== 'object' || Array.isArray(map)) {
-            problems.push(invalid);
-            return;
-        }
-
-        const containers: CharmContainer[] = [];
-        (result as any)[mapToKey] = containers;
-
-        for (const [key, value] of Object.entries(map)) {
-            const entry: CharmContainer = {
-                name: key,
-                problems: [],
-            };
-            containers.push(entry);
-
-            if (!value || typeof value !== 'object' || Array.isArray(value)) {
-                entry.problems.push(_METADATA_PROBLEMS.containerEntryInvalid(key));
-                continue;
-            }
-
-            _optional(value, entry, 'string', 'resource', 'resource', _METADATA_PROBLEMS.containerResourceFieldInvalid(key), entry.problems);
-
-            const v = value as any;
-
-            if ('bases' in v) {
-                const bases = v['bases'];
-                if (bases !== undefined && bases !== null && typeof bases === 'object' && Array.isArray(bases)) {
-                    entry.bases = [];
-                    for (let i = 0; i < bases.length; i++) {
-                        const b = bases[i];
-                        const e: CharmContainerBase = {
-                            name: '',
-                            channel: '',
-                            architectures: [],
-                            problems: [],
-                        };
-                        entry.bases.push(e);
-
-                        _required(b, e, 'string', 'name', 'name', _METADATA_PROBLEMS.containerBaseNameFieldMissing(i), _METADATA_PROBLEMS.containerBaseNameFieldInvalid(i), e.problems);
-                        _required(b, e, 'string', 'channel', 'channel', _METADATA_PROBLEMS.containerBaseChannelFieldMissing(i), _METADATA_PROBLEMS.containerBaseChannelFieldInvalid(i), e.problems);
-                        _requiredArray(b, e, 'string', 'architectures', 'architectures', _METADATA_PROBLEMS.containerBaseArchitecturesFieldMissing(i), _METADATA_PROBLEMS.containerBaseArchitecturesFieldInvalid(i), e.problems);
-                    }
-                } else {
-                    entry.problems.push(_METADATA_PROBLEMS.containerBasesFieldInvalid(key));
-                }
-            }
-
-            if (entry.resource === undefined && entry.bases === undefined) {
-                entry.problems.push(_METADATA_PROBLEMS.containerMissingResourceAndBases(key));
-            } else if (entry.resource !== undefined && entry.bases !== undefined) {
-                entry.problems.push(_METADATA_PROBLEMS.containerOnlyResourceOrBases(key));
-            }
-
-            if ('mounts' in v) {
-                const mounts = v['mounts'];
-                if (mounts !== undefined && mounts !== null && typeof mounts === 'object' && Array.isArray(mounts)) {
-                    entry.mounts = [];
-                    for (let i = 0; i < mounts.length; i++) {
-                        const m = mounts[i];
-                        const e: CharmContainerMount = {
-                            storage: '',
-                            problems: [],
-                        };
-                        entry.mounts.push(e);
-
-                        _required(m, e, 'string', 'storage', 'storage', _METADATA_PROBLEMS.containerMountStorageFieldMissing(i), _METADATA_PROBLEMS.containerMountStorageFieldInvalid(i), e.problems);
-                        _optional(m, e, 'string', 'location', 'location', _METADATA_PROBLEMS.containerMountLocationFieldInvalid(i), e.problems);
-                    }
-                } else {
-                    entry.problems.push(_METADATA_PROBLEMS.containerMountsFieldInvalid(key));
-                }
-            }
-        }
-    }
-
-    function _optionalAssumes<T>(doc: any, result: T, key: string, mapToKey: keyof T, invalid: CharmMetadataProblem, problems: CharmMetadataProblem[]) {
-        if (!doc[key]) {
-            return;
-        }
-        const ls = doc[key];
-        if (!ls || typeof ls !== 'object' || !Array.isArray(ls)) {
-            problems.push(invalid);
-            return;
-        }
-
-        const assumptions: CharmAssumptions = { problems: [] };
-        (result as any)[mapToKey] = assumptions;
-
-        for (let i = 0; i < ls.length; i++) {
-            const element = ls[i];
-
-            if (element !== undefined && element !== null && typeof element === 'string') {
-                if (!assumptions.singles) {
-                    assumptions.singles = [];
-                }
-                assumptions.singles.push(element);
-            } else if (element && typeof element === 'object' && !Array.isArray(element)) {
-                if ('all-of' in element) {
-                    if (assumptions.allOf) {
-                        assumptions.problems.push(_METADATA_PROBLEMS.assumesAllOfMultipleUsage(i));
-                    } else {
-                        const allOf = element['all-of'];
-                        if (Object.keys(element).length !== 1) {
-                            assumptions.problems.push(_METADATA_PROBLEMS.assumesEntryExtraFields(i));
-                        } else if (allOf && typeof allOf === 'object' && Array.isArray(allOf) && allOf.every(x => typeof x === 'string')) {
-                            assumptions.allOf = allOf;
-                        } else {
-                            assumptions.problems.push(_METADATA_PROBLEMS.assumesAllOfInvalid(i));
-                        }
-                    }
-                } else if ('any-of' in element) {
-                    if (assumptions.anyOf) {
-                        assumptions.problems.push(_METADATA_PROBLEMS.assumesAnyOfMultipleUsage(i));
-                    } else {
-                        const anyOf = element['any-of'];
-                        if (Object.keys(element).length !== 1) {
-                            assumptions.problems.push(_METADATA_PROBLEMS.assumesEntryExtraFields(i));
-                        } else if (anyOf && typeof anyOf === 'object' && Array.isArray(anyOf) && anyOf.every(x => typeof x === 'string')) {
-                            assumptions.anyOf = anyOf;
-                        } else {
-                            assumptions.problems.push(_METADATA_PROBLEMS.assumesAnyOfInvalid(i));
-                        }
-                    }
+                    entry.node.problems.push(YAML_PROBLEMS.metadata.assumptionExpectedAnyOfOrAllOf);
                 }
             } else {
-                assumptions.problems.push(_METADATA_PROBLEMS.assumesEntryInvalid(i));
+                entry.node.problems.push(YAML_PROBLEMS.metadata.assumptionExpected);
             }
         }
+        return result;
     }
 }
 

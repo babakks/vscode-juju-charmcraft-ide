@@ -1,5 +1,4 @@
-import * as vscode from 'vscode';
-import { Disposable, EventEmitter, OutputChannel, Uri } from 'vscode';
+import { Disposable, EventEmitter, OutputChannel, Uri, DiagnosticCollection, CancellationToken, workspace, FileType } from 'vscode';
 import * as constant from './model/common';
 import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
 import { WorkspaceCharm } from './workspace';
@@ -15,7 +14,7 @@ export class Registry implements Disposable {
     private readonly _onChanged = new EventEmitter<void>();
     readonly onChanged = this._onChanged.event;
 
-    constructor(readonly output: OutputChannel) { }
+    constructor(readonly output: OutputChannel, readonly diagnostics: DiagnosticCollection) { }
 
     dispose() {
         this._onChanged.dispose();
@@ -100,7 +99,7 @@ export class Registry implements Disposable {
     }
 
     private _instantiateCharm(home: Uri): WorkspaceCharm {
-        const charm = new WorkspaceCharm(home, this.output);
+        const charm = new WorkspaceCharm(home, this.output, this.diagnostics);
         this._disposablesPerCharm.set(charm, []);
         return charm;
     }
@@ -108,12 +107,12 @@ export class Registry implements Disposable {
 
 const GLOB_METADATA = `**/${CHARM_FILE_METADATA_YAML}}`;
 
-export async function findCharms(token?: vscode.CancellationToken): Promise<vscode.Uri[]> {
-    const matches = await vscode.workspace.findFiles(GLOB_METADATA, undefined, undefined, token);
-    const result: vscode.Uri[] = [];
+export async function findCharms(token?: CancellationToken): Promise<Uri[]> {
+    const matches = await workspace.findFiles(GLOB_METADATA, undefined, undefined, token);
+    const result: Uri[] = [];
     await Promise.allSettled(
         matches.map(async uri => {
-            const parent = vscode.Uri.joinPath(uri, '..');
+            const parent = Uri.joinPath(uri, '..');
             if (await isCharmDirectory(parent)) {
                 result.push(parent);
             }
@@ -122,9 +121,9 @@ export async function findCharms(token?: vscode.CancellationToken): Promise<vsco
     return result;
 }
 
-async function isCharmDirectory(uri: vscode.Uri): Promise<boolean> {
+async function isCharmDirectory(uri: Uri): Promise<boolean> {
     return (await Promise.allSettled([
-        vscode.workspace.fs.stat(vscode.Uri.joinPath(uri, CHARM_FILE_CHARMCRAFT_YAML)),
-        vscode.workspace.fs.stat(vscode.Uri.joinPath(uri, CHARM_FILE_METADATA_YAML)),
-    ])).every(x => x.status === 'fulfilled' && x.value.type === vscode.FileType.File);
+        workspace.fs.stat(Uri.joinPath(uri, CHARM_FILE_CHARMCRAFT_YAML)),
+        workspace.fs.stat(Uri.joinPath(uri, CHARM_FILE_METADATA_YAML)),
+    ])).every(x => x.status === 'fulfilled' && x.value.type === FileType.File);
 }

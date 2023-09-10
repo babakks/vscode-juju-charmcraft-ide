@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/schema",
-    "$id": "charms://schema/config.json",
+    "$id": "charmcraft://schema/config.json",
     "$defs": {},
     "properties": {
         "options": {

@@ -7,147 +7,199 @@ import {
     toValidSymbol
 } from "./common";
 
+export const YAML_PROBLEMS = {
+    /**
+     * Generic YAML file problems.
+     */
+    generic: {
+        invalidYAML: { id: 'invalidYAML', message: "Invalid YAML file." },
+        missingField: (key: string) => ({ id: 'missingField', key, message: `Missing \`${key}\` field.` }),
+        unexpectedScalarType: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'unexpectedScalarType', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
+        expectedSequenceOfScalars: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'expectedSequenceOfScalars', expected, message: `Must be a sequence of ${expected} values.` }),
+        expectedScalarOrSequence: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'expectedScalarOrSequence', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected} or a sequence of them.` }),
+        expectedMap: { id: 'expectedMap', message: `Must be a map.` },
+        expectedSequence: { id: 'expectedSequence', message: `Must be a sequence.` },
+        expectedEnumValue: (expected: string[]) => ({ id: 'expectedEnumValue', expected, message: `Must be one of the following: ${expected.join(', ')}.` }),
+        expectedNull: { id: 'expectedNull', message: 'Must be null' },
+    },
+    /**
+     * Problems specific to `config.yaml`.
+     */
+    config: {
+        /**
+        * Occurs when the `default` field is assigned with a wrong type of value (e.g., object or array) and also the `type`
+        * field (to pinpoint the type of the default value) is missing,
+         */
+        invalidDefault: { id: 'invalidDefault', message: `Default value must have a valid type; boolean, string, integer, or float.` },
+        wrongDefaultType: (expected: CharmConfigParameterType) => ({ id: 'wrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
+    },
+    /**
+     * Problems specific to `metadata.yaml`.
+     */
+    metadata: {
+        assumptionExpectedAnyOfOrAllOf: { id: 'assumptionExpectedAnyOfOrAllOf', message: `Must include only one of \`any-of\` or \`all-of\` keys.` },
+        assumptionExpected: { id: 'assumptionExpected', message: 'Expected a string entry or a map with only \`any-of\` or \`all-of\` keys.' },
+        resourceExpectedFilenameForFileResource: { id: 'resourceExpectedFilenameForFileResource', message: `Field \`filename\` is required since resource type is \`file\`.` },
+        resourceUnexpectedFilenameForNonFileResource: { id: 'resourceUnexpectedFilenameForNonFileResource', message: `Field \`filename\` must be assigned only if resource type is \`file\`.` },
+        storageMultipleInvalid: { id: 'storageMultipleInvalid', message: `Should be one of \`n\`, \`n+\`, \`n-\`, or \`n-m\`, where \`n\` and \`m\` are integers.` },
+        storageMinimumSizeInvalid: { id: 'storageMinimumSizeInvalid', message: `Should be either of \`n\` or \`nM\`, where \`n\` is an integer and M is a one of M, G, T, P, E, Z or Y.` },
+        containerExpectedResourceOrBases: { id: 'containerExpectedResourceOrBases', message: `One of \`resource\` or \`bases\` fields must be assigned.` },
+        containerExpectedOnlyResourceOrBases: { id: 'containerExpectedOnlyResourceOrBases', message: `Only one of \`resource\` or \`bases\` fields must be assigned.` },
+        containerResourceUndefined: (expectedResource: string) => ({ id: 'containerResourceUndefined', expectedResource, message: `Container resource \`${expectedResource}\` is not defined.` }),
+        containerResourceOCIImageExpected: (expectedResource: string) => ({ id: 'containerResourceOCIImageExpected', expectedResource, message: `Container resource \`${expectedResource}\` is not of type \`oci-image\`.` }),
+        containerMountStorageUndefined: (expectedStorage: string) => ({ id: 'containerMountStorageUndefined', expectedStorage, message: `Container mount storage \`${expectedStorage}\` is not defined.` }),
+    },
+} satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
+
 export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
 export function isConfigParameterType(value: string): value is CharmConfigParameterType {
     return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
 }
 
+type AttachedNode = {
+    /**
+     * If the field/value was not found, this will be missing/`undefined`.
+     */
+    node: YAMLNode;
+};
+
+export type WithNode<T> = AttachedNode & {
+    value?: T;
+};
+
+export type SequenceWithNode<T> = AttachedNode & {
+    elements?: WithNode<T>[];
+};
+
+export type MapWithNode<T> = AttachedNode & {
+    entries?: { [key: string]: WithNode<T> };
+};
+
 export interface CharmConfigParameter {
     name: string;
-    type?: CharmConfigParameterType;
-    description?: string;
-    default?: string | number | boolean;
-    problems: CharmConfigParameterProblem[];
-}
-
-export interface CharmConfigParameterProblem {
-    message: string;
-    parameter?: string;
+    type?: WithNode<CharmConfigParameterType>;
+    description?: WithNode<string>;
+    default?: WithNode<string | number | boolean>;
 }
 
 export interface CharmConfig {
-    parameters: CharmConfigParameter[];
-    problems: CharmConfigParameterProblem[];
+    parameters?: MapWithNode<CharmConfigParameter>;
+    /**
+     * Root node.
+     */
+    node: YAMLNode;
 }
 
 export type CharmEndpointScope = 'global' | 'container';
 
 export interface CharmEndpoint {
     name: string;
-    interface: string;
-    limit?: number;
-    optional?: boolean;
-    scope?: CharmEndpointScope;
-    problems: CharmMetadataProblem[];
+    interface?: WithNode<string>;
+    limit?: WithNode<number>;
+    optional?: WithNode<boolean>;
+    scope?: WithNode<CharmEndpointScope>;
 }
 
-export type CharmResourceType = 'file' | 'oci-image' | 'unknown';
+export type CharmResourceType = 'file' | 'oci-image';
 
 export interface CharmResource {
     name: string;
-    type: CharmResourceType;
-    description?: string;
-    filename?: string;
-    problems: CharmMetadataProblem[];
+    type?: WithNode<CharmResourceType>;
+    description?: WithNode<string>;
+    filename?: WithNode<string>;
 }
 
+export type CharmDeviceType = 'gpu' | 'nvidia.com/gpu' | 'amd.com/gpu';
 
-export type CharmDeviceType = 'gpu' | 'nvidia.com/gpu' | 'amd.com/gpu' | 'unknown';
 export interface CharmDevice {
     name: string;
-    type: CharmDeviceType;
-    description?: string;
-    countMin?: number;
-    countMax?: number;
-    problems: CharmMetadataProblem[];
+    type?: WithNode<CharmDeviceType>;
+    description?: WithNode<string>;
+    countMin?: WithNode<number>;
+    countMax?: WithNode<number>;
 }
 
-export type CharmStorageType = 'filesystem' | 'block' | 'unknown';
+export type CharmStorageType = 'filesystem' | 'block';
 
-export type CharmStorageProperty = 'transient' | 'unknown';
+export type CharmStorageProperty = 'transient';
 
 export interface CharmStorage {
     name: string;
-    type: CharmStorageType;
-    description?: string;
-    location?: string;
-    shared?: boolean;
-    readOnly?: boolean;
-    multiple?: string;
-    minimumSize?: string;
-    properties?: CharmStorageProperty[];
-    problems: CharmMetadataProblem[];
+    type?: WithNode<CharmStorageType>;
+    description?: WithNode<string>;
+    location?: WithNode<string>;
+    shared?: WithNode<boolean>;
+    readOnly?: WithNode<boolean>;
+    multiple?: WithNode<string>;
+    minimumSize?: WithNode<string>;
+    properties?: SequenceWithNode<CharmStorageProperty>;
 }
 
 export interface CharmExtraBinding {
     name: string;
-    problems: CharmMetadataProblem[];
 }
 
 export interface CharmContainerBase {
-    name: string;
-    channel: string;
-    architectures: string[];
-    problems: CharmMetadataProblem[];
+    name?: WithNode<string>;
+    channel?: WithNode<string>;
+    architectures?: SequenceWithNode<string>;
 }
 
 export interface CharmContainerMount {
-    storage: string;
-    location?: string;
-    problems: CharmMetadataProblem[];
+    storage?: WithNode<string>;
+    location?: WithNode<string>;
 }
 
 export interface CharmContainer {
     name: string;
-    resource?: string;
-    bases?: CharmContainerBase[];
-    mounts?: CharmContainerMount[];
-    problems: CharmMetadataProblem[];
+    resource?: WithNode<string>;
+    bases?: SequenceWithNode<CharmContainerBase>;
+    mounts?: SequenceWithNode<CharmContainerMount>;
 }
 
-export interface CharmAssumptions {
-    singles?: string[];
-    allOf?: string[];
-    anyOf?: string[];
-    problems: CharmMetadataProblem[];
-}
-
-export interface CharmMetadataProblem {
-    message: string;
-    key?: string;
-    index?: number;
+export interface CharmAssumption {
+    single?: WithNode<string>;
+    allOf?: SequenceWithNode<string>;
+    anyOf?: SequenceWithNode<string>;
 }
 
 export interface CharmMetadata {
-    name: string;
-    displayName: string
-    description: string
-    summary: string;
-    source?: string | string[];
-    issues?: string | string[];
-    website?: string | string[];
-    maintainers?: string[];
-    terms?: string[];
-    docs?: string;
-    subordinate?: boolean;
-    requires?: CharmEndpoint[];
-    provides?: CharmEndpoint[];
-    peers?: CharmEndpoint[];
-    resources?: CharmResource[];
-    devices?: CharmDevice[];
-    storage?: CharmStorage[];
-    extraBindings?: CharmExtraBinding[];
-    containers?: CharmContainer[];
-    assumes?: CharmAssumptions;
-    customFields: { [key: string]: any };
-    problems: CharmMetadataProblem[];
+    name?: WithNode<string>;
+    displayName?: WithNode<string>;
+    description?: WithNode<string>;
+    summary?: WithNode<string>;
+    source?: WithNode<string> | SequenceWithNode<string>;
+    issues?: WithNode<string> | SequenceWithNode<string>;
+    website?: WithNode<string> | SequenceWithNode<string>;
+    maintainers?: SequenceWithNode<string>;
+    terms?: SequenceWithNode<string>;
+    docs?: WithNode<string>;
+    subordinate?: WithNode<boolean>;
+    requires?: MapWithNode<CharmEndpoint>;
+    provides?: MapWithNode<CharmEndpoint>;
+    peers?: MapWithNode<CharmEndpoint>;
+    resources?: MapWithNode<CharmResource>;
+    devices?: MapWithNode<CharmDevice>;
+    storage?: MapWithNode<CharmStorage>;
+    extraBindings?: MapWithNode<CharmExtraBinding>;
+    containers?: MapWithNode<CharmContainer>;
+    assumes?: SequenceWithNode<CharmAssumption>;
+    customFields?: { [key: string]: any };
+    /**
+     * Root node.
+     */
+    node: YAMLNode;
 }
 
 export type CharmEventSource = 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides' | 'storage' | 'container' | 'action' | 'built-in';
 
 export interface CharmEvent {
     name: string;
-    source: CharmEventSource,
+    source: CharmEventSource;
+    /**
+     * Name of the action, if the source of this event is an action. 
+     */
+    sourceActionName?: string;
     symbol: string;
     preferredHandlerSymbol: string;
     description?: string;
@@ -156,18 +208,46 @@ export interface CharmEvent {
 export interface CharmAction {
     name: string;
     symbol: string;
-    description?: string;
-    problems: CharmActionProblem[];
-}
-
-export interface CharmActionProblem {
-    message: string;
-    action?: string;
+    description?: WithNode<string>;
 }
 
 export interface CharmActions {
-    actions: CharmAction[];
-    problems: CharmActionProblem[];
+    actions?: MapWithNode<CharmAction>;
+    /**
+     * Root node.
+     */
+    node: YAMLNode;
+}
+
+export interface YAMLNode {
+    kind?: 'map' | 'sequence' | 'pair' | 'scalar';
+    range?: Range;
+    pairKeyRange?: Range;
+    pairValueRange?: Range;
+    problems: Problem[];
+    /**
+     * Raw node returned by the underlying YAML parser/tokenizer library.
+     */
+    raw?: any;
+    /**
+     * Raw text content, corresponding to the {@link range `range`} property.
+     */
+    text: string;
+    pairText?: string;
+}
+
+export interface Problem {
+    message: string;
+    /**
+     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
+     */
+    id?: string;
+    key?: string;
+    index?: number;
+    /**
+     * Supplementary data for further usage (e.g., when providing fix suggestions). 
+     */
+    [key: string]: any;
 }
 
 export class CharmSourceCodeFile {
@@ -577,6 +657,13 @@ export function getTextOverRange(lines: string[], range: Range): string {
     const portion = lines.slice(start.line, 1 + end.line);
     portion[-1 + portion.length] = portion[-1 + portion.length].substring(0, end.character);
     portion[0] = portion[0].substring(start.character);
+
+    if (portion[-1 + portion.length] === '') {
+        portion.pop();
+    }
+    if (portion[0] === '') {
+        portion.splice(0, 1);
+    }
     return portion.join('\n');
 }
 
@@ -715,40 +802,42 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
             source: 'action',
             name: `${action.name}-action`,
             symbol: `${action.symbol}_action`,
+            sourceActionName: action.name,
             preferredHandlerSymbol: `_on_${action.symbol}_action`,
-            description: (action.description ? action.description + '\n\n' : '') + `Fired when \`${action.name}\` action is called.`,
+            description: (action.description?.value !== undefined ? action.description.value + '\n\n' : '') + `Fired when \`${action.name}\` action is called.`,
         }
     ];
 };
 
+export function emptyYAMLNode(): YAMLNode {
+    return {
+        text: '',
+        raw: {},
+        problems: [],
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    };
+}
+
 export function emptyActions(): CharmActions {
     return {
-        actions: [],
-        problems: []
+        node: emptyYAMLNode(),
     };
 }
 
 export function emptyConfig(): CharmConfig {
     return {
-        parameters: [],
-        problems: []
+        node: emptyYAMLNode(),
     };
 }
 
 export function emptyMetadata(): CharmMetadata {
     return {
-        name: '',
-        description: '',
-        displayName: '',
-        summary: '',
-        customFields: {},
-        problems: [],
+        node: emptyYAMLNode(),
     };
 }
 
 export class Charm {
     private _config: CharmConfig = emptyConfig();
-    private _configMap = new Map<string, CharmConfigParameter>();
 
     private _eventSymbolMap = new Map<string, CharmEvent>();
     private _actions: CharmActions = emptyActions();
@@ -763,8 +852,8 @@ export class Charm {
         return this._config;
     }
 
-    getConfigParameterByName(name: string): CharmConfigParameter | undefined {
-        return this._configMap.get(name);
+    get actions(): CharmActions {
+        return this._actions;
     }
 
     get events(): CharmEvent[] {
@@ -790,10 +879,6 @@ export class Charm {
 
     async updateConfig(config: CharmConfig) {
         this._config = config;
-        this._configMap.clear();
-        for (const p of this._config.parameters) {
-            this._configMap.set(p.name, p);
-        }
     }
 
     async updateMetadata(metadata: CharmMetadata) {
@@ -809,12 +894,12 @@ export class Charm {
         this._events = [
             ...Array.from(CHARM_LIFECYCLE_EVENTS),
             ...Array.from(CHARM_SECRET_EVENTS),
-            ...this._actions.actions.map(action => CHARM_ACTION_EVENT_TEMPLATE(action)).flat(1),
-            ...this._metadata.storage?.map(storage => CHARM_STORAGE_EVENTS_TEMPLATE(storage)).flat(1) ?? [],
-            ...this._metadata.containers?.map(container => CHARM_CONTAINER_EVENTS_TEMPLATE(container)).flat(1) ?? [],
-            ...this._metadata.peers?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/peer')).flat(1) ?? [],
-            ...this._metadata.provides?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/provides')).flat(1) ?? [],
-            ...this._metadata.requires?.map(endpoint => CHARM_RELATION_EVENTS_TEMPLATE(endpoint, 'endpoints/requires')).flat(1) ?? [],
+            ...Object.entries(this._actions.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => CHARM_ACTION_EVENT_TEMPLATE(action.value!)).flat(1),
+            ...Object.entries(this._metadata.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => CHARM_STORAGE_EVENTS_TEMPLATE(storage.value!)).flat(1),
+            ...Object.entries(this._metadata.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => CHARM_CONTAINER_EVENTS_TEMPLATE(container.value!)).flat(1),
+            ...Object.entries(this._metadata.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/peer')).flat(1),
+            ...Object.entries(this._metadata.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/provides')).flat(1),
+            ...Object.entries(this._metadata.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/requires')).flat(1),
         ];
 
         this._eventSymbolMap.clear();

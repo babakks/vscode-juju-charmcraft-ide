@@ -29,7 +29,7 @@ export class DocumentWatcher implements Disposable {
         this._dirties.clear();
         this._listeners.push(
             vscode.workspace.onDidChangeTextDocument(e => this._dirties.set(e.document.uri.path, e.document.uri)),
-            vscode.workspace.onDidCloseTextDocument(e => this._dirties.delete(e.uri.path)),
+            vscode.workspace.onDidCloseTextDocument(e => this._dirties.set(e.uri.path, e.uri)),
             vscode.workspace.onDidOpenTextDocument(e => this._dirties.set(e.uri.path, e.uri)),
         );
         // To capture already-opened documents (e.g., at startup).
@@ -59,7 +59,7 @@ export class DocumentWatcher implements Disposable {
             const keys = dirtyKeys.filter(x => x.startsWith(home));
             for (const k of keys) {
                 const uri = dirties.get(k)!;
-                charm.updateLiveSourceCodeFile(uri).then(() => {
+                charm.updateLiveFile(uri).then(() => {
                     // nop
                 });
             }

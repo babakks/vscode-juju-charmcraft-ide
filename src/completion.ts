@@ -31,15 +31,14 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
             return;
         }
 
-        if (!workspaceCharm.model.src.isMain(relativeSourcePath)) {
+        if (!workspaceCharm.live.src.isMain(relativeSourcePath)) {
             return;
         }
 
-        const file = workspaceCharm.getLatestCachedLiveSourceCodeFile(document.uri);
+        const file = workspaceCharm.live.src.getFile(relativeSourcePath);
         if (!file) {
             return;
         }
-
 
         if (!file.analyzer.mainCharmClass) {
             return;
@@ -75,7 +74,11 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         const needsCloseQuote = openQuote && !trailingText.startsWith(openQuote);
 
         const result: CompletionItem[] = [];
-        for (const p of workspaceCharm.model.config.parameters) {
+        for (const [, v] of Object.entries(workspaceCharm.live.config.parameters?.entries ?? {})) {
+            if (!v.value) {
+                continue;
+            }
+            const p = v.value;
             const completion: CompletionItem = {
                 label: p.name,
                 sortText: "0",
@@ -105,17 +108,19 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     // }
 
     getParameterDefaultValueAsString(param: CharmConfigParameter): string {
-        switch (param.type) {
-            case undefined:
-                return '""';
+        if (!param.type?.value) {
+            return '""';
+        }
+        const defaultValue = param.default?.value;
+        switch (param.type.value) {
             case 'string':
-                return param.default !== undefined && typeof param.default === 'string' ? JSON.stringify(param.default) : '""';
+                return defaultValue !== undefined && typeof defaultValue === 'string' ? JSON.stringify(defaultValue) : '""';
             case 'boolean':
-                return param.default !== undefined && typeof param.default === 'boolean' ? (param.default ? 'True' : 'False') : 'False';
+                return defaultValue !== undefined && typeof defaultValue === 'boolean' ? (defaultValue ? 'True' : 'False') : 'False';
             case 'int':
-                return param.default !== undefined && typeof param.default === 'number' && Number.isInteger(param.default) ? param.default.toString() : '0';
+                return defaultValue !== undefined && typeof defaultValue === 'number' && Number.isInteger(defaultValue) ? defaultValue.toString() : '0';
             case 'float':
-                return param.default !== undefined && typeof param.default === 'number' ? param.default.toString() : '0';
+                return defaultValue !== undefined && typeof defaultValue === 'number' ? defaultValue.toString() : '0';
         }
     }
 }
@@ -137,11 +142,11 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
             return;
         }
 
-        if (!workspaceCharm.model.src.isMain(relativeSourcePath)) {
+        if (!workspaceCharm.live.src.isMain(relativeSourcePath)) {
             return;
         }
 
-        const file = workspaceCharm.getLatestCachedLiveSourceCodeFile(document.uri);
+        const file = workspaceCharm.live.src.getFile(relativeSourcePath);
         if (!file) {
             return;
         }
@@ -175,7 +180,7 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
         const isNextCharClosedBracket = (isFullEventSubscription || isPartialEventSubscription) && remainingLineText.startsWith(')');
 
         const result: CompletionItem[] = [];
-        for (const e of workspaceCharm.model.events) {
+        for (const e of workspaceCharm.live.events) {
             const item: CompletionItem = {
                 label: e.symbol,
                 insertText: e.symbol,

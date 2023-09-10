@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/schema",
-    "$id": "charms://schema/actions.json",
+    "$id": "charmcraft://schema/actions.json",
     "$defs": {},
     "type": "object",
     "additionalProperties": false,

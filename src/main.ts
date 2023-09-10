@@ -1,4 +1,13 @@
-import { Disposable, ExtensionContext, ExtensionMode, commands, extensions, languages, window } from 'vscode';
+import TelemetryReporter from '@vscode/extension-telemetry';
+import {
+    Disposable,
+    ExtensionContext,
+    ExtensionMode,
+    commands,
+    extensions,
+    languages,
+    window
+} from 'vscode';
 import { EventHandlerCodeActionProvider } from './codeAction';
 import {
     CHARM_CONFIG_COMPLETION_TRIGGER_CHARS,
@@ -6,14 +15,13 @@ import {
     CharmConfigParametersCompletionProvider,
     CharmEventCompletionProvider
 } from './completion';
+import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './definition';
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
-import { PythonExtension } from './include/ms-python.python';
 import { ExtensionAPI } from './include/redhat.vscode-yaml';
 import { Registry } from './registry';
 import { registerSchemas } from './schema';
 import { DocumentWatcher } from './watcher';
 import path = require('path');
-import TelemetryReporter from '@vscode/extension-telemetry';
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 
@@ -23,20 +31,24 @@ const RED_HAT_YAML_EXT = 'redhat.vscode-yaml';
 const GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT = 'never-ask-yaml-extension';
 
 export async function activate(context: ExtensionContext) {
-    const reporter = new TelemetryReporter(TELEMETRY_INSTRUMENTATION_KEY);
+    const reporter = new TelemetryReporter(context.extensionMode === ExtensionMode.Production ? TELEMETRY_INSTRUMENTATION_KEY : '');
     context.subscriptions.push(reporter);
 
-    const output = window.createOutputChannel('Charms IDE');
+    const output = window.createOutputChannel('Charmcraft IDE');
     context.subscriptions.push(output);
 
-    const registry = new Registry(output);
+    const diagnostics = languages.createDiagnosticCollection('Charmcraft IDE');
+    context.subscriptions.push(diagnostics);
+
+    const registry = new Registry(output, diagnostics);
     context.subscriptions.push(registry);
     await registry.refresh();
 
     context.subscriptions.push(
         ...registerCodeActionProviders(registry, reporter),
         ...registerCompletionProviders(registry, reporter),
-        ...registerHoverProviders(registry, reporter)
+        ...registerHoverProviders(registry, reporter),
+        ...registerDefinitionProviders(registry, reporter),
     );
 
     const dw = new DocumentWatcher(registry);
@@ -44,12 +56,6 @@ export async function activate(context: ExtensionContext) {
     dw.enable();
 
     context.subscriptions.push(...registerCommands(context, reporter));
-
-    // const python = extensions.getExtension('ms-python.python')?.exports as PythonExtension;
-    // if (!python) {
-    //     // throw new Error('Failed to retrieve `ms-python.python` extension API');
-    // } else {
-    // }
 
     // Note that we shouldn't `await` on this call, because it could ask for user decision (e.g., to install the YAML
     // extension) and get blocked for an unknown time duration (possibly never, if user decides to skip the message).
@@ -148,6 +154,19 @@ function registerCodeActionProviders(registry: Registry, reporter: TelemetryRepo
         languages.registerCodeActionsProvider(
             { scheme: 'file', language: 'python' },
             new EventHandlerCodeActionProvider(registry, reporter),
+        ),
+    ];
+}
+
+function registerDefinitionProviders(registry: Registry, reporter: TelemetryReporter): Disposable[] {
+    return [
+        languages.registerDefinitionProvider(
+            { scheme: 'file', language: 'python' },
+            new CharmConfigDefinitionProvider(registry, reporter),
+        ),
+        languages.registerDefinitionProvider(
+            { scheme: 'file', language: 'python' },
+            new CharmEventDefinitionProvider(registry, reporter),
         ),
     ];
 }

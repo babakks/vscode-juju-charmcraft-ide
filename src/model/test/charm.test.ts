@@ -237,6 +237,16 @@ suite(getTextOverRange.name, function () {
             lines: ['some text here'],
             range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
             expected: 'some text here',
+        }, {
+            name: 'start character at the end of line',
+            lines: ['line 1', 'line 2'],
+            range: { start: { line: 0, character: 6 }, end: { line: 1, character: 6 } },
+            expected: 'line 2',
+        }, {
+            name: 'end character at the start of line',
+            lines: ['line 1', 'line 2'],
+            range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
+            expected: 'line 1',
         },
     ];
 
