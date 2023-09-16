@@ -281,7 +281,7 @@ export class CharmSourceCodeFile {
     }
 }
 
-export type CharmSourceCodeTreeEntry = CharmSourceCodeTreeDirectoryEntry | CharmSourceCodeTreeFileEntry
+export type CharmSourceCodeTreeEntry = CharmSourceCodeTreeDirectoryEntry | CharmSourceCodeTreeFileEntry;
 
 export interface CharmSourceCodeTree {
     [key: string]: CharmSourceCodeTreeEntry;
