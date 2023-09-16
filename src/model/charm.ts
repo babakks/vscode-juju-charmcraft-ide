@@ -52,6 +52,16 @@ export const YAML_PROBLEMS = {
     },
 } satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
 
+export const SOURCE_CODE_PROBLEMS = {
+    /**
+     * Problems specific to referencing charm belongings (e.g., configuration parameters or actions).
+     */
+    reference: {
+        undefinedConfigParameter: (name: string) => ({ id: 'undefinedConfigParameter', name, message: `Undefined configuration parameter \`${name}\`` }),
+        undefinedEvent: (symbol: string) => ({ id: 'undefinedEvent', name: symbol, message: `Undefined event \`${symbol}\`` }),
+    },
+} satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
+
 export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
 export function isConfigParameterType(value: string): value is CharmConfigParameterType {
     return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
