@@ -3,6 +3,7 @@ import {
     CHARM_SOURCE_CODE_CHARM_BASE_CLASS,
     Position,
     Range,
+    TextPositionMapper,
     comparePositions,
     toValidSymbol
 } from "./common";
@@ -252,12 +253,21 @@ export interface Problem {
 
 export class CharmSourceCodeFile {
     private _analyzer: CharmSourceCodeFileAnalyzer | undefined;
+    private _tpm: TextPositionMapper | undefined;
+
     constructor(public content: string, public ast: any, public healthy: boolean) { }
     get analyzer() {
         if (!this._analyzer) {
             this._analyzer = new CharmSourceCodeFileAnalyzer(this.content, this.ast);
         }
         return this._analyzer;
+    }
+
+    get tpm() {
+        if (!this._tpm) {
+            this._tpm = new TextPositionMapper(this.content);
+        }
+        return this._tpm;
     }
 }
 
