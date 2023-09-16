@@ -343,6 +343,36 @@ export class CharmSourceCode {
         return undefined;
     }
 
+    /**
+     * Returns a flat map of files and their relative path in the source code
+     * tree. Note that the results are not ordered in a specific manner.
+     */
+    getFiles(): Map<string, CharmSourceCodeFile> {
+        const result = new Map<string, CharmSourceCodeFile>();
+
+        const stack: [string, CharmSourceCodeTreeEntry][] = [];
+        function push(tree: CharmSourceCodeTree, relativePath?: string) {
+            stack.push(...Object.entries(tree).map(([k, v]) =>
+                [relativePath !== undefined ? relativePath + '/' + k : k, v] as [string, CharmSourceCodeTreeEntry]
+            ));
+        }
+
+        push(this.tree);
+        while (true) {
+            const element = stack.pop();
+            if (!element) {
+                break;
+            }
+            const [relativePath, entry] = element;
+            if (entry.kind === 'directory') {
+                push(entry.data, relativePath);
+                continue;
+            }
+            result.set(relativePath, entry.data);
+        }
+        return result;
+    }
+
     getFile(relativePath: string): CharmSourceCodeFile | undefined {
         const entry = this._getEntryAt(relativePath);
         return entry?.kind === 'file' ? entry.data : undefined;
