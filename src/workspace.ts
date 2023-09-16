@@ -1,6 +1,7 @@
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
 import { Disposable, Uri } from 'vscode';
+import { getActionsDiagnostics, getAllSourceCodeDiagnostics, getConfigDiagnostics, getMetadataDiagnostics, getSourceCodeDiagnostics } from './diagnostic';
 import { Charm, CharmActions, CharmConfig, CharmMetadata, CharmSourceCode, CharmSourceCodeFile, CharmSourceCodeTree, MapWithNode, Problem, SequenceWithNode, WithNode, YAMLNode, emptyActions, emptyConfig, emptyMetadata } from './model/charm';
 import { CHARM_DIR_SRC, CHARM_FILE_ACTIONS_YAML, CHARM_FILE_CONFIG_YAML, CHARM_FILE_METADATA_YAML, Range, zeroRange } from './model/common';
 import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from './parser';
@@ -121,7 +122,14 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
     }
 
-    private _updateDiagnostics(uri: Uri, entries: vscode.Diagnostic[]) {
+    private _updateDiagnostics(map: Map<string, vscode.Diagnostic[]>, baseURI: vscode.Uri) {
+        for (const [relativePath, diags] of map) {
+            const uri = vscode.Uri.joinPath(baseURI, relativePath);
+            this._updateDiagnosticsByURI(uri, diags);
+        }
+    }
+
+    private _updateDiagnosticsByURI(uri: Uri, entries: vscode.Diagnostic[]) {
         this.diagnostics.delete(uri);
         this.diagnostics.set(uri, entries);
     }
@@ -195,6 +203,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
         this.model.updateSourceCode(new CharmSourceCode(tree));
         this.live.updateSourceCode(new CharmSourceCode(tree));
+        this._updateDiagnostics(getAllSourceCodeDiagnostics(this.live), this._srcDir);
     }
 
     async updateLiveFile(uri: Uri) {
@@ -231,160 +240,39 @@ export class WorkspaceCharm implements vscode.Disposable {
         const content = this._getDirtyDocumentContent(this.configUri);
         if (content === undefined) {
             this.live.updateConfig(this.model.config);
-            this._updateDiagnostics(this.configUri, this._getConfigDiagnostics(this.live.config));
+            this._updateDiagnosticsByURI(this.configUri, getConfigDiagnostics(this.live.config));
             return;
         }
 
         this._log('config refreshed');
         this.live.updateConfig(parseCharmConfigYAML(content));
-        this._updateDiagnostics(this.configUri, this._getConfigDiagnostics(this.live.config));
-    }
-
-    private _getConfigDiagnostics(config: CharmConfig): vscode.Diagnostic[] {
-        return [
-            ...config.node.problems.map(p => createDiagnostics(p, config.node.range)),
-            ...Object.values(config.parameters?.entries ?? {}).map(config => [
-                ...config.node.problems.map(p => createDiagnostics(p, config.node.pairKeyRange)),
-                ...config.value?.type?.node.problems.map(p => createDiagnostics(p, config.value!.type!.node.range)) ?? [],
-                ...config.value?.description?.node.problems.map(p => createDiagnostics(p, config.value!.description!.node.range)) ?? [],
-                ...config.value?.default?.node.problems.map(p => createDiagnostics(p, config.value!.default!.node.range)) ?? [],
-            ]).flat(1),
-        ];
+        this._updateDiagnosticsByURI(this.configUri, getConfigDiagnostics(this.live.config));
     }
 
     async updateLiveActionsFile() {
         const content = this._getDirtyDocumentContent(this.actionsUri);
         if (content === undefined) {
             this.live.updateActions(this.model.actions);
-            this._updateDiagnostics(this.actionsUri, this._getActionsDiagnostics(this.live.actions));
+            this._updateDiagnosticsByURI(this.actionsUri, getActionsDiagnostics(this.live.actions));
             return;
         }
 
         this._log('actions refreshed');
         this.live.updateActions(parseCharmActionsYAML(content));
-        this._updateDiagnostics(this.actionsUri, this._getActionsDiagnostics(this.live.actions));
-    }
-
-    private _getActionsDiagnostics(actions: CharmActions): vscode.Diagnostic[] {
-        return [
-            ...actions.node.problems.map(p => createDiagnostics(p, actions.node.range)),
-            ...Object.values(actions.actions?.entries ?? {}).map(action => [
-                ...action.node.problems.map(p => createDiagnostics(p, action.node.pairKeyRange)),
-                ...action.value?.description?.node.problems.map(p => createDiagnostics(p, action.value!.description!.node.range)) ?? [],
-            ]).flat(1),
-        ];
+        this._updateDiagnosticsByURI(this.actionsUri, getActionsDiagnostics(this.live.actions));
     }
 
     async updateLiveMetadataFile() {
         const content = this._getDirtyDocumentContent(this.metadataUri);
         if (content === undefined) {
             this.live.updateMetadata(this.model.metadata);
-            this._updateDiagnostics(this.metadataUri, this._getMetadataDiagnostics(this.live.metadata));
+            this._updateDiagnosticsByURI(this.metadataUri, getMetadataDiagnostics(this.live.metadata));
             return;
         }
 
         this._log('metadata refreshed');
         this.live.updateMetadata(parseCharmMetadataYAML(content));
-        this._updateDiagnostics(this.metadataUri, this._getMetadataDiagnostics(this.live.metadata));
-    }
-
-    private _getMetadataDiagnostics(metadata: CharmMetadata): vscode.Diagnostic[] {
-        return [
-            ...metadata.node.problems.map(x => createDiagnostics(x, metadata.node.range)),
-            ...fs(metadata.assumes, x => [
-                ...f(x.single),
-                ...fs(x.allOf),
-                ...fs(x.anyOf),
-            ]),
-            ...fm(metadata.containers, x => [
-                ...fs(x.bases, x => [
-                    ...fs(x.architectures),
-                    ...f(x.channel),
-                    ...f(x.name),
-                ]),
-                ...fs(x.mounts, x => [
-                    ...f(x.location),
-                    ...f(x.storage),
-                ]),
-                ...f(x.resource),
-            ]),
-            ...f(metadata.description),
-            ...fm(metadata.devices, x => [
-                ...f(x.countMin),
-                ...f(x.countMax),
-                ...f(x.description),
-                ...f(x.type),
-            ]),
-            ...f(metadata.displayName),
-            ...f(metadata.docs),
-            ...fm(metadata.extraBindings),
-            ...(metadata.issues ? (metadata.issues.node.kind === 'sequence' ? fs(metadata.issues as SequenceWithNode<string>) : f(metadata.issues as WithNode<string>)) : []),
-            ...fs(metadata.maintainers),
-            ...f(metadata.name),
-            ...fm(metadata.peers, x => [
-                ...f(x.interface),
-                ...f(x.limit),
-                ...f(x.optional),
-                ...f(x.scope),
-            ]),
-            ...fm(metadata.provides, x => [
-                ...f(x.interface),
-                ...f(x.limit),
-                ...f(x.optional),
-                ...f(x.scope),
-            ]),
-            ...fm(metadata.requires, x => [
-                ...f(x.interface),
-                ...f(x.limit),
-                ...f(x.optional),
-                ...f(x.scope),
-            ]),
-            ...fm(metadata.resources, x => [
-                ...f(x.description),
-                ...f(x.filename),
-                ...f(x.type),
-            ]),
-            ...(metadata.source ? (metadata.source.node.kind === 'sequence' ? fs(metadata.source as SequenceWithNode<string>) : f(metadata.source as WithNode<string>)) : []),
-            ...fm(metadata.storage, x => [
-                ...f(x.description),
-                ...f(x.location),
-                ...f(x.minimumSize),
-                ...f(x.multiple),
-                ...fs(x.properties),
-                ...f(x.readOnly),
-                ...f(x.type),
-            ]),
-            ...f(metadata.subordinate),
-            ...f(metadata.summary),
-            ...fs(metadata.terms),
-            ...(metadata.website ? (metadata.website.node.kind === 'sequence' ? fs(metadata.website as SequenceWithNode<string>) : f(metadata.website as WithNode<string>)) : []),
-        ];
-
-        function fs<T>(e: SequenceWithNode<T> | undefined, cb?: ((e: T) => vscode.Diagnostic[])) {
-            return !e ? [] : [
-                ...f(e),
-                ...(e.elements ?? []).map(x => [
-                    ...f(x),
-                    ...(x.value !== undefined && cb ? cb(x.value) : [])
-                ]).flat(1),
-            ];
-        }
-
-        function fm<T>(e: MapWithNode<T> | undefined, cb?: ((m: T) => vscode.Diagnostic[])) {
-            return !e ? [] : [
-                ...f(e),
-                ...Object.values(e.entries ?? {}).map(x => [
-                    ...f(x),
-                    ...(x.value !== undefined && cb ? cb(x.value) : [])
-                ]).flat(1),
-            ];
-        }
-
-        function f(e: WithNode<any> | MapWithNode<any> | SequenceWithNode<any> | undefined): vscode.Diagnostic[] {
-            return !e ? [] : [
-                ...e.node.problems.map(p => createDiagnostics(p, e.node.range)),
-            ];
-        }
+        this._updateDiagnosticsByURI(this.metadataUri, getMetadataDiagnostics(this.live.metadata));
     }
 
     async updateLiveSourceCodeFile(uri: Uri) {
@@ -398,6 +286,7 @@ export class WorkspaceCharm implements vscode.Disposable {
             const file = this.model.src.getFile(relativePath);
             if (file) {
                 this.live.src.updateFile(relativePath, file);
+                this._updateDiagnosticsByURI(uri, getSourceCodeDiagnostics(this.live, relativePath));
             }
             return;
         }
@@ -421,15 +310,10 @@ export class WorkspaceCharm implements vscode.Disposable {
             }
         }
         this.live.src.updateFile(relativePath, file);
+        this._updateDiagnosticsByURI(uri, getSourceCodeDiagnostics(this.live, relativePath));
     }
 
     private _log(s: string) {
         this.output.appendLine(`${new Date().toISOString()} ${this.home.path} ${s}`);
     }
-}
-
-function createDiagnostics(problem: Problem, range?: Range): vscode.Diagnostic {
-    const result = new vscode.Diagnostic(rangeToVSCodeRange(range ?? zeroRange()), problem.message);
-    result.code = problem.id;
-    return result;
 }

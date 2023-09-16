@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.4
+
+- Add source code diagnostics for invalid references (e.g., configuration parameters or events).
+
 ## 0.0.3
 
 - Add go-to-definition support form configuration parameters or actions.

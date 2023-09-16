@@ -3,6 +3,7 @@ import {
     CHARM_SOURCE_CODE_CHARM_BASE_CLASS,
     Position,
     Range,
+    TextPositionMapper,
     comparePositions,
     toValidSymbol
 } from "./common";
@@ -48,6 +49,16 @@ export const YAML_PROBLEMS = {
         containerResourceUndefined: (expectedResource: string) => ({ id: 'containerResourceUndefined', expectedResource, message: `Container resource \`${expectedResource}\` is not defined.` }),
         containerResourceOCIImageExpected: (expectedResource: string) => ({ id: 'containerResourceOCIImageExpected', expectedResource, message: `Container resource \`${expectedResource}\` is not of type \`oci-image\`.` }),
         containerMountStorageUndefined: (expectedStorage: string) => ({ id: 'containerMountStorageUndefined', expectedStorage, message: `Container mount storage \`${expectedStorage}\` is not defined.` }),
+    },
+} satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
+
+export const SOURCE_CODE_PROBLEMS = {
+    /**
+     * Problems specific to referencing charm belongings (e.g., configuration parameters or actions).
+     */
+    reference: {
+        undefinedConfigParameter: (name: string) => ({ id: 'undefinedConfigParameter', name, message: `Undefined configuration parameter \`${name}\`` }),
+        undefinedEvent: (symbol: string) => ({ id: 'undefinedEvent', name: symbol, message: `Undefined event \`${symbol}\`` }),
     },
 } satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
 
@@ -252,6 +263,8 @@ export interface Problem {
 
 export class CharmSourceCodeFile {
     private _analyzer: CharmSourceCodeFileAnalyzer | undefined;
+    private _tpm: TextPositionMapper | undefined;
+
     constructor(public content: string, public ast: any, public healthy: boolean) { }
     get analyzer() {
         if (!this._analyzer) {
@@ -259,10 +272,19 @@ export class CharmSourceCodeFile {
         }
         return this._analyzer;
     }
+
+    get tpm() {
+        if (!this._tpm) {
+            this._tpm = new TextPositionMapper(this.content);
+        }
+        return this._tpm;
+    }
 }
 
+export type CharmSourceCodeTreeEntry = CharmSourceCodeTreeDirectoryEntry | CharmSourceCodeTreeFileEntry
+
 export interface CharmSourceCodeTree {
-    [key: string]: CharmSourceCodeTreeDirectoryEntry | CharmSourceCodeTreeFileEntry;
+    [key: string]: CharmSourceCodeTreeEntry;
 }
 
 export interface CharmSourceCodeTreeDirectoryEntry {
@@ -329,6 +351,36 @@ export class CharmSourceCode {
             dir = current.data;
         }
         return undefined;
+    }
+
+    /**
+     * Returns a flat map of files and their relative path in the source code
+     * tree. Note that the results are not ordered in a specific manner.
+     */
+    getFiles(): Map<string, CharmSourceCodeFile> {
+        const result = new Map<string, CharmSourceCodeFile>();
+
+        const stack: [string, CharmSourceCodeTreeEntry][] = [];
+        function push(tree: CharmSourceCodeTree, relativePath?: string) {
+            stack.push(...Object.entries(tree).map(([k, v]) =>
+                [relativePath !== undefined ? relativePath + '/' + k : k, v] as [string, CharmSourceCodeTreeEntry]
+            ));
+        }
+
+        push(this.tree);
+        while (true) {
+            const element = stack.pop();
+            if (!element) {
+                break;
+            }
+            const [relativePath, entry] = element;
+            if (entry.kind === 'directory') {
+                push(entry.data, relativePath);
+                continue;
+            }
+            result.set(relativePath, entry.data);
+        }
+        return result;
     }
 
     getFile(relativePath: string): CharmSourceCodeFile | undefined {
