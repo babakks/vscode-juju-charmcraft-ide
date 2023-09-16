@@ -12,6 +12,7 @@ This is a VS Code extension to provide tools for Juju Charms development. To lea
 - Hover for events or configuration parameters in charm source code.
 - Auto-completion for events or configuration parameters in charm source code.
 - Go-to-definition support for configuration parameters or actions.
+- Diagnostics (e.g., invalid configuration parameter, or event references).
 
 ### YAML features
   > Note that for this feature to work, you need to install *Red Hat YAML* language server [extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml).
