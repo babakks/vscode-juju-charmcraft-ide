@@ -101,10 +101,10 @@ function registerCommands(context: ExtensionContext, reporter: TelemetryReporter
 
                 const deleteResult = await e.workspaceCharm.virtualEnv.delete();
                 if (deleteResult.code !== 0) {
-                    const seeLogs: MessageItem = { title: "See logs" };
+                    const showLogs: MessageItem = { title: "Show Logs" };
                     const resp = await window.showInformationMessage(
                         "Failed to delete the existing  virtual environment. Click on 'See Logs' for more information.",
-                        seeLogs,
+                        showLogs,
                     );
                     if (!resp) {
                         return;
@@ -116,10 +116,10 @@ function registerCommands(context: ExtensionContext, reporter: TelemetryReporter
 
             const createResult = await e.workspaceCharm.virtualEnv.create();
             if (createResult.code !== 0) {
-                const seeLogs: MessageItem = { title: "See logs" };
+                const showLogs: MessageItem = { title: "Show Logs" };
                 const resp = await window.showInformationMessage(
                     "Failed to create the virtual environment. Click on 'See Logs' for more information.",
-                    seeLogs,
+                    showLogs,
                 );
                 if (!resp) {
                     return;
@@ -131,7 +131,7 @@ function registerCommands(context: ExtensionContext, reporter: TelemetryReporter
             const setupResult = await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
-                    title: "Setting up the virtual environment.",
+                    title: "Setting up virtual environment at " + workspace.asRelativePath(e.workspaceCharm.virtualEnvUri) + ".",
                 },
                 async progress => {
                     progress.report({});
@@ -140,10 +140,10 @@ function registerCommands(context: ExtensionContext, reporter: TelemetryReporter
             );
 
             if (setupResult.code !== 0) {
-                const seeLogs: MessageItem = { title: "See logs" };
+                const showlogs: MessageItem = { title: "Show Logs" };
                 const resp = await window.showInformationMessage(
                     "Failed to setup the virtual environment. Click on 'See Logs' for more information.",
-                    seeLogs,
+                    showlogs,
                 );
                 if (!resp) {
                     return;
@@ -152,10 +152,10 @@ function registerCommands(context: ExtensionContext, reporter: TelemetryReporter
                 return;
             }
 
-            const seeLogs: MessageItem = { title: "See logs" };
+            const showLogs: MessageItem = { title: "Show Logs" };
             const resp = await window.showInformationMessage(
-                "Virtual environment created at " + workspace.asRelativePath(e.workspaceCharm.virtualEnvUri),
-                seeLogs,
+                "Virtual environment created at " + workspace.asRelativePath(e.workspaceCharm.virtualEnvUri) + ".",
+                showLogs,
             );
             if (!resp) {
                 return;
