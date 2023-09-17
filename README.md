@@ -8,6 +8,11 @@ This is a VS Code extension to provide tools for Juju Charms development. To lea
 
 ## Features
 
+### General features
+
+- Control charm belongings via the activity bar view:
+  - Create virtual environments.
+
 ### Python features
 - Hover for events or configuration parameters in charm source code.
 - Auto-completion for events or configuration parameters in charm source code.
