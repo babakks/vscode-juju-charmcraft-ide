@@ -2,9 +2,7 @@ import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     Disposable,
     ExtensionContext,
-    ExtensionMode, commands,
-    extensions,
-    languages,
+    ExtensionMode, languages,
     window
 } from 'vscode';
 import { EventHandlerCodeActionProvider } from './codeAction';
@@ -17,19 +15,13 @@ import {
 } from './completion';
 import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './definition';
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
-import { ExtensionAPI } from './include/redhat.vscode-yaml';
 import { Registry } from './registry';
-import { registerSchemas } from './schema';
+import { integrateWithYAMLExtension } from './schema';
 import { CharmcraftTreeDataProvider } from './tree';
 import { DocumentWatcher } from './watcher';
 import path = require('path');
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
-
-const EXTENSION_SCHEMA_DATA_DIR = 'schema/data';
-
-const RED_HAT_YAML_EXT = 'redhat.vscode-yaml';
-const GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT = 'never-ask-yaml-extension';
 
 export async function activate(context: ExtensionContext) {
     const reporter = new TelemetryReporter(context.extensionMode === ExtensionMode.Production ? TELEMETRY_INSTRUMENTATION_KEY : '');
@@ -71,42 +63,6 @@ export async function activate(context: ExtensionContext) {
 }
 
 export function deactivate() { }
-
-async function integrateWithYAMLExtension(context: ExtensionContext) {
-    const yamlExtension = extensions.getExtension(RED_HAT_YAML_EXT);
-    if (!yamlExtension) {
-        const neverAsk = context.globalState.get(GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT);
-        if (neverAsk) {
-            return;
-        }
-
-        const resp = await window.showInformationMessage(
-            "To enable YAML file services (e.g., schema validation or auto-completion) you need to install Red Hat YAML language server extension.",
-            "Open Red Hat YAML Extension",
-            "Never ask",
-        );
-        if (resp) {
-            if (resp === 'Never ask') {
-                context.globalState.update(GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT, true);
-            } else {
-                commands.executeCommand('extension.open', RED_HAT_YAML_EXT);
-            }
-        }
-        return;
-    }
-
-    if (!yamlExtension.isActive) {
-        await yamlExtension.activate();
-    }
-
-    const yaml = yamlExtension.exports as ExtensionAPI;
-    await registerSchemas(
-        path.join(context.extensionPath, EXTENSION_SCHEMA_DATA_DIR),
-        yaml,
-        // Enable watching for schema changes, only in development mode.
-        context.extensionMode === ExtensionMode.Development,
-    );
-}
 
 function registerCompletionProviders(registry: Registry, reporter: TelemetryReporter): Disposable[] {
     return [
