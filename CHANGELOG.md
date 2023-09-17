@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.5
+
+- Introduce Charmcraft tree to the activity bar.
+
 ## 0.0.4
 
 - Add source code diagnostics for invalid references (e.g., configuration parameters or events).
