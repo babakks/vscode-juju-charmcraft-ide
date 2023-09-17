@@ -53,7 +53,8 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(window.createTreeView('charmcraft-charms', { treeDataProvider: tdp }));
 
     const commands = new Commands(context, reporter, registry, tdp);
-    context.subscriptions.push(...commands.register());
+    context.subscriptions.push(commands);
+    commands.register();
 
     // Note that we shouldn't `await` on this call, because it could ask for user decision (e.g., to install the YAML
     // extension) and get blocked for an unknown time duration (possibly never, if user decides to skip the message).

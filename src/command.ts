@@ -1,5 +1,6 @@
 import TelemetryReporter from '@vscode/extension-telemetry';
 import {
+    Disposable,
     ExtensionContext, MessageItem,
     ProgressLocation,
     commands, window,
@@ -16,7 +17,9 @@ import {
 import { ExecutionResult } from './venv';
 import path = require('path');
 
-export class Commands {
+export class Commands implements Disposable {
+    private readonly _disposables: Disposable[] = [];
+
     constructor(
         readonly context: ExtensionContext,
         readonly reporter: TelemetryReporter,
@@ -24,8 +27,12 @@ export class Commands {
         readonly treeDataProvider: CharmcraftTreeDataProvider,
     ) { }
 
+    dispose() {
+        this._disposables.forEach(x => x.dispose());
+    }
+
     register() {
-        return [
+        this._disposables.push(
             commands.registerCommand('charmcraft-ide.discoverCharms', async () => {
                 await this.discoverCharms();
             }),
@@ -44,7 +51,7 @@ export class Commands {
             commands.registerCommand('charmcraft-ide.resetStateWorkspace', () => {
                 this.resetStateWorkspace();
             }),
-        ];
+        );
     }
 
     async revealCharmDirectory(e: CharmTreeItemModel) {
