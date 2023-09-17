@@ -51,7 +51,7 @@
                 "command": "charmcraft-ide.createAndSetupVirtualEnvironment",
                 "title": "Create and Setup Virtual Environment (venv)",
                 "category": "Charmcraft IDE",
-                "icon": "$(add)"
+                "icon": "$(debug-console)"
             },
             {
                 "command": "charmcraft-ide.resetStateGlobal",
