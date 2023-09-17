@@ -30,16 +30,83 @@
     "contributes": {
         "commands": [
             {
-                "command": "vscode-juju-charmcraft-ide.resetStateGlobal",
+                "command": "charmcraft-ide.discoverCharms",
+                "title": "Discover Charms",
+                "category": "Charmcraft IDE",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "charmcraft-ide.revealCharmDirectory",
+                "title": "Reveal Charm Directory in Explorer",
+                "category": "Charmcraft IDE",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "charmcraft-ide.revealCharmFile",
+                "title": "Reveal Charm File in Explorer",
+                "category": "Charmcraft IDE",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "charmcraft-ide.createAndSetupVirtualEnvironment",
+                "title": "Create and Setup Virtual Environment (venv)",
+                "category": "Charmcraft IDE",
+                "icon": "$(add)"
+            },
+            {
+                "command": "charmcraft-ide.resetStateGlobal",
                 "title": "Reset State (Global)",
                 "category": "Charmcraft IDE"
             },
             {
-                "command": "vscode-juju-charmcraft-ide.resetStateWorkspace",
+                "command": "charmcraft-ide.resetStateWorkspace",
                 "title": "Reset State (Workspace)",
                 "category": "Charmcraft IDE"
             }
-        ]
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "title": "Charmcraft IDE",
+                    "icon": "image/logo-128x128.png",
+                    "id": "charmcraft"
+                }
+            ]
+        },
+        "views": {
+            "charmcraft": [
+                {
+                    "id": "charmcraft-charms",
+                    "name": "Charms"
+                }
+            ]
+        },
+        "menus": {
+            "view/title": [
+                {
+                    "when": "view == charmcraft-charms",
+                    "group": "navigation",
+                    "command": "charmcraft-ide.discoverCharms"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "when": "view == charmcraft-charms && viewItem == charm",
+                    "group": "inline",
+                    "command": "charmcraft-ide.revealCharmDirectory"
+                },
+                {
+                    "when": "view == charmcraft-charms && viewItem == charm",
+                    "group": "inline",
+                    "command": "charmcraft-ide.createAndSetupVirtualEnvironment"
+                },
+                {
+                    "when": "view == charmcraft-charms && (viewItem == config || viewItem == actions || viewItem == metadata)",
+                    "group": "inline",
+                    "command": "charmcraft-ide.revealCharmFile"
+                }
+            ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",

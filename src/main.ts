@@ -3,10 +3,13 @@ import {
     Disposable,
     ExtensionContext,
     ExtensionMode,
+    MessageItem,
+    ProgressLocation,
     commands,
     extensions,
     languages,
-    window
+    window,
+    workspace
 } from 'vscode';
 import { EventHandlerCodeActionProvider } from './codeAction';
 import {
@@ -20,8 +23,10 @@ import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
 import { ExtensionAPI } from './include/redhat.vscode-yaml';
 import { Registry } from './registry';
 import { registerSchemas } from './schema';
+import { ActionsTreeItemModel, CharmTreeItemModel, CharmcraftTreeDataProvider, ConfigTreeItemModel, MetadataTreeItemModel } from './tree';
 import { DocumentWatcher } from './watcher';
 import path = require('path');
+import { ExecutionResult } from './venv';
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 
@@ -55,7 +60,11 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(dw);
     dw.enable();
 
-    context.subscriptions.push(...registerCommands(context, reporter));
+    const tdp = new CharmcraftTreeDataProvider(registry, reporter);
+    context.subscriptions.push(tdp);
+    context.subscriptions.push(window.createTreeView('charmcraft-charms', { treeDataProvider: tdp }));
+
+    context.subscriptions.push(...registerCommands(context, reporter, registry, tdp));
 
     // Note that we shouldn't `await` on this call, because it could ask for user decision (e.g., to install the YAML
     // extension) and get blocked for an unknown time duration (possibly never, if user decides to skip the message).
@@ -66,16 +75,119 @@ export async function activate(context: ExtensionContext) {
 
 export function deactivate() { }
 
-function registerCommands(context: ExtensionContext, reporter: TelemetryReporter): Disposable[] {
+function registerCommands(context: ExtensionContext, reporter: TelemetryReporter, registry: Registry, tdp: CharmcraftTreeDataProvider): Disposable[] {
     return [
-        commands.registerCommand('vscode-juju-charmcraft-ide.resetStateGlobal', function () {
+        commands.registerCommand('charmcraft-ide.discoverCharms', async function () {
+            reporter.sendTelemetryEvent('v0.command.discoverCharms');
+            await registry.refresh();
+            tdp.triggerRefresh();
+        }),
+        commands.registerCommand('charmcraft-ide.revealCharmDirectory', async function (e: CharmTreeItemModel) {
+            reporter.sendTelemetryEvent('v0.command.revealCharmDirectory');
+            await commands.executeCommand('revealInExplorer', e.workspaceCharm.home);
+        }),
+        commands.registerCommand('charmcraft-ide.createAndSetupVirtualEnvironment', async function (e: CharmTreeItemModel) {
+            reporter.sendTelemetryEvent('v0.command.createAndSetupVirtualEnvironment');
+            if (e.workspaceCharm.hasVirtualEnv) {
+                const ok: MessageItem = { title: "OK" };
+                const cancel: MessageItem = { title: "Cancel", isCloseAffordance: true };
+                const resp = await window.showInformationMessage(
+                    "Charm already has a virtual environment. Proceed with re-creating it?",
+                    ok, cancel,
+                );
+                if (!resp || resp === cancel) {
+                    return;
+                }
+
+                const deleteResult = await e.workspaceCharm.virtualEnv.delete();
+                if (deleteResult.code !== 0) {
+                    const seeLogs: MessageItem = { title: "See logs" };
+                    const resp = await window.showInformationMessage(
+                        "Failed to delete the existing  virtual environment. Click on 'See Logs' for more information.",
+                        seeLogs,
+                    );
+                    if (!resp) {
+                        return;
+                    }
+                    await showResultInNewDocument(deleteResult);
+                    return;
+                }
+            }
+
+            const createResult = await e.workspaceCharm.virtualEnv.create();
+            if (createResult.code !== 0) {
+                const seeLogs: MessageItem = { title: "See logs" };
+                const resp = await window.showInformationMessage(
+                    "Failed to create the virtual environment. Click on 'See Logs' for more information.",
+                    seeLogs,
+                );
+                if (!resp) {
+                    return;
+                }
+                await showResultInNewDocument(createResult);
+                return;
+            }
+
+            const setupResult = await window.withProgress(
+                {
+                    location: ProgressLocation.Notification,
+                    title: "Setting up the virtual environment.",
+                },
+                async progress => {
+                    progress.report({});
+                    return await e.workspaceCharm.virtualEnv.setup();
+                },
+            );
+
+            if (setupResult.code !== 0) {
+                const seeLogs: MessageItem = { title: "See logs" };
+                const resp = await window.showInformationMessage(
+                    "Failed to setup the virtual environment. Click on 'See Logs' for more information.",
+                    seeLogs,
+                );
+                if (!resp) {
+                    return;
+                }
+                await showResultInNewDocument(setupResult);
+                return;
+            }
+
+            const seeLogs: MessageItem = { title: "See logs" };
+            const resp = await window.showInformationMessage(
+                "Virtual environment created at " + workspace.asRelativePath(e.workspaceCharm.virtualEnvUri),
+                seeLogs,
+            );
+            if (!resp) {
+                return;
+            }
+            await showResultInNewDocument(setupResult);
+
+            async function showResultInNewDocument(e: ExecutionResult) {
+                const content = `exit-code: ${e.code}\r\n\r\nstdout:\r\n-------\r\n\r\n${e.stdout}\r\n\r\nstderr:\r\n-------\r\n\r\n${e.stderr}\r\n\r\n`;
+                const doc = await workspace.openTextDocument({ content });
+                await window.showTextDocument(doc);
+            }
+        }),
+        commands.registerCommand('charmcraft-ide.revealCharmFile', async function (e: ConfigTreeItemModel | ActionsTreeItemModel | MetadataTreeItemModel) {
+            if (e.kind === 'config') {
+                reporter.sendTelemetryEvent('v0.command.revealCharmFile.config');
+                await commands.executeCommand('revealInExplorer', e.workspaceCharm.configUri);
+            } else if (e.kind === 'actions') {
+                reporter.sendTelemetryEvent('v0.command.revealCharmFile.actions');
+                await commands.executeCommand('revealInExplorer', e.workspaceCharm.actionsUri);
+            } else if (e.kind === 'metadata') {
+                reporter.sendTelemetryEvent('v0.command.revealCharmFile.metadata');
+                await commands.executeCommand('revealInExplorer', e.workspaceCharm.metadataUri);
+            }
+        }),
+        commands.registerCommand('charmcraft-ide.resetStateGlobal', function () {
             reporter.sendTelemetryEvent('v0.command.resetStateGlobal');
             const keys = context.globalState.keys();
             for (const key of keys) {
                 context.globalState.update(key, undefined);
             }
         }),
-        commands.registerCommand('vscode-juju-charmcraft-ide.resetStateWorkspace', function () {
+        commands.registerCommand('charmcraft-ide.resetStateWorkspace', function () {
             reporter.sendTelemetryEvent('v0.command.resetStateWorkspace');
             const keys = context.workspaceState.keys();
             for (const key of keys) {

@@ -14,6 +14,30 @@ export class Registry implements Disposable {
     private readonly _onChanged = new EventEmitter<void>();
     readonly onChanged = this._onChanged.event;
 
+    private readonly _onCharmVirtualEnvChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onVirtualEnvChanged} event.
+     */
+    readonly onCharmVirtualEnvChanged = this._onCharmVirtualEnvChanged.event;
+
+    private readonly _onCharmConfigChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onConfigChanged} event.
+     */
+    readonly onCharmConfigChanged = this._onCharmConfigChanged.event;
+
+    private readonly _onCharmActionsChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onActionsChanged} event.
+     */
+    readonly onCharmActionsChanged = this._onCharmActionsChanged.event;
+
+    private readonly _onCharmMetadataChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onMetadataChanged} event.
+     */
+    readonly onCharmMetadataChanged = this._onCharmMetadataChanged.event;
+
     constructor(readonly output: OutputChannel, readonly diagnostics: DiagnosticCollection) { }
 
     dispose() {
@@ -100,7 +124,12 @@ export class Registry implements Disposable {
 
     private _instantiateCharm(home: Uri): WorkspaceCharm {
         const charm = new WorkspaceCharm(home, this.output, this.diagnostics);
-        this._disposablesPerCharm.set(charm, []);
+        this._disposablesPerCharm.set(charm, [
+            charm.onVirtualEnvChanged(() => this._onCharmVirtualEnvChanged.fire(charm)),
+            charm.onConfigChanged(() => this._onCharmConfigChanged.fire(charm)),
+            charm.onActionsChanged(() => this._onCharmActionsChanged.fire(charm)),
+            charm.onMetadataChanged(() => this._onCharmMetadataChanged.fire(charm)),
+        ]);
         return charm;
     }
 }

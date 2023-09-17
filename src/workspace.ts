@@ -3,10 +3,11 @@ import * as vscode from 'vscode';
 import { Disposable, Uri } from 'vscode';
 import { getActionsDiagnostics, getAllSourceCodeDiagnostics, getConfigDiagnostics, getMetadataDiagnostics, getSourceCodeDiagnostics } from './diagnostic';
 import { Charm, CharmActions, CharmConfig, CharmMetadata, CharmSourceCode, CharmSourceCodeFile, CharmSourceCodeTree, MapWithNode, Problem, SequenceWithNode, WithNode, YAMLNode, emptyActions, emptyConfig, emptyMetadata } from './model/charm';
-import { CHARM_DIR_SRC, CHARM_FILE_ACTIONS_YAML, CHARM_FILE_CONFIG_YAML, CHARM_FILE_METADATA_YAML, Range, zeroRange } from './model/common';
+import { CHARM_DIR_SRC, CHARM_FILE_ACTIONS_YAML, CHARM_FILE_CONFIG_YAML, CHARM_FILE_METADATA_YAML, CHARM_VENV_DIR as CHARM_VIRTUAL_ENV_DIR, Range, zeroRange } from './model/common';
 import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from './parser';
 import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import path = require('path');
+import { VirtualEnv } from './venv';
 
 export async function getCharmSourceCodeTree(charmHome: vscode.Uri, token?: vscode.CancellationToken): Promise<CharmSourceCodeTree | undefined> {
     async function readDir(uri: vscode.Uri): Promise<CharmSourceCodeTree | undefined> {
@@ -47,7 +48,7 @@ export async function createCharmSourceCodeFileFromContent(content: string): Pro
     return new CharmSourceCodeFile(content, ast, ast !== undefined);
 }
 
-const WATCH_GLOB_PATTERN = `{${CHARM_FILE_CONFIG_YAML},${CHARM_FILE_METADATA_YAML},${CHARM_FILE_ACTIONS_YAML},${CHARM_DIR_SRC}/**/*.py}`;
+const WATCH_GLOB_PATTERN = `{${CHARM_VIRTUAL_ENV_DIR},${CHARM_FILE_CONFIG_YAML},${CHARM_FILE_METADATA_YAML},${CHARM_FILE_ACTIONS_YAML},${CHARM_DIR_SRC}/**/*.py}`;
 
 export class WorkspaceCharm implements vscode.Disposable {
     private _disposables: Disposable[] = [];
@@ -68,8 +69,41 @@ export class WorkspaceCharm implements vscode.Disposable {
     private readonly watcher: vscode.FileSystemWatcher;
 
     readonly configUri: Uri;
+    private _hasConfig: boolean = false;
+
     readonly actionsUri: Uri;
+    private _hasActions: boolean = false;
+
     readonly metadataUri: Uri;
+    private _hasMetadata: boolean = false;
+
+    readonly virtualEnv: VirtualEnv;
+    readonly virtualEnvUri: Uri;
+    private _hasVirtualEnv: boolean = false;
+
+    private readonly _onVirtualEnvChanged = new vscode.EventEmitter<void>();
+    /**
+     * Fires when the virtual environment directory (i.e., `venv`) is created/deleted.
+     */
+    readonly onVirtualEnvChanged = this._onVirtualEnvChanged.event;
+
+    private readonly _onConfigChanged = new vscode.EventEmitter<void>();
+    /**
+     * Fires when the **persisted** configuration file (i.e., `config.yaml`) changes, or is created/deleted).
+     */
+    readonly onConfigChanged = this._onConfigChanged.event;
+
+    private readonly _onActionsChanged = new vscode.EventEmitter<void>();
+    /**
+     * Fires when the **persisted** actions file (i.e., `actions.yaml`) changes, or is created/deleted).
+     */
+    readonly onActionsChanged = this._onActionsChanged.event;
+
+    private readonly _onMetadataChanged = new vscode.EventEmitter<void>();
+    /**
+     * Fires when the **persisted** metadata file (i.e., `metadata.yaml`) changes, or is created/deleted).
+     */
+    readonly onMetadataChanged = this._onMetadataChanged.event;
 
     constructor(
         readonly home: Uri,
@@ -78,6 +112,8 @@ export class WorkspaceCharm implements vscode.Disposable {
     ) {
         this.model = new Charm();
         this.live = new Charm();
+        this.virtualEnv = new VirtualEnv(this.home, CHARM_VIRTUAL_ENV_DIR);
+        this.virtualEnvUri = Uri.joinPath(this.home, CHARM_VIRTUAL_ENV_DIR);
         this.configUri = Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
         this.actionsUri = Uri.joinPath(this.home, CHARM_FILE_ACTIONS_YAML);
         this.metadataUri = Uri.joinPath(this.home, CHARM_FILE_METADATA_YAML);
@@ -104,20 +140,50 @@ export class WorkspaceCharm implements vscode.Disposable {
         return uri.path.startsWith(prefix) ? uri.path.replace(prefix, '') : undefined;
     }
 
-    private async _onFileSystemEvent(kind: 'change' | 'create' | 'delete', uri: vscode.Uri) {
-        if (uri.path.endsWith(CHARM_FILE_ACTIONS_YAML)) {
-            await this._refreshActions();
-        } else if (uri.path.endsWith(CHARM_FILE_CONFIG_YAML)) {
-            await this._refreshConfig();
-        } else if (uri.path.endsWith(CHARM_FILE_METADATA_YAML)) {
-            await this._refreshMetadata();
-        }
+    /**
+     * Returns `true` if there's a virtual environment directory associated with the charm; otherwise, `false`.
+     */
+    get hasVirtualEnv() {
+        return this._hasVirtualEnv;
+    }
 
-        if (this._getRelativePathToSrc(uri)) {
-            if (kind === 'change') {
-                await this._refreshSourceCodeFile(uri);
-            } else {
-                await this._refreshSourceCodeTree();
+    /**
+     * Returns `true` if there's a `config.yaml` file associated with the charm; otherwise, `false`.
+     */
+    get hasConfig() {
+        return this._hasConfig;
+    }
+
+    /**
+     * Returns `true` if there's an `actions.yaml` file associated with the charm; otherwise, `false`.
+     */
+    get hasActions() {
+        return this._hasActions;
+    }
+
+    /**
+     * Returns `true` if there's a `metadata.yaml` file associated with the charm; otherwise, `false`.
+     */
+    get hasMetadata() {
+        return this._hasMetadata;
+    }
+
+    private async _onFileSystemEvent(kind: 'change' | 'create' | 'delete', uri: vscode.Uri) {
+        if (uri.path === this.virtualEnvUri.path) {
+            await this._refreshVirtualEnv();
+        } else if (uri.path === this.actionsUri.path) {
+            await this._refreshActions();
+        } else if (uri.path === this.configUri.path) {
+            await this._refreshConfig();
+        } else if (uri.path === this.metadataUri.path) {
+            await this._refreshMetadata();
+        } else {
+            if (this._getRelativePathToSrc(uri)) {
+                if (kind === 'change') {
+                    await this._refreshSourceCodeFile(uri);
+                } else {
+                    await this._refreshSourceCodeTree();
+                }
             }
         }
     }
@@ -136,6 +202,7 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     async refresh() {
         await Promise.allSettled([
+            this._refreshVirtualEnv(),
             this._refreshActions(),
             this._refreshConfig(),
             this._refreshMetadata(),
@@ -143,28 +210,59 @@ export class WorkspaceCharm implements vscode.Disposable {
         ]);
     }
 
+    private async _refreshVirtualEnv() {
+        try {
+            const stat = await vscode.workspace.fs.stat(this.virtualEnvUri);
+            this._hasVirtualEnv = stat.type === vscode.FileType.Directory;
+        } catch {
+            this._hasVirtualEnv = false;
+        }
+        this._onVirtualEnvChanged.fire();
+    }
+
     private async _refreshActions() {
-        const uri = vscode.Uri.joinPath(this.home, CHARM_FILE_ACTIONS_YAML);
-        const content = await tryReadWorkspaceFileAsText(uri) || "";
-        const actions = (content ? parseCharmActionsYAML(content) : undefined) || emptyActions();
+        const content = await tryReadWorkspaceFileAsText(this.actionsUri);
+        let actions: CharmActions;
+        if (content === undefined) {
+            this._hasActions = false;
+            actions = emptyActions();
+        } else {
+            this._hasActions = true;
+            actions = parseCharmActionsYAML(content);
+        }
         this.model.updateActions(actions);
         await this.updateLiveActionsFile();
+        this._onActionsChanged.fire();
     }
 
     private async _refreshConfig() {
-        const uri = vscode.Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
-        const content = await tryReadWorkspaceFileAsText(uri) || "";
-        const config = (content ? parseCharmConfigYAML(content) : undefined) || emptyConfig();
+        const content = await tryReadWorkspaceFileAsText(this.configUri);
+        let config: CharmConfig;
+        if (content === undefined) {
+            this._hasConfig = false;
+            config = emptyConfig();
+        } else {
+            this._hasConfig = true;
+            config = parseCharmConfigYAML(content);
+        }
         this.model.updateConfig(config);
         await this.updateLiveConfigFile();
+        this._onConfigChanged.fire();
     }
 
     private async _refreshMetadata() {
-        const uri = vscode.Uri.joinPath(this.home, CHARM_FILE_METADATA_YAML);
-        const content = await tryReadWorkspaceFileAsText(uri) || "";
-        const metadata = (content ? parseCharmMetadataYAML(content) : undefined) || emptyMetadata();
+        const content = await tryReadWorkspaceFileAsText(this.metadataUri);
+        let metadata: CharmMetadata;
+        if (content === undefined) {
+            this._hasMetadata = false;
+            metadata = emptyMetadata();
+        } else {
+            this._hasMetadata = true;
+            metadata = parseCharmMetadataYAML(content);
+        }
         this.model.updateMetadata(metadata);
         await this.updateLiveMetadataFile();
+        this._onMetadataChanged.fire();
     }
 
     private async _refreshSourceCodeFile(uri: Uri) {
