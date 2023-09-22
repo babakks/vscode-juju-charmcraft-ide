@@ -1,8 +1,8 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
-import { Problem, CharmMetadata, CharmAction, CharmConfigParameter, emptyYAMLNode, CharmConfig, SequenceWithNode, CharmActions, WithNode, MapWithNode } from "../model/charm";
-import { YAMLParser, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML } from "../parser";
+import { Problem, CharmMetadata, CharmAction, CharmConfigParameter, emptyYAMLNode, CharmConfig, SequenceWithNode, CharmActions, WithNode, MapWithNode, CharmToxConfig } from "../model/charm";
+import { YAMLParser, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from "../parser";
 import path = require("path");
 import { readFileSync } from "fs";
 import { Range } from "../model/common";
@@ -1869,4 +1869,103 @@ suite(parseCharmMetadataYAML.name, function () {
     // TODO add tests for 'containers'.
     // TODO add tests for 'containers/resource' match.
     // TODO add tests for 'containers/storage' match.
+});
+
+suite(parseToxINI.name, function () {
+    type TestCase = {
+        name: string;
+        content: string;
+        expected: CharmToxConfig;
+    };
+
+    const tests: TestCase[] = [
+        {
+            name: 'empty',
+            content: '',
+            expected: { sections: {} },
+        }, {
+            name: 'invalid INI',
+            content: '?',
+            expected: { sections: {} },
+        }, {
+            name: 'no section',
+            content: unindent(`
+                key=value
+            `),
+            expected: { sections: {} },
+        }, {
+            name: 'empty section',
+            content: unindent(`
+                [section]
+            `),
+            expected: {
+                sections: {
+                    section: {
+                        name: 'section',
+                    },
+                },
+            },
+        }, {
+            name: 'non-empty section, with unknown properties',
+            content: unindent(`
+                [section]
+                key=value
+            `),
+            expected: {
+                sections: {
+                    section: {
+                        name: 'section',
+                    },
+                },
+            },
+        }, {
+            name: 'non-empty section, with all expected properties',
+            content: unindent(`
+                [a]
+                description=description-a
+                commands=command-a
+            `),
+            expected: {
+                sections: {
+                    a: {
+                        name: 'a',
+                        description: 'description-a',
+                        commands: 'command-a',
+                    },
+                },
+            },
+        }, {
+            name: 'multiple non-empty sections',
+            content: unindent(`
+                [a]
+                description=description-a
+                commands=command-a
+                [b]
+                description=description-b
+                commands=command-b
+            `),
+            expected: {
+                sections: {
+                    'a': {
+                        name: 'a',
+                        description: 'description-a',
+                        commands: 'command-a',
+                    },
+                    'b': {
+                        name: 'b',
+                        description: 'description-b',
+                        commands: 'command-b',
+                    },
+                },
+            },
+        }
+    ];
+
+    for (const t of tests) {
+        const tt = t;
+        test(tt.name, function () {
+            const value = parseToxINI(tt.content);
+            assert.deepStrictEqual(value, tt.expected);
+        });
+    }
 });
