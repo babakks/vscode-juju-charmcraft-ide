@@ -8,6 +8,20 @@ import {
     toValidSymbol
 } from "./common";
 
+export interface Problem {
+    message: string;
+    /**
+     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
+     */
+    id?: string;
+    key?: string;
+    index?: number;
+    /**
+     * Supplementary data for further usage (e.g., when providing fix suggestions).
+     */
+    [key: string]: any;
+}
+
 export const YAML_PROBLEMS = {
     /**
      * Generic YAML file problems.
@@ -65,6 +79,23 @@ export const SOURCE_CODE_PROBLEMS = {
 export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
 export function isConfigParameterType(value: string): value is CharmConfigParameterType {
     return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
+}
+
+export interface YAMLNode {
+    kind?: 'map' | 'sequence' | 'pair' | 'scalar';
+    range?: Range;
+    pairKeyRange?: Range;
+    pairValueRange?: Range;
+    problems: Problem[];
+    /**
+     * Raw node returned by the underlying YAML parser/tokenizer library.
+     */
+    raw?: any;
+    /**
+     * Raw text content, corresponding to the {@link range `range`} property.
+     */
+    text: string;
+    pairText?: string;
 }
 
 type AttachedNode = {
@@ -228,37 +259,6 @@ export interface CharmActions {
      * Root node.
      */
     node: YAMLNode;
-}
-
-export interface YAMLNode {
-    kind?: 'map' | 'sequence' | 'pair' | 'scalar';
-    range?: Range;
-    pairKeyRange?: Range;
-    pairValueRange?: Range;
-    problems: Problem[];
-    /**
-     * Raw node returned by the underlying YAML parser/tokenizer library.
-     */
-    raw?: any;
-    /**
-     * Raw text content, corresponding to the {@link range `range`} property.
-     */
-    text: string;
-    pairText?: string;
-}
-
-export interface Problem {
-    message: string;
-    /**
-     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
-     */
-    id?: string;
-    key?: string;
-    index?: number;
-    /**
-     * Supplementary data for further usage (e.g., when providing fix suggestions). 
-     */
-    [key: string]: any;
 }
 
 export class CharmSourceCodeFile {
