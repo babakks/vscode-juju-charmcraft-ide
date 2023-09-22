@@ -52,6 +52,8 @@ const WATCH_GLOB_PATTERN = `{${CHARM_VIRTUAL_ENV_DIR},${CHARM_FILE_CONFIG_YAML},
 
 export class WorkspaceCharm implements vscode.Disposable {
     private _disposables: Disposable[] = [];
+    private readonly watcher: vscode.FileSystemWatcher;
+    private readonly _srcDir: Uri;
 
     /**
      * Persisted model of the charm. 
@@ -64,46 +66,62 @@ export class WorkspaceCharm implements vscode.Disposable {
      */
     readonly live: Charm;
 
-    private readonly _srcDir: Uri;
-
-    private readonly watcher: vscode.FileSystemWatcher;
-
-    readonly configUri: Uri;
     private _hasConfig: boolean = false;
-
-    readonly actionsUri: Uri;
-    private _hasActions: boolean = false;
-
-    readonly metadataUri: Uri;
-    private _hasMetadata: boolean = false;
-
-    readonly virtualEnv: VirtualEnv;
-    readonly virtualEnvUri: Uri;
-    private _hasVirtualEnv: boolean = false;
-
-    private readonly _onVirtualEnvChanged = new vscode.EventEmitter<void>();
-    /**
-     * Fires when the virtual environment directory (i.e., `venv`) is created/deleted.
-     */
-    readonly onVirtualEnvChanged = this._onVirtualEnvChanged.event;
-
     private readonly _onConfigChanged = new vscode.EventEmitter<void>();
     /**
-     * Fires when the **persisted** configuration file (i.e., `config.yaml`) changes, or is created/deleted).
+     * URI of the charm's `config.yaml` file. This property is always
+     * assigned with the standard path, so consult with {@link hasConfig} to
+     * check if the file exists.
+     */
+    readonly configUri: Uri;
+    /**
+     * Fires when the **persisted** configuration file (i.e., `config.yaml`)
+     * changes, or is created/deleted).
      */
     readonly onConfigChanged = this._onConfigChanged.event;
 
+    private _hasActions: boolean = false;
     private readonly _onActionsChanged = new vscode.EventEmitter<void>();
     /**
-     * Fires when the **persisted** actions file (i.e., `actions.yaml`) changes, or is created/deleted).
+     * URI of the charm's `actions.yaml` file. This property is always
+     * assigned with the standard path, so consult with {@link hasActions} to
+     * check if the file exists.
+     */
+    readonly actionsUri: Uri;
+    /**
+     * Fires when the **persisted** actions file (i.e., `actions.yaml`) changes,
+     * or is created/deleted).
      */
     readonly onActionsChanged = this._onActionsChanged.event;
 
+    private _hasMetadata: boolean = false;
     private readonly _onMetadataChanged = new vscode.EventEmitter<void>();
     /**
-     * Fires when the **persisted** metadata file (i.e., `metadata.yaml`) changes, or is created/deleted).
+     * URI of the charm's `metadata.yaml` file. This property is always
+     * assigned with the standard path, so consult with {@link hasMetadata} to
+     * check if the file exists.
+     */
+    readonly metadataUri: Uri;
+    /**
+     * Fires when the **persisted** metadata file (i.e., `metadata.yaml`)
+     * changes, or is created/deleted).
      */
     readonly onMetadataChanged = this._onMetadataChanged.event;
+
+    private _hasVirtualEnv: boolean = false;
+    private readonly _onVirtualEnvChanged = new vscode.EventEmitter<void>();
+    /**
+     * URI of the charm's virtual environment directory. This property is always
+     * assigned with the standard path, so consult with {@link hasVirtualEnv} to
+     * check if the directory exists.
+     */
+    readonly virtualEnvUri: Uri;
+    /**
+     * Fires when the virtual environment directory (i.e., `venv`) is
+     * created/deleted.
+     */
+    readonly onVirtualEnvChanged = this._onVirtualEnvChanged.event;
+    readonly virtualEnv: VirtualEnv;
 
     constructor(
         readonly home: Uri,
