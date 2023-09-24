@@ -11,7 +11,9 @@ This is a VS Code extension to provide tools for Juju Charms development. To lea
 ### General features
 
 - Control charm belongings via the activity bar view:
-  - Create virtual environments.
+  - Create/setup virtual environments.
+  - Run Tox environments; lint, format, unit/integration tests, etc.
+  - Activate a charm to be the default for Python development environment.
 
 ### Python features
 - Hover for events or configuration parameters in charm source code.
