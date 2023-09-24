@@ -114,14 +114,15 @@ export class Commands implements Disposable {
             const deleteResult = await workspaceCharm.virtualEnv.delete();
             if (deleteResult.code !== 0) {
                 const showLogs: MessageItem = { title: "Show Logs" };
-                const resp = await window.showInformationMessage(
+                window.showInformationMessage(
                     "Failed to delete the existing  virtual environment. Click on 'See Logs' for more information.",
                     showLogs,
-                );
-                if (!resp) {
-                    return;
-                }
-                await showResultInNewDocument(deleteResult);
+                ).then(resp => {
+                    if (!resp) {
+                        return;
+                    }
+                    showResultInNewDocument(deleteResult);
+                });
                 return;
             }
         }
@@ -129,14 +130,15 @@ export class Commands implements Disposable {
         const createResult = await workspaceCharm.virtualEnv.create();
         if (createResult.code !== 0) {
             const showLogs: MessageItem = { title: "Show Logs" };
-            const resp = await window.showInformationMessage(
+            window.showInformationMessage(
                 "Failed to create the virtual environment. Click on 'See Logs' for more information.",
                 showLogs,
-            );
-            if (!resp) {
-                return;
-            }
-            await showResultInNewDocument(createResult);
+            ).then(resp => {
+                if (!resp) {
+                    return;
+                }
+                showResultInNewDocument(createResult);
+            });
             return;
         }
 
@@ -153,26 +155,28 @@ export class Commands implements Disposable {
 
         if (setupResult.code !== 0) {
             const showlogs: MessageItem = { title: "Show Logs" };
-            const resp = await window.showInformationMessage(
+            window.showInformationMessage(
                 "Failed to setup the virtual environment. Click on 'See Logs' for more information.",
                 showlogs,
-            );
-            if (!resp) {
-                return;
-            }
-            await showResultInNewDocument(setupResult);
+            ).then(resp => {
+                if (!resp) {
+                    return;
+                }
+                showResultInNewDocument(setupResult);
+            });
             return;
         }
 
         const showLogs: MessageItem = { title: "Show Logs" };
-        const resp = await window.showInformationMessage(
+        window.showInformationMessage(
             "Virtual environment created at " + workspace.asRelativePath(workspaceCharm.virtualEnvUri) + ".",
             showLogs,
-        );
-        if (!resp) {
-            return;
-        }
-        await showResultInNewDocument(setupResult);
+        ).then(resp => {
+            if (!resp) {
+                return;
+            }
+            showResultInNewDocument(setupResult);
+        });
 
         async function showResultInNewDocument(e: ExecutionResult) {
             const content = `exit-code: ${e.code}\r\n\r\nstdout:\r\n-------\r\n\r\n${e.stdout}\r\n\r\nstderr:\r\n-------\r\n\r\n${e.stderr}\r\n\r\n`;
