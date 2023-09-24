@@ -274,8 +274,6 @@ export interface CharmToxConfig {
 
 export interface CharmToxConfigSection {
     name: string;
-    description?: string;
-    commands?: string;
 }
 
 export class CharmSourceCodeFile {
@@ -905,12 +903,19 @@ export function emptyMetadata(): CharmMetadata {
     };
 }
 
+export function emptyToxConfig(): CharmToxConfig {
+    return {
+        sections: {},
+    };
+}
+
 export class Charm {
     private _config: CharmConfig = emptyConfig();
 
     private _eventSymbolMap = new Map<string, CharmEvent>();
     private _actions: CharmActions = emptyActions();
     private _metadata: CharmMetadata = emptyMetadata();
+    private _toxConfig: CharmToxConfig = emptyToxConfig();
 
     private _events: CharmEvent[] = [];
     private _src: CharmSourceCode = new CharmSourceCode({});
@@ -937,6 +942,10 @@ export class Charm {
         return this._metadata;
     }
 
+    get toxConfig(): CharmToxConfig {
+        return this._toxConfig;
+    }
+
     get src(): CharmSourceCode {
         return this._src;
     }
@@ -953,6 +962,10 @@ export class Charm {
     async updateMetadata(metadata: CharmMetadata) {
         this._metadata = metadata;
         this._repopulateEvents();
+    }
+
+    async updateToxConfig(toxConfig: CharmToxConfig) {
+        this._toxConfig = toxConfig;
     }
 
     async updateSourceCode(src: CharmSourceCode) {

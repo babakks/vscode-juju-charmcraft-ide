@@ -12,44 +12,50 @@ export type ExecutionEnv = {
     [key: string]: string | undefined;
 };
 
-export class VirtualEnv {
-    // private _isCreated: boolean = false;
-    // private _isSetUp: boolean = false;
+export class VirtualEnv implements vscode.Disposable {
+    private readonly _disposables: vscode.Disposable[] = [];
+    /**
+     * Maps a tuple of group (e.g., `testenv` in tox environments like
+     * `testenv:lint`) and CWD (as a single JSON string) to terminals.
+     */
+    private readonly _terminalMap = new Map<string, vscode.Terminal>();
 
-    constructor(readonly home: vscode.Uri, readonly dir: string = 'venv') {
-        if (this.home.scheme !== 'file') {
+    constructor(readonly charmHome: vscode.Uri, readonly virtualEnvDir: string = 'venv') {
+        if (this.charmHome.scheme !== 'file') {
             throw new Error('Only `file://` scheme is supported');
         }
-        if (this.dir === '') {
+        if (this.virtualEnvDir === '') {
             throw new Error('Virtual environment directory cannot be empty string');
         }
+
+        this._disposables.push(vscode.window.onDidCloseTerminal(e => {
+            for (const [k, v] of this._terminalMap) {
+                if (v === e) {
+                    this._terminalMap.delete(k);
+                    return;
+                }
+            }
+        }));
     }
 
-    // get isCreated(): boolean {
-    //     return this._isCreated;
-    // }
-
-    // get isSetUp(): boolean {
-    //     return this._isSetUp;
-    // }
+    dispose() {
+        this._disposables.forEach(x => x.dispose());
+    }
 
     async create(): Promise<ExecutionResult> {
         // if (this.isCreated) {
         //     throw new Error('Virtual environment is already created');
         // }
         const result = await this._exec(
-            this.home.path,
+            this.charmHome.path,
             'sh',
             [
                 getResourceScriptPath('create.sh'),
-                this.dir,
+                this.virtualEnvDir,
             ],
             undefined,
             true,
         );
-        // if (result.code === 0) {
-        //     this._isCreated = true;
-        // }
         return result;
     }
 
@@ -58,41 +64,29 @@ export class VirtualEnv {
         //     throw new Error('Virtual environment is not created yet');
         // }
         const result = await this._exec(
-            this.home.path,
+            this.charmHome.path,
             'sh',
             [
                 getResourceScriptPath('delete.sh'),
-                this.dir,
+                this.virtualEnvDir,
             ],
             undefined,
             true,
         );
-        // if (result.code === 0) {
-        //     this._isCreated = false;
-        //     this._isSetUp = false;
-        // }
         return result;
     }
 
     async setup(): Promise<ExecutionResult> {
-        // if (!this.isCreated) {
-        //     throw new Error('Virtual environment is not created yet');
-        // }
-        const result = await this._exec(this.home.path, 'sh', [getResourceScriptPath('setup.sh')]);
-        // if (result.code === 0) {
-        //     this._isSetUp = true;
-        // }
+        const result = await this._exec(this.charmHome.path, 'sh', [getResourceScriptPath('setup.sh')]);
         return result;
     }
 
-    async exec(command: string, args?: string[], env?: ExecutionEnv): Promise<ExecutionResult> {
-        // if (!this.isCreated) {
-        //     throw new Error('Virtual environment is not created yet');
-        // }
-        // if (!this.isSetUp) {
-        //     throw new Error('Virtual environment is not set up yet');
-        // }
-        return await this._exec(this.home.path, command, args, env);
+    /**
+     * Executes given command within the virtual environment, in the charm home
+     * directory.
+     */
+    async exec(command: string, args?: string[], cwd?: vscode.Uri, env?: ExecutionEnv): Promise<ExecutionResult> {
+        return await this._exec(cwd?.fsPath ?? this.charmHome.path, command, args, env);
     }
 
     private async _exec(
@@ -112,7 +106,7 @@ export class VirtualEnv {
             modifiedCommand = 'sh';
             modifiedArgs = [
                 '-c',
-                `. ${quoteForShell(`${this.dir}/bin/activate`)} && ${command}${args ? ' "$@"' : ''}`,
+                this._prependActivateCommand(`${command}${args ? ' "$@"' : ''}`),
                 "",
                 ...args ?? [],
             ];
@@ -136,6 +130,32 @@ export class VirtualEnv {
                 resolve(result);
             });
         });
+    }
+
+    execInTerminal(group: string, command: string, cwd?: vscode.Uri, env?: ExecutionEnv, terminalName?: string): vscode.Terminal {
+        const terminal = this._getOrCreateTerminal(group, cwd, env, terminalName);
+        const modifiedCommand = this._prependActivateCommand(command);
+        terminal.sendText(modifiedCommand, true);
+        return terminal;
+    }
+
+    private _getOrCreateTerminal(group: string, cwd?: vscode.Uri, env?: ExecutionEnv, terminalName?: string): vscode.Terminal {
+        const getKey = () => JSON.stringify([group, cwd?.path ?? this.charmHome.path]);
+        const terminal = this._terminalMap.get(getKey());
+        if (terminal) {
+            return terminal;
+        }
+        const created = vscode.window.createTerminal({
+            name: terminalName || group || undefined,
+            cwd: cwd ?? this.charmHome,
+            env,
+        });
+        this._terminalMap.set(getKey(), created);
+        return created;
+    }
+
+    private _prependActivateCommand(command: string): string {
+        return `. ${quoteForShell(`${this.virtualEnvDir}/bin/activate`)} && ${command}`;
     }
 }
 

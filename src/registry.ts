@@ -11,6 +11,11 @@ export class Registry implements Disposable {
     private readonly _set = new Set<WorkspaceCharm>();
     private readonly _disposablesPerCharm = new Map<WorkspaceCharm, Disposable[]>();
 
+    private _activeCharm: WorkspaceCharm | undefined = undefined;
+
+    private readonly _onActiveCharmChanged = new EventEmitter<void>();
+    readonly onActiveCharmChanged = this._onActiveCharmChanged.event;
+
     private readonly _onChanged = new EventEmitter<void>();
     readonly onChanged = this._onChanged.event;
 
@@ -38,6 +43,12 @@ export class Registry implements Disposable {
      */
     readonly onCharmMetadataChanged = this._onCharmMetadataChanged.event;
 
+    private readonly _onCharmToxConfigChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onToxConfigChanged} event.
+     */
+    readonly onCharmToxConfigChanged = this._onCharmToxConfigChanged.event;
+
     constructor(readonly output: OutputChannel, readonly diagnostics: DiagnosticCollection) { }
 
     dispose() {
@@ -50,6 +61,18 @@ export class Registry implements Disposable {
         this._disposablesPerCharm.delete(charm);
         charm.dispose();
         this._set.delete(charm);
+        if (this._activeCharm === charm) {
+            this.setActiveCharm(undefined);
+        }
+    }
+
+    getActiveCharm(): WorkspaceCharm | undefined {
+        return this._activeCharm;
+    }
+
+    setActiveCharm(workspaceCharm: WorkspaceCharm | undefined) {
+        this._activeCharm = workspaceCharm;
+        this._onActiveCharmChanged.fire();
     }
 
     getWorkspaceCharms() {
@@ -129,6 +152,7 @@ export class Registry implements Disposable {
             charm.onConfigChanged(() => this._onCharmConfigChanged.fire(charm)),
             charm.onActionsChanged(() => this._onCharmActionsChanged.fire(charm)),
             charm.onMetadataChanged(() => this._onCharmMetadataChanged.fire(charm)),
+            charm.onToxConfigChanged(() => this._onCharmToxConfigChanged.fire(charm)),
         ]);
         return charm;
     }

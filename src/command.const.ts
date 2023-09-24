@@ -1,0 +1,9 @@
+export const COMMAND_PREFIX = 'charmcraft-ide';
+export const COMMAND_DISCOVER_CHARMS = COMMAND_PREFIX + '.discoverCharms';
+export const COMMAND_REVEAL_CHARM_DIRECTORY = COMMAND_PREFIX + '.revealCharmDirectory';
+export const COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT = COMMAND_PREFIX + '.createAndSetupVirtualEnvironment';
+export const COMMAND_ACTIVATE_CHARM = COMMAND_PREFIX + '.activateCharm';
+export const COMMAND_REVEAL_CHARM_FILE = COMMAND_PREFIX + '.revealCharmFile';
+export const COMMAND_RUN_TOX_ENV_IN_TERMINAL = COMMAND_PREFIX + '.runToxEnvInTerminal';
+export const COMMAND_RESET_STATE_GLOBAL = COMMAND_PREFIX + '.resetStateGlobal';
+export const COMMAND_RESET_STATE_WORKSPACE = COMMAND_PREFIX + '.resetStateWorkspace';

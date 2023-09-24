@@ -1906,7 +1906,7 @@ suite(parseToxINI.name, function () {
                 },
             },
         }, {
-            name: 'non-empty section, with unknown properties',
+            name: 'non-empty section',
             content: unindent(`
                 [section]
                 key=value
@@ -1919,46 +1919,24 @@ suite(parseToxINI.name, function () {
                 },
             },
         }, {
-            name: 'non-empty section, with all expected properties',
-            content: unindent(`
-                [a]
-                description=description-a
-                commands=command-a
-            `),
-            expected: {
-                sections: {
-                    a: {
-                        name: 'a',
-                        description: 'description-a',
-                        commands: 'command-a',
-                    },
-                },
-            },
-        }, {
             name: 'multiple non-empty sections',
             content: unindent(`
                 [a]
-                description=description-a
-                commands=command-a
+                key=value
                 [b]
-                description=description-b
-                commands=command-b
+                key=value
             `),
             expected: {
                 sections: {
                     'a': {
                         name: 'a',
-                        description: 'description-a',
-                        commands: 'command-a',
                     },
                     'b': {
                         name: 'b',
-                        description: 'description-b',
-                        commands: 'command-b',
                     },
                 },
             },
-        }
+        },
     ];
 
     for (const t of tests) {

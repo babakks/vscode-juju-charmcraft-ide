@@ -41,6 +41,7 @@ import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
 import * as ini from 'ini';
 
+
 /**
  * A generic YAML parser that returns a tree of objects/arrays of type {@link WithNode<any>}.
  */
@@ -817,8 +818,11 @@ export function parseToxINI(text: string): CharmToxConfig {
     function parseSection(name: string, v: Object): CharmToxConfigSection | undefined {
         const result: CharmToxConfigSection = {
             name,
-            ...('description' in v && typeof v['description'] === 'string' ? { description: v['description'] } : {}),
-            ...('commands' in v && typeof v['commands'] === 'string' ? { commands: v['commands'] } : {}),
+            /*
+             * NOTE the `ini` package does not support multiline values which is common
+             * for `description` or `commands` in `tox.ini` file. Therefore, we just
+             * use the section names. 
+             */
         };
         return result;
     }

@@ -42,16 +42,28 @@
                 "icon": "$(folder-opened)"
             },
             {
+                "command": "charmcraft-ide.createAndSetupVirtualEnvironment",
+                "title": "Create and Setup Virtual Environment (venv)",
+                "category": "Charmcraft IDE",
+                "icon": "$(debug-console)"
+            },
+            {
+                "command": "charmcraft-ide.activateCharm",
+                "title": "Activate Charm as Default Python Project",
+                "category": "Charmcraft IDE",
+                "icon": "$(pass-filled)"
+            },
+            {
                 "command": "charmcraft-ide.revealCharmFile",
                 "title": "Reveal Charm File in Explorer",
                 "category": "Charmcraft IDE",
                 "icon": "$(folder-opened)"
             },
             {
-                "command": "charmcraft-ide.createAndSetupVirtualEnvironment",
-                "title": "Create and Setup Virtual Environment (venv)",
+                "command": "charmcraft-ide.runToxEnvInTerminal",
+                "title": "Run in Terminal (Tox Environment)",
                 "category": "Charmcraft IDE",
-                "icon": "$(debug-console)"
+                "icon": "$(run)"
             },
             {
                 "command": "charmcraft-ide.resetStateGlobal",
@@ -96,14 +108,24 @@
                     "command": "charmcraft-ide.revealCharmDirectory"
                 },
                 {
-                    "when": "view == charmcraft-charms && viewItem == charm",
+                    "when": "view == charmcraft-charms && (viewItem == charm || viewItem == noVirtualEnvWarning)",
                     "group": "inline",
                     "command": "charmcraft-ide.createAndSetupVirtualEnvironment"
                 },
                 {
-                    "when": "view == charmcraft-charms && (viewItem == config || viewItem == actions || viewItem == metadata)",
+                    "when": "view == charmcraft-charms && viewItem == charm",
+                    "group": "inline",
+                    "command": "charmcraft-ide.activateCharm"
+                },
+                {
+                    "when": "view == charmcraft-charms && (viewItem == config || viewItem == actions || viewItem == metadata || viewItem == tox)",
                     "group": "inline",
                     "command": "charmcraft-ide.revealCharmFile"
+                },
+                {
+                    "when": "view == charmcraft-charms && viewItem == toxEnv",
+                    "group": "inline",
+                    "command": "charmcraft-ide.runToxEnvInTerminal"
                 }
             ]
         }
@@ -121,6 +143,7 @@
     "devDependencies": {
         "@types/chai": "^4.3.5",
         "@types/glob": "^7.2.0",
+        "@types/ini": "^1.3.31",
         "@types/js-yaml": "^4.0.5",
         "@types/mocha": "^9.1.0",
         "@types/node": "14.x",
@@ -135,7 +158,6 @@
         "typescript": "^4.9.5"
     },
     "dependencies": {
-        "@types/ini": "^1.3.31",
         "@vscode/extension-telemetry": "^0.8.2",
         "handlebars": "^4.7.7",
         "ini": "^4.1.1",
