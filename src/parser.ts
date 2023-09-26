@@ -27,6 +27,8 @@ import {
     CharmMetadata,
     CharmResource,
     CharmStorage,
+    CharmToxConfig,
+    CharmToxConfigSection,
     MapWithNode,
     Problem,
     SequenceWithNode,
@@ -37,6 +39,8 @@ import {
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
+import * as ini from 'ini';
+
 
 /**
  * A generic YAML parser that returns a tree of objects/arrays of type {@link WithNode<any>}.
@@ -787,6 +791,39 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 entry.node.problems.push(YAML_PROBLEMS.metadata.assumptionExpected);
             }
         }
+        return result;
+    }
+}
+
+export function parseToxINI(text: string): CharmToxConfig {
+    let parsed = {};
+    try {
+        parsed = ini.parse(text);
+    } catch { }
+
+    const result: CharmToxConfig = {
+        sections: {},
+    };
+
+    for (const [k, v] of Object.entries(parsed)) {
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+            const section = parseSection(k, v);
+            if (section) {
+                result.sections[k] = section;
+            }
+        }
+    }
+    return result;
+
+    function parseSection(name: string, v: Object): CharmToxConfigSection | undefined {
+        const result: CharmToxConfigSection = {
+            name,
+            /*
+             * NOTE the `ini` package does not support multiline values which is common
+             * for `description` or `commands` in `tox.ini` file. Therefore, we just
+             * use the section names. 
+             */
+        };
         return result;
     }
 }

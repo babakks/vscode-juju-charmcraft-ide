@@ -1,10 +1,13 @@
 export const CHARM_DIR_SRC = 'src';
 export const CHARM_DIR_SRC_MAIN = 'charm.py';
 export const CHARM_DIR_LIB = 'lib';
+export const CHARM_DIR_TESTS = 'tests';
+export const CHARM_DIR_VENV = 'venv';
 export const CHARM_FILE_ACTIONS_YAML = 'actions.yaml';
 export const CHARM_FILE_CONFIG_YAML = 'config.yaml';
 export const CHARM_FILE_METADATA_YAML = 'metadata.yaml';
 export const CHARM_FILE_CHARMCRAFT_YAML = 'charmcraft.yaml';
+export const CHARM_FILE_TOX_INI = 'tox.ini';
 export const CHARM_SOURCE_CODE_CHARM_BASE_CLASS = 'CharmBase';
 
 export interface Position {

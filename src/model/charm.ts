@@ -8,6 +8,20 @@ import {
     toValidSymbol
 } from "./common";
 
+export interface Problem {
+    message: string;
+    /**
+     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
+     */
+    id?: string;
+    key?: string;
+    index?: number;
+    /**
+     * Supplementary data for further usage (e.g., when providing fix suggestions).
+     */
+    [key: string]: any;
+}
+
 export const YAML_PROBLEMS = {
     /**
      * Generic YAML file problems.
@@ -65,6 +79,23 @@ export const SOURCE_CODE_PROBLEMS = {
 export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
 export function isConfigParameterType(value: string): value is CharmConfigParameterType {
     return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
+}
+
+export interface YAMLNode {
+    kind?: 'map' | 'sequence' | 'pair' | 'scalar';
+    range?: Range;
+    pairKeyRange?: Range;
+    pairValueRange?: Range;
+    problems: Problem[];
+    /**
+     * Raw node returned by the underlying YAML parser/tokenizer library.
+     */
+    raw?: any;
+    /**
+     * Raw text content, corresponding to the {@link range `range`} property.
+     */
+    text: string;
+    pairText?: string;
 }
 
 type AttachedNode = {
@@ -230,35 +261,19 @@ export interface CharmActions {
     node: YAMLNode;
 }
 
-export interface YAMLNode {
-    kind?: 'map' | 'sequence' | 'pair' | 'scalar';
-    range?: Range;
-    pairKeyRange?: Range;
-    pairValueRange?: Range;
-    problems: Problem[];
-    /**
-     * Raw node returned by the underlying YAML parser/tokenizer library.
-     */
-    raw?: any;
-    /**
-     * Raw text content, corresponding to the {@link range `range`} property.
-     */
-    text: string;
-    pairText?: string;
+/*
+ * TODO
+ * We have skipped AST-scope granularity (e.g., nodes or problems) for tox
+ * configuration model, for now. Maybe at some point in future we decided to add
+ * them to the type, after which point the type should look like others (e.g.,
+ * actions or config ) where WithNode<T> has replaced primitive types.
+ */
+export interface CharmToxConfig {
+    sections: { [key: string]: CharmToxConfigSection };
 }
 
-export interface Problem {
-    message: string;
-    /**
-     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
-     */
-    id?: string;
-    key?: string;
-    index?: number;
-    /**
-     * Supplementary data for further usage (e.g., when providing fix suggestions). 
-     */
-    [key: string]: any;
+export interface CharmToxConfigSection {
+    name: string;
 }
 
 export class CharmSourceCodeFile {
@@ -281,7 +296,7 @@ export class CharmSourceCodeFile {
     }
 }
 
-export type CharmSourceCodeTreeEntry = CharmSourceCodeTreeDirectoryEntry | CharmSourceCodeTreeFileEntry
+export type CharmSourceCodeTreeEntry = CharmSourceCodeTreeDirectoryEntry | CharmSourceCodeTreeFileEntry;
 
 export interface CharmSourceCodeTree {
     [key: string]: CharmSourceCodeTreeEntry;
@@ -888,12 +903,19 @@ export function emptyMetadata(): CharmMetadata {
     };
 }
 
+export function emptyToxConfig(): CharmToxConfig {
+    return {
+        sections: {},
+    };
+}
+
 export class Charm {
     private _config: CharmConfig = emptyConfig();
 
     private _eventSymbolMap = new Map<string, CharmEvent>();
     private _actions: CharmActions = emptyActions();
     private _metadata: CharmMetadata = emptyMetadata();
+    private _toxConfig: CharmToxConfig = emptyToxConfig();
 
     private _events: CharmEvent[] = [];
     private _src: CharmSourceCode = new CharmSourceCode({});
@@ -920,6 +942,10 @@ export class Charm {
         return this._metadata;
     }
 
+    get toxConfig(): CharmToxConfig {
+        return this._toxConfig;
+    }
+
     get src(): CharmSourceCode {
         return this._src;
     }
@@ -936,6 +962,10 @@ export class Charm {
     async updateMetadata(metadata: CharmMetadata) {
         this._metadata = metadata;
         this._repopulateEvents();
+    }
+
+    async updateToxConfig(toxConfig: CharmToxConfig) {
+        this._toxConfig = toxConfig;
     }
 
     async updateSourceCode(src: CharmSourceCode) {

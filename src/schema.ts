@@ -7,12 +7,53 @@ import * as vscode from 'vscode';
 import { type ExtensionAPI } from './include/redhat.vscode-yaml';
 import path = require('path');
 
+const EXTENSION_SCHEMA_DATA_DIR = 'schema/data';
+
+const RED_HAT_YAML_EXT = 'redhat.vscode-yaml';
+const GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT = 'never-ask-yaml-extension';
+
+const SCHEMA_FILE = 'schema.json';
+const SCHEMA_INCLUDE_SUBDIR = 'include';
+
 type Schema = { uri: string, filename: string; content: string };
 type SchemaMapByURI = Map<string, Schema>;
 type SchemaMapByFilename = Map<string, Schema>;
 
-const SCHEMA_FILE = 'schema.json';
-const SCHEMA_INCLUDE_SUBDIR = 'include';
+export async function integrateWithYAMLExtension(context: vscode.ExtensionContext) {
+    const yamlExtension = vscode.extensions.getExtension(RED_HAT_YAML_EXT);
+    if (!yamlExtension) {
+        const neverAsk = context.globalState.get(GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT);
+        if (neverAsk) {
+            return;
+        }
+
+        const resp = await vscode.window.showInformationMessage(
+            "To enable YAML file services (e.g., schema validation or auto-completion) you need to install Red Hat YAML language server extension.",
+            "Open Red Hat YAML Extension",
+            "Never ask",
+        );
+        if (resp) {
+            if (resp === 'Never ask') {
+                context.globalState.update(GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT, true);
+            } else {
+                vscode.commands.executeCommand('extension.open', RED_HAT_YAML_EXT);
+            }
+        }
+        return;
+    }
+
+    if (!yamlExtension.isActive) {
+        await yamlExtension.activate();
+    }
+
+    const yaml = yamlExtension.exports as ExtensionAPI;
+    await registerSchemas(
+        path.join(context.extensionPath, EXTENSION_SCHEMA_DATA_DIR),
+        yaml,
+        // Enable watching for schema changes, only in development mode.
+        context.extensionMode === vscode.ExtensionMode.Development,
+    );
+}
 
 export async function registerSchemas(schemaDataDir: string, yamlExtensionAPI: ExtensionAPI, watchForChanges: boolean): Promise<vscode.Disposable[]> {
     let [byURI, byFilename] = await loadSchemas(schemaDataDir);

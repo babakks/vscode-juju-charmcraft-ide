@@ -2,13 +2,11 @@ import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     Disposable,
     ExtensionContext,
-    ExtensionMode,
-    commands,
-    extensions,
-    languages,
+    ExtensionMode, languages,
     window
 } from 'vscode';
 import { EventHandlerCodeActionProvider } from './codeAction';
+import { Commands } from './command';
 import {
     CHARM_CONFIG_COMPLETION_TRIGGER_CHARS,
     CHARM_EVENT_COMPLETION_TRIGGER_CHARS,
@@ -17,18 +15,13 @@ import {
 } from './completion';
 import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './definition';
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
-import { ExtensionAPI } from './include/redhat.vscode-yaml';
 import { Registry } from './registry';
-import { registerSchemas } from './schema';
+import { integrateWithYAMLExtension } from './schema';
+import { CharmcraftTreeDataProvider } from './tree';
 import { DocumentWatcher } from './watcher';
 import path = require('path');
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
-
-const EXTENSION_SCHEMA_DATA_DIR = 'schema/data';
-
-const RED_HAT_YAML_EXT = 'redhat.vscode-yaml';
-const GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT = 'never-ask-yaml-extension';
 
 export async function activate(context: ExtensionContext) {
     const reporter = new TelemetryReporter(context.extensionMode === ExtensionMode.Production ? TELEMETRY_INSTRUMENTATION_KEY : '');
@@ -55,7 +48,13 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(dw);
     dw.enable();
 
-    context.subscriptions.push(...registerCommands(context, reporter));
+    const tdp = new CharmcraftTreeDataProvider(registry, reporter);
+    context.subscriptions.push(tdp);
+    context.subscriptions.push(window.createTreeView('charmcraft-charms', { treeDataProvider: tdp }));
+
+    const commands = new Commands(context, reporter, registry, tdp);
+    context.subscriptions.push(commands);
+    commands.register();
 
     // Note that we shouldn't `await` on this call, because it could ask for user decision (e.g., to install the YAML
     // extension) and get blocked for an unknown time duration (possibly never, if user decides to skip the message).
@@ -65,61 +64,6 @@ export async function activate(context: ExtensionContext) {
 }
 
 export function deactivate() { }
-
-function registerCommands(context: ExtensionContext, reporter: TelemetryReporter): Disposable[] {
-    return [
-        commands.registerCommand('vscode-juju-charmcraft-ide.resetStateGlobal', function () {
-            reporter.sendTelemetryEvent('v0.command.resetStateGlobal');
-            const keys = context.globalState.keys();
-            for (const key of keys) {
-                context.globalState.update(key, undefined);
-            }
-        }),
-        commands.registerCommand('vscode-juju-charmcraft-ide.resetStateWorkspace', function () {
-            reporter.sendTelemetryEvent('v0.command.resetStateWorkspace');
-            const keys = context.workspaceState.keys();
-            for (const key of keys) {
-                context.workspaceState.update(key, undefined);
-            }
-        }),
-    ];
-}
-
-async function integrateWithYAMLExtension(context: ExtensionContext) {
-    const yamlExtension = extensions.getExtension(RED_HAT_YAML_EXT);
-    if (!yamlExtension) {
-        const neverAsk = context.globalState.get(GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT);
-        if (neverAsk) {
-            return;
-        }
-
-        const resp = await window.showInformationMessage(
-            "To enable YAML file services (e.g., schema validation or auto-completion) you need to install Red Hat YAML language server extension.",
-            "Open Red Hat YAML Extension",
-            "Never ask",
-        );
-        if (resp) {
-            if (resp === 'Never ask') {
-                context.globalState.update(GLOBAL_STATE_KEY_NEVER_ASK_FOR_YAML_EXT, true);
-            } else {
-                commands.executeCommand('extension.open', RED_HAT_YAML_EXT);
-            }
-        }
-        return;
-    }
-
-    if (!yamlExtension.isActive) {
-        await yamlExtension.activate();
-    }
-
-    const yaml = yamlExtension.exports as ExtensionAPI;
-    await registerSchemas(
-        path.join(context.extensionPath, EXTENSION_SCHEMA_DATA_DIR),
-        yaml,
-        // Enable watching for schema changes, only in development mode.
-        context.extensionMode === ExtensionMode.Development,
-    );
-}
 
 function registerCompletionProviders(registry: Registry, reporter: TelemetryReporter): Disposable[] {
     return [

@@ -1,9 +1,14 @@
 import { assert } from "chai";
+import { readFileSync } from "fs";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
 import {
     CharmClassMethod,
+    CharmSourceCode,
+    CharmSourceCodeFile,
     CharmSourceCodeFileAnalyzer,
+    CharmSourceCodeTree,
+    CharmSourceCodeTreeDirectoryEntry, CharmSourceCodeTreeFileEntry,
     DeepSearchCallback,
     DeepSearchCallbackNode,
     deepSearch,
@@ -15,7 +20,6 @@ import {
 } from "../charm";
 import { Range } from "../common";
 import path = require('path');
-import { readFileSync } from "fs";
 
 suite(CharmSourceCodeFileAnalyzer.name, function () {
     function makeSUT(fixtureName: string): CharmSourceCodeFileAnalyzer {
@@ -363,4 +367,84 @@ suite(deepSearchForPattern.name, function () {
         ],
         [{}]
     );
+});
+
+suite(CharmSourceCode.name, function () {
+    function file(content: string = ''): CharmSourceCodeTreeFileEntry {
+        return { kind: 'file', data: new CharmSourceCodeFile(content, {}, true) };
+    }
+    function dir(content: CharmSourceCodeTree): CharmSourceCodeTreeDirectoryEntry {
+        return { kind: 'directory', data: content };
+    }
+
+    suite(CharmSourceCode.prototype.getFiles.name, function () {
+        type TestCase = {
+            name: string;
+            tree: CharmSourceCodeTree;
+            expected: [string, CharmSourceCodeFile][];
+        };
+
+        const tests: TestCase[] = [
+            {
+                name: 'empty',
+                tree: {},
+                expected: [],
+            }, {
+                name: 'no directories',
+                tree: {
+                    fileA: file('a'),
+                },
+                expected: [
+                    ['fileA', file('a').data],
+                ],
+            }, {
+                name: 'one level',
+                tree: {
+                    fileA: file('a'),
+                    dirA: dir({
+                        fileB: file('b'),
+                    }),
+                },
+                expected: [
+                    ['fileA', file('a').data],
+                    ['dirA/fileB', file('b').data],
+                ],
+            }, {
+                name: 'two levels',
+                tree: {
+                    fileA: file('a'),
+                    dirA: dir({
+                        fileB: file('b'),
+                        dirB: dir({
+                            fileC: file('c'),
+                        }),
+                    }),
+                },
+                expected: [
+                    ['fileA', file('a').data],
+                    ['dirA/fileB', file('b').data],
+                    ['dirA/dirB/fileC', file('c').data],
+                ],
+            }, {
+                name: 'two levels, no files',
+                tree: {
+                    dirA: dir({
+                        dirB: dir({
+                        }),
+                    }),
+                },
+                expected: [],
+            },
+        ];
+
+        for (const t of tests) {
+            const tt = t;
+            test(tt.name, function () {
+                assert.deepStrictEqual(
+                    new CharmSourceCode(tt.tree).getFiles(),
+                    new Map<string, CharmSourceCodeFile>(tt.expected)
+                );
+            });
+        }
+    });
 });

@@ -11,8 +11,43 @@ export class Registry implements Disposable {
     private readonly _set = new Set<WorkspaceCharm>();
     private readonly _disposablesPerCharm = new Map<WorkspaceCharm, Disposable[]>();
 
+    private _activeCharm: WorkspaceCharm | undefined = undefined;
+
+    private readonly _onActiveCharmChanged = new EventEmitter<void>();
+    readonly onActiveCharmChanged = this._onActiveCharmChanged.event;
+
     private readonly _onChanged = new EventEmitter<void>();
     readonly onChanged = this._onChanged.event;
+
+    private readonly _onCharmVirtualEnvChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onVirtualEnvChanged} event.
+     */
+    readonly onCharmVirtualEnvChanged = this._onCharmVirtualEnvChanged.event;
+
+    private readonly _onCharmConfigChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onConfigChanged} event.
+     */
+    readonly onCharmConfigChanged = this._onCharmConfigChanged.event;
+
+    private readonly _onCharmActionsChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onActionsChanged} event.
+     */
+    readonly onCharmActionsChanged = this._onCharmActionsChanged.event;
+
+    private readonly _onCharmMetadataChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onMetadataChanged} event.
+     */
+    readonly onCharmMetadataChanged = this._onCharmMetadataChanged.event;
+
+    private readonly _onCharmToxConfigChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onToxConfigChanged} event.
+     */
+    readonly onCharmToxConfigChanged = this._onCharmToxConfigChanged.event;
 
     constructor(readonly output: OutputChannel, readonly diagnostics: DiagnosticCollection) { }
 
@@ -26,6 +61,18 @@ export class Registry implements Disposable {
         this._disposablesPerCharm.delete(charm);
         charm.dispose();
         this._set.delete(charm);
+        if (this._activeCharm === charm) {
+            this.setActiveCharm(undefined);
+        }
+    }
+
+    getActiveCharm(): WorkspaceCharm | undefined {
+        return this._activeCharm;
+    }
+
+    setActiveCharm(workspaceCharm: WorkspaceCharm | undefined) {
+        this._activeCharm = workspaceCharm;
+        this._onActiveCharmChanged.fire();
     }
 
     getWorkspaceCharms() {
@@ -100,7 +147,13 @@ export class Registry implements Disposable {
 
     private _instantiateCharm(home: Uri): WorkspaceCharm {
         const charm = new WorkspaceCharm(home, this.output, this.diagnostics);
-        this._disposablesPerCharm.set(charm, []);
+        this._disposablesPerCharm.set(charm, [
+            charm.onVirtualEnvChanged(() => this._onCharmVirtualEnvChanged.fire(charm)),
+            charm.onConfigChanged(() => this._onCharmConfigChanged.fire(charm)),
+            charm.onActionsChanged(() => this._onCharmActionsChanged.fire(charm)),
+            charm.onMetadataChanged(() => this._onCharmMetadataChanged.fire(charm)),
+            charm.onToxConfigChanged(() => this._onCharmToxConfigChanged.fire(charm)),
+        ]);
         return charm;
     }
 }
