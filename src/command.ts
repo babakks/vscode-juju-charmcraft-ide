@@ -6,6 +6,18 @@ import {
     commands, extensions, window,
     workspace
 } from 'vscode';
+import {
+    COMMAND_ACTIVATE_CHARM,
+    COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT,
+    COMMAND_DISCOVER_CHARMS,
+    COMMAND_RESET_STATE_GLOBAL,
+    COMMAND_RESET_STATE_WORKSPACE,
+    COMMAND_REVEAL_CHARM_DIRECTORY,
+    COMMAND_REVEAL_CHARM_FILE,
+    COMMAND_RUN_TOX_ENV_IN_TERMINAL
+} from './command.const';
+import { PythonExtension } from './include/ms-python.python';
+import { CHARM_DIR_LIB, CHARM_DIR_SRC, CHARM_DIR_TESTS } from './model/common';
 import { Registry } from './registry';
 import {
     ActionsTreeItemModel,
@@ -18,11 +30,8 @@ import {
     ToxConfigTreeItemModel
 } from './tree';
 import { ExecutionResult } from './venv';
-import path = require('path');
 import { WorkspaceCharm } from './workspace';
-import { PythonExtension } from './include/ms-python.python';
-import { CHARM_DIR_LIB, CHARM_DIR_SRC, CHARM_DIR_TESTS } from './model/common';
-import { COMMAND_ACTIVATE_CHARM, COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT, COMMAND_DISCOVER_CHARMS, COMMAND_RESET_STATE_GLOBAL, COMMAND_RESET_STATE_WORKSPACE, COMMAND_REVEAL_CHARM_DIRECTORY, COMMAND_REVEAL_CHARM_FILE, COMMAND_RUN_TOX_ENV_IN_TERMINAL } from './command.const';
+import path = require('path');
 
 export class Commands implements Disposable {
     private readonly _disposables: Disposable[] = [];
