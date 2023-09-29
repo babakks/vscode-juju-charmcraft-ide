@@ -13,5 +13,5 @@ pip3 install \
     coverage[toml] \
     juju \
     pytest-operator
-find . -type f -name 'requirements*.txt' -exec pip3 install -r {} \;
+find . -maxdepth 1 -type f -name 'requirements*.txt' -exec pip3 install -r {} \;
 cd -
