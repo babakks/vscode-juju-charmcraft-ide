@@ -277,15 +277,30 @@ export interface CharmToxConfigSection {
 }
 
 export class CharmSourceCodeFile {
-    private _analyzer: CharmSourceCodeFileAnalyzer | undefined;
+    private _analyzer: SourceCodeFileAnalyzer | undefined;
+    private _charmAnalyzer: CharmSourceCodeFileAnalyzer | undefined;
     private _tpm: TextPositionMapper | undefined;
 
     constructor(public content: string, public ast: any, public healthy: boolean) { }
+
+    /**
+     * Returns the generic source code analyzer instance.
+     */
     get analyzer() {
         if (!this._analyzer) {
-            this._analyzer = new CharmSourceCodeFileAnalyzer(this.content, this.ast);
+            this._analyzer = new SourceCodeFileAnalyzer(this.content, this.ast);
         }
         return this._analyzer;
+    }
+
+    /**
+     * Returns the charm-aware source code analyzer instance.
+     */
+    get charmAnalyzer() {
+        if (!this._charmAnalyzer) {
+            this._charmAnalyzer = new CharmSourceCodeFileAnalyzer(this.analyzer);
+        }
+        return this._charmAnalyzer;
     }
 
     get tpm() {
@@ -312,37 +327,65 @@ export interface CharmSourceCodeTreeFileEntry {
     data: CharmSourceCodeFile;
 }
 
-export interface CharmClass {
+export interface SourceCodeCharmClass extends SourceCodeClass {
+    subscribedEvents: SourceCodeCharmClassSubscribedEvent[];
+}
+
+export interface SourceCodeCharmClassSubscribedEvent {
+    event: string;
+    handler: string;
+};
+
+export interface SourceCodeClass {
+    /**
+     * Raw AST data.
+     */
+    raw: any;
     range: Range;
     /**
      * Extended (greedy) range of the node that covers trailing whitespace or empty lines. 
      */
     extendedRange: Range;
     name: string;
-    base: string;
+    bases: string[];
     /**
-     * Charm methods, ordered by their lexical position.
+     * Class methods, ordered by their lexical position.
      */
-    methods: CharmClassMethod[];
-    subscribedEvents: CharmClassSubscribedEvent[];
+    methods: SourceCodeFunction[];
 };
 
-export type CharmClassMethodKind = 'method' | 'getter' | 'setter';
-export interface CharmClassMethod {
+export type SourceCodeFunctionKind =
+    /**
+     * Functions defined at file-scope.
+     */
+    'function' |
+    /**
+     * Function definitions enclosed by a class.
+     */
+    'method' |
+    /**
+     * Class property getters.
+     */
+    'getter' |
+    /**
+     * Class property setters.
+     */
+    'setter';
+
+export interface SourceCodeFunction {
+    /**
+     * Raw AST data.
+     */
+    raw: any;
     range: Range;
     /**
      * Extended (greedy) range of the node that covers trailing whitespace or empty lines. 
      */
     extendedRange: Range;
-    kind: CharmClassMethodKind;
+    kind: SourceCodeFunctionKind;
     isStatic: boolean;
     name: string;
     positionalParameters: string[];
-};
-
-export interface CharmClassSubscribedEvent {
-    event: string;
-    handler: string;
 };
 
 export class CharmSourceCode {
@@ -435,13 +478,10 @@ const CONSTANT_VALUE_SETTER = 'setter';
 const CONSTANT_VALUE_STATIC_METHOD = 'staticmethod';
 
 export class CharmSourceCodeFileAnalyzer {
-    private _charmClasses: CharmClass[] | undefined | null = null;
-    private _mainCharmClass: CharmClass | undefined | null = null;
-    private readonly _lines: string[];
+    private _charmClasses: SourceCodeClass[] | undefined | null = null;
+    private _mainCharmClass: SourceCodeClass | undefined | null = null;
 
-    constructor(readonly content: string, readonly ast: any | undefined) {
-        this._lines = content.split('\n').map(x => x.endsWith('\r') ? x.substring(0, -1 + x.length) : x);
-    }
+    constructor(readonly analyzer: SourceCodeFileAnalyzer) { }
 
     /**
      * Resets analyses' results.
@@ -454,84 +494,36 @@ export class CharmSourceCodeFileAnalyzer {
     /**
      * Charm-based classes, ordered by their lexical position.
      */
-    get charmClasses(): CharmClass[] | undefined {
+    get charmClasses(): SourceCodeClass[] | undefined {
         if (this._charmClasses !== null) {
             return this._charmClasses;
         }
         return this._charmClasses = this._getCharmClasses();
     }
 
-    get mainCharmClass(): CharmClass | undefined {
+    get mainCharmClass(): SourceCodeClass | undefined {
         if (this._mainCharmClass !== null) {
             return this._mainCharmClass;
         }
         return this._mainCharmClass = this._getMainCharmClass();
     }
 
-    private _getCharmClasses(): CharmClass[] | undefined {
-        const body = this.ast?.['body'];
-        if (!body || !Array.isArray(body)) {
-            return undefined;
-        }
-
-        const result: CharmClass[] = [];
-        for (let i = 0; i < body.length; i++) {
-            const cls = body[i];
-            if (cls['$type'] !== NODE_TYPE_CLASS_DEF) {
-                continue;
-            }
-
-            const bases = cls['bases'];
-            if (!bases || !Array.isArray(bases)) {
-                continue;
-            }
-
-            const baseClass = this._findAppropriateCharmBaseClass(bases);
-            if (!baseClass) {
-                continue;
-            }
-
-            const range = getNodeRange(cls);
-            const extendedRange = getNodeExtendedRange(cls, body[1 + i]);
-
-            result.push({
-                name: unquoteSymbol(cls['name'] as string),
-                base: baseClass,
-                methods: this._getClassMethods(cls, extendedRange) ?? [],
-                subscribedEvents: this._getClassSubscribedEvents(cls) ?? [],
-                range,
-                extendedRange,
-            });
-        }
-        return result;
+    private _getCharmClasses(): SourceCodeCharmClass[] | undefined {
+        return this.analyzer.classes?.filter(x => x.bases.indexOf(CHARM_SOURCE_CODE_CHARM_BASE_CLASS) !== -1)
+            .map(x => ({
+                ...x,
+                // TODO `getClassSubscribedEvents` is not implemented yet.
+                subscribedEvents: this._getClassSubscribedEvents(x.raw),
+            }));
     }
 
-    private _findAppropriateCharmBaseClass(bases: any[]): string | undefined {
-        for (const b of bases) {
-            if (b['$type'] === NODE_TYPE_NAME && b['id']) {
-                // Cases: `class MyCharm(CharmBase)`
-                const id = unquoteSymbol(b['id']);
-                if (id === CHARM_SOURCE_CODE_CHARM_BASE_CLASS) {
-                    return id;
-                }
-            } else if (b['$type'] === NODE_TYPE_ATTRIBUTE && b['attr']) {
-                // Cases: `class MyCharm(ops.CharmBase)`
-                const id = unquoteSymbol(b['attr']);
-                if (id === CHARM_SOURCE_CODE_CHARM_BASE_CLASS) {
-                    return id;
-                }
-            }
-        }
-        return undefined;
-    }
-
-    private _getMainCharmClass(): CharmClass | undefined {
+    private _getMainCharmClass(): SourceCodeClass | undefined {
         const classes = this.charmClasses;
         if (!classes) {
             return undefined;
         }
 
-        const body = this.ast?.['body'];
+        const body = this.analyzer.ast?.['body'];
         if (!body || !Array.isArray(body)) {
             return undefined;
         }
@@ -555,7 +547,7 @@ export class CharmSourceCodeFileAnalyzer {
                 continue;
             }
 
-            const nodeText = getTextOverRange(this._lines, getNodeRange(x));
+            const nodeText = getTextOverRange(this.analyzer.lines, getNodeRange(x));
             const charmClass = classes.find(x => nodeText.match(new RegExp(`(^\\s*|\\W)${escapeRegex(x.name)}(\\W|\\s*$)`)));
             if (charmClass) {
                 return charmClass;
@@ -564,13 +556,130 @@ export class CharmSourceCodeFileAnalyzer {
         return undefined;
     }
 
-    private _getClassMethods(cls: any, clsExtendedRange: Range): CharmClassMethod[] | undefined {
-        const body = cls['body'];
+    private _getClassSubscribedEvents(cls: any): SourceCodeCharmClassSubscribedEvent[] {
+        // const body = cls.body;
+        // if (!body || !Array.isArray(body)) {
+        //     return undefined;
+        // }
+
+        // const result: CharmClassMethod[] = [];
+        // const methods = body.filter(x => x.$type === NODE_TYPE_FUNCTION_DEF && unquoteSymbol(x.name) === NODE_NAME_FUNCTION_INIT);
+        // for (const method of methods) {
+        //     result.push({
+        //         name: unquoteSymbol(method.name as string),
+        //         range: getNodeRange(method),
+        //     });
+        // }
+        // return result;
+        return [];
+    }
+}
+
+
+export class SourceCodeFileAnalyzer {
+    private _classes: SourceCodeClass[] | undefined | null = null;
+    private _functions: SourceCodeFunction[] | undefined | null = null;
+    readonly lines: string[];
+
+    constructor(readonly content: string, readonly ast: any | undefined) {
+        this.lines = content.split('\n').map(x => x.endsWith('\r') ? x.substring(0, -1 + x.length) : x);
+    }
+
+    /**
+     * Resets analyses' results.
+     */
+    reset() {
+        this._classes = null;
+        this._functions = null;
+    }
+
+    get classes(): SourceCodeClass[] | undefined {
+        if (this._classes !== null) {
+            return this._classes;
+        }
+        return this._classes = this._getClasses(this.ast);
+    }
+
+    get functions(): SourceCodeFunction[] | undefined {
+        if (this._functions !== null) {
+            return this._functions;
+        }
+        return this._functions = this._getFunctions(this.ast);
+    }
+
+    private _getClasses(parent: any, parentExtendedRange?: Range): SourceCodeClass[] | undefined {
+        if (!parent) {
+            return undefined;
+        }
+
+        const body = parent['body'];
         if (!body || !Array.isArray(body)) {
             return undefined;
         }
 
-        const result: CharmClassMethod[] = [];
+        if (!parentExtendedRange) {
+            parentExtendedRange = getNodeRange(parent);
+        }
+
+        const result: SourceCodeClass[] = [];
+        for (let i = 0; i < body.length; i++) {
+            const cls = body[i];
+            if (cls['$type'] !== NODE_TYPE_CLASS_DEF) {
+                continue;
+            }
+
+            const bases = cls['bases'];
+            if (!bases || !Array.isArray(bases)) {
+                continue;
+            }
+
+            const range = getNodeRange(cls);
+            const isLast = i === -1 + body.length;
+            const extendedRange = !isLast ? getNodeExtendedRange(cls, body[1 + i]) : { start: range.start, end: parentExtendedRange.end };
+
+            result.push({
+                raw: cls,
+                name: unquoteSymbol(cls['name'] as string),
+                bases: this._getBaseClasses(bases),
+                methods: this._getFunctions(cls, extendedRange, true) ?? [],
+                range,
+                extendedRange,
+            });
+        }
+        return result;
+    }
+
+    private _getBaseClasses(bases: any[]): string[] {
+        const result: string[] = [];
+        for (const b of bases) {
+            if (b['$type'] === NODE_TYPE_NAME && b['id']) {
+                // Cases: `class MyClass(MyBaseClass)`
+                const id = unquoteSymbol(b['id']);
+                result.push(id);
+            } else if (b['$type'] === NODE_TYPE_ATTRIBUTE && b['attr']) {
+                // Cases: `class MyClass(ops.MyBaseClass)`
+                const id = unquoteSymbol(b['attr']);
+                result.push(id);
+            }
+        }
+        return result;
+    }
+
+    private _getFunctions(parent: any, parentExtendedRange?: Range, isParentAClass?: boolean): SourceCodeFunction[] | undefined {
+        if (!parent) {
+            return undefined;
+        }
+
+        const body = parent['body'];
+        if (!body || !Array.isArray(body)) {
+            return undefined;
+        }
+
+        if (!parentExtendedRange) {
+            parentExtendedRange = getNodeRange(parent);
+        }
+
+        const result: SourceCodeFunction[] = [];
         for (let i = 0; i < body.length; i++) {
             const method = body[i];
             if (method['$type'] !== NODE_TYPE_FUNCTION_DEF) {
@@ -580,11 +689,12 @@ export class CharmSourceCodeFileAnalyzer {
             const positionalParameters = (method['args']?.['args'] as Array<any> ?? []).filter(x => x['$type'] === NODE_TYPE_ARG && x['arg']).map(x => unquoteSymbol(x['arg']));
             const range = getNodeRange(method);
             const isLast = i === -1 + body.length;
-            const extendedRange = !isLast ? getNodeExtendedRange(method, body[1 + i]) : { start: range.start, end: clsExtendedRange.end };
+            const extendedRange = !isLast ? getNodeExtendedRange(method, body[1 + i]) : { start: range.start, end: parentExtendedRange.end };
             result.push({
+                raw: method,
                 name: unquoteSymbol(method['name'] as string),
-                kind: this._getMethodKind(method),
-                isStatic: this._isClassMethodStatic(method),
+                kind: isParentAClass ? this._getClassMethodKind(method) : 'function',
+                isStatic: isParentAClass ? this._isClassMethodStatic(method) : false,
                 range,
                 extendedRange,
                 positionalParameters,
@@ -594,7 +704,7 @@ export class CharmSourceCodeFileAnalyzer {
         return result;
     }
 
-    private _getMethodKind(node: any): CharmClassMethodKind {
+    private _getClassMethodKind(node: any): SourceCodeFunctionKind {
         const decorators = node['decorator_list'] as Array<any> ?? [];
         for (const d of decorators) {
             if (d['$type'] === NODE_TYPE_NAME && d['id']) {
@@ -652,24 +762,6 @@ export class CharmSourceCodeFileAnalyzer {
             }
         }
         return false;
-    }
-
-    private _getClassSubscribedEvents(cls: any): CharmClassSubscribedEvent[] | undefined {
-        // const body = cls.body;
-        // if (!body || !Array.isArray(body)) {
-        //     return undefined;
-        // }
-
-        // const result: CharmClassMethod[] = [];
-        // const methods = body.filter(x => x.$type === NODE_TYPE_FUNCTION_DEF && unquoteSymbol(x.name) === NODE_NAME_FUNCTION_INIT);
-        // for (const method of methods) {
-        //     result.push({
-        //         name: unquoteSymbol(method.name as string),
-        //         range: getNodeRange(method),
-        //     });
-        // }
-        // return result;
-        return undefined;
     }
 }
 
