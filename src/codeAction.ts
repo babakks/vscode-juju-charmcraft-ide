@@ -33,7 +33,7 @@ export class EventHandlerCodeActionProvider implements CodeActionProvider {
             return;
         }
 
-        const classes = file.analyzer.charmClasses;
+        const classes = file.charmAnalyzer.charmClasses;
         if (!classes) {
             return;
         }

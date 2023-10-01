@@ -237,14 +237,14 @@ function offsetLengthToRange(index: number, length: number, tpm: TextPositionMap
 }
 
 function isInMainCharmClassAndSelfAccessible(file: CharmSourceCodeFile, index: number): boolean | undefined {
-    if (!file.analyzer.mainCharmClass) {
+    if (!file.charmAnalyzer.mainCharmClass) {
         return undefined;
     }
     const position = file.tpm.indexToPosition(index);
-    if (!isInRange(position, file.analyzer.mainCharmClass.extendedRange)) {
+    if (!isInRange(position, file.charmAnalyzer.mainCharmClass.extendedRange)) {
         return false;
     }
-    const currentMethod = file.analyzer.mainCharmClass.methods.find(x => isInRange(position, x.extendedRange));
+    const currentMethod = file.charmAnalyzer.mainCharmClass.methods.find(x => isInRange(position, x.extendedRange));
     if (!currentMethod || currentMethod.isStatic) {
         return false;
     }
