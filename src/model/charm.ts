@@ -575,6 +575,43 @@ export class CharmSourceCodeFileAnalyzer {
     }
 }
 
+export class CharmTestSourceCodeFileAnalyzer {
+    private _testClasses: SourceCodeClass[] | undefined | null = null;
+    private _testFunctions: SourceCodeFunction[] | undefined | null = null;
+
+    constructor(readonly analyzer: SourceCodeFileAnalyzer) { }
+
+    /**
+     * Resets analyses' results.
+     */
+    reset() {
+        this._testClasses = null;
+        this._testFunctions = null;
+    }
+
+    get testClasses(): SourceCodeClass[] | undefined {
+        if (this._testClasses !== null) {
+            return this._testClasses;
+        }
+        return this._testClasses = this._getTestClasses();
+    }
+
+    get testFunctions(): SourceCodeFunction[] | undefined {
+        if (this._testFunctions !== null) {
+            return this._testFunctions;
+        }
+        return this._testFunctions = this._getTestFunctions();
+    }
+
+
+    private _getTestClasses(): SourceCodeClass[] | undefined {
+        return [];
+    }
+
+    private _getTestFunctions(): SourceCodeFunction[] | undefined {
+        return [];
+    }
+}
 
 export class SourceCodeFileAnalyzer {
     private _classes: SourceCodeClass[] | undefined | null = null;
