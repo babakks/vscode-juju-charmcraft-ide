@@ -336,6 +336,13 @@ export interface SourceCodeCharmClassSubscribedEvent {
     handler: string;
 };
 
+export type SourceCodeCharmTestClassDialect = 'unittest.TestCase' | 'pytest';
+
+export interface SourceCodeCharmTestClass extends SourceCodeClass {
+    dialect: SourceCodeCharmTestClassDialect;
+    testMethods: SourceCodeFunction[];
+}
+
 export interface SourceCodeClass {
     /**
      * Raw AST data.
@@ -477,149 +484,13 @@ const CONSTANT_VALUE_MAIN = '__main__';
 const CONSTANT_VALUE_SETTER = 'setter';
 const CONSTANT_VALUE_STATIC_METHOD = 'staticmethod';
 
-export class CharmSourceCodeFileAnalyzer {
-    private _charmClasses: SourceCodeClass[] | undefined | null = null;
-    private _mainCharmClass: SourceCodeClass | undefined | null = null;
-
-    constructor(readonly analyzer: SourceCodeFileAnalyzer) { }
-
-    /**
-     * Resets analyses' results.
-     */
-    reset() {
-        this._charmClasses = null;
-        this._mainCharmClass = null;
-    }
-
-    /**
-     * Charm-based classes, ordered by their lexical position.
-     */
-    get charmClasses(): SourceCodeClass[] | undefined {
-        if (this._charmClasses !== null) {
-            return this._charmClasses;
-        }
-        return this._charmClasses = this._getCharmClasses();
-    }
-
-    get mainCharmClass(): SourceCodeClass | undefined {
-        if (this._mainCharmClass !== null) {
-            return this._mainCharmClass;
-        }
-        return this._mainCharmClass = this._getMainCharmClass();
-    }
-
-    private _getCharmClasses(): SourceCodeCharmClass[] | undefined {
-        return this.analyzer.classes?.filter(x => x.bases.indexOf(CHARM_SOURCE_CODE_CHARM_BASE_CLASS) !== -1)
-            .map(x => ({
-                ...x,
-                // TODO `getClassSubscribedEvents` is not implemented yet.
-                subscribedEvents: this._getClassSubscribedEvents(x.raw),
-            }));
-    }
-
-    private _getMainCharmClass(): SourceCodeClass | undefined {
-        const classes = this.charmClasses;
-        if (!classes) {
-            return undefined;
-        }
-
-        const body = this.analyzer.ast?.['body'];
-        if (!body || !Array.isArray(body)) {
-            return undefined;
-        }
-
-        const ifs = body.filter(x => x['$type'] === NODE_TYPE_IF).reverse();
-        for (const x of ifs) {
-            /*
-             * Looking for:
-             *
-             *     if __name__=="__main__":
-             */
-            const isEntrypointIf =
-                x['$type'] === NODE_TYPE_COMPARE
-                && x['test']?.['left']?.['$type'] === NODE_TYPE_NAME
-                && x['test']['left']['id'] && unquoteSymbol(x['test']['left']['id']) === CONSTANT_VALUE_NAME
-                && x['test']['ops'] && x['test']['ops'].length && x['test']['ops'][0]?.['$type'] === NODE_TYPE_EQ
-                && x['test']['comparators']?.[0]?.['$type'] === NODE_TYPE_CONSTANT
-                && x['test']['comparators'][0]['value']
-                && unquoteSymbol(x['test']['comparators'][0]['value']) === CONSTANT_VALUE_MAIN;
-            if (!isEntrypointIf) {
-                continue;
-            }
-
-            const nodeText = getTextOverRange(this.analyzer.lines, getNodeRange(x));
-            const charmClass = classes.find(x => nodeText.match(new RegExp(`(^\\s*|\\W)${escapeRegex(x.name)}(\\W|\\s*$)`)));
-            if (charmClass) {
-                return charmClass;
-            }
-        }
-        return undefined;
-    }
-
-    private _getClassSubscribedEvents(cls: any): SourceCodeCharmClassSubscribedEvent[] {
-        // const body = cls.body;
-        // if (!body || !Array.isArray(body)) {
-        //     return undefined;
-        // }
-
-        // const result: CharmClassMethod[] = [];
-        // const methods = body.filter(x => x.$type === NODE_TYPE_FUNCTION_DEF && unquoteSymbol(x.name) === NODE_NAME_FUNCTION_INIT);
-        // for (const method of methods) {
-        //     result.push({
-        //         name: unquoteSymbol(method.name as string),
-        //         range: getNodeRange(method),
-        //     });
-        // }
-        // return result;
-        return [];
-    }
-}
-
-export class CharmTestSourceCodeFileAnalyzer {
-    private _testClasses: SourceCodeClass[] | undefined | null = null;
-    private _testFunctions: SourceCodeFunction[] | undefined | null = null;
-
-    constructor(readonly analyzer: SourceCodeFileAnalyzer) { }
-
-    /**
-     * Resets analyses' results.
-     */
-    reset() {
-        this._testClasses = null;
-        this._testFunctions = null;
-    }
-
-    get testClasses(): SourceCodeClass[] | undefined {
-        if (this._testClasses !== null) {
-            return this._testClasses;
-        }
-        return this._testClasses = this._getTestClasses();
-    }
-
-    get testFunctions(): SourceCodeFunction[] | undefined {
-        if (this._testFunctions !== null) {
-            return this._testFunctions;
-        }
-        return this._testFunctions = this._getTestFunctions();
-    }
-
-
-    private _getTestClasses(): SourceCodeClass[] | undefined {
-        return [];
-    }
-
-    private _getTestFunctions(): SourceCodeFunction[] | undefined {
-        return [];
-    }
-}
-
 export class SourceCodeFileAnalyzer {
     private _classes: SourceCodeClass[] | undefined | null = null;
     private _functions: SourceCodeFunction[] | undefined | null = null;
-    readonly lines: string[];
+    readonly tpm: TextPositionMapper;
 
     constructor(readonly content: string, readonly ast: any | undefined) {
-        this.lines = content.split('\n').map(x => x.endsWith('\r') ? x.substring(0, -1 + x.length) : x);
+        this.tpm = new TextPositionMapper(this.content);
     }
 
     /**
@@ -634,17 +505,17 @@ export class SourceCodeFileAnalyzer {
         if (this._classes !== null) {
             return this._classes;
         }
-        return this._classes = this._getClasses(this.ast);
+        return this._classes = this._getClasses(this.ast, this.tpm.all());
     }
 
     get functions(): SourceCodeFunction[] | undefined {
         if (this._functions !== null) {
             return this._functions;
         }
-        return this._functions = this._getFunctions(this.ast);
+        return this._functions = this._getFunctions(this.ast, this.tpm.all());
     }
 
-    private _getClasses(parent: any, parentExtendedRange?: Range): SourceCodeClass[] | undefined {
+    private _getClasses(parent: any, parentExtendedRange: Range): SourceCodeClass[] | undefined {
         if (!parent) {
             return undefined;
         }
@@ -652,10 +523,6 @@ export class SourceCodeFileAnalyzer {
         const body = parent['body'];
         if (!body || !Array.isArray(body)) {
             return undefined;
-        }
-
-        if (!parentExtendedRange) {
-            parentExtendedRange = getNodeRange(parent);
         }
 
         const result: SourceCodeClass[] = [];
@@ -702,7 +569,7 @@ export class SourceCodeFileAnalyzer {
         return result;
     }
 
-    private _getFunctions(parent: any, parentExtendedRange?: Range, isParentAClass?: boolean): SourceCodeFunction[] | undefined {
+    private _getFunctions(parent: any, parentExtendedRange: Range, isParentAClass?: boolean): SourceCodeFunction[] | undefined {
         if (!parent) {
             return undefined;
         }
@@ -710,10 +577,6 @@ export class SourceCodeFileAnalyzer {
         const body = parent['body'];
         if (!body || !Array.isArray(body)) {
             return undefined;
-        }
-
-        if (!parentExtendedRange) {
-            parentExtendedRange = getNodeRange(parent);
         }
 
         const result: SourceCodeFunction[] = [];
@@ -802,6 +665,162 @@ export class SourceCodeFileAnalyzer {
     }
 }
 
+export class CharmSourceCodeFileAnalyzer {
+    private _charmClasses: SourceCodeClass[] | undefined | null = null;
+    private _mainCharmClass: SourceCodeClass | undefined | null = null;
+
+    constructor(readonly analyzer: SourceCodeFileAnalyzer) { }
+
+    /**
+     * Resets analyses' results.
+     */
+    reset() {
+        this._charmClasses = null;
+        this._mainCharmClass = null;
+    }
+
+    /**
+     * Charm-based classes, ordered by their lexical position.
+     */
+    get charmClasses(): SourceCodeClass[] | undefined {
+        if (this._charmClasses !== null) {
+            return this._charmClasses;
+        }
+        return this._charmClasses = this._getCharmClasses();
+    }
+
+    get mainCharmClass(): SourceCodeClass | undefined {
+        if (this._mainCharmClass !== null) {
+            return this._mainCharmClass;
+        }
+        return this._mainCharmClass = this._getMainCharmClass();
+    }
+
+    private _getCharmClasses(): SourceCodeCharmClass[] | undefined {
+        return this.analyzer.classes?.filter(x => x.bases.indexOf(CHARM_SOURCE_CODE_CHARM_BASE_CLASS) !== -1)
+            .map(x => ({
+                ...x,
+                // TODO `getClassSubscribedEvents` is not implemented yet.
+                subscribedEvents: this._getClassSubscribedEvents(x.raw),
+            }));
+    }
+
+    private _getMainCharmClass(): SourceCodeClass | undefined {
+        const classes = this.charmClasses;
+        if (!classes) {
+            return undefined;
+        }
+
+        const body = this.analyzer.ast?.['body'];
+        if (!body || !Array.isArray(body)) {
+            return undefined;
+        }
+
+        const ifs = body.filter(x => x['$type'] === NODE_TYPE_IF).reverse();
+        for (const x of ifs) {
+            /*
+             * Looking for:
+             *
+             *     if __name__=="__main__":
+             */
+            const isEntrypointIf =
+                x['$type'] === NODE_TYPE_COMPARE
+                && x['test']?.['left']?.['$type'] === NODE_TYPE_NAME
+                && x['test']['left']['id'] && unquoteSymbol(x['test']['left']['id']) === CONSTANT_VALUE_NAME
+                && x['test']['ops'] && x['test']['ops'].length && x['test']['ops'][0]?.['$type'] === NODE_TYPE_EQ
+                && x['test']['comparators']?.[0]?.['$type'] === NODE_TYPE_CONSTANT
+                && x['test']['comparators'][0]['value']
+                && unquoteSymbol(x['test']['comparators'][0]['value']) === CONSTANT_VALUE_MAIN;
+            if (!isEntrypointIf) {
+                continue;
+            }
+
+            const nodeText = this.analyzer.tpm.getTextOverRange(getNodeRange(x));
+            const charmClass = classes.find(x => nodeText.match(new RegExp(`(^\\s*|\\W)${escapeRegex(x.name)}(\\W|\\s*$)`)));
+            if (charmClass) {
+                return charmClass;
+            }
+        }
+        return undefined;
+    }
+
+    private _getClassSubscribedEvents(cls: any): SourceCodeCharmClassSubscribedEvent[] {
+        // const body = cls.body;
+        // if (!body || !Array.isArray(body)) {
+        //     return undefined;
+        // }
+
+        // const result: CharmClassMethod[] = [];
+        // const methods = body.filter(x => x.$type === NODE_TYPE_FUNCTION_DEF && unquoteSymbol(x.name) === NODE_NAME_FUNCTION_INIT);
+        // for (const method of methods) {
+        //     result.push({
+        //         name: unquoteSymbol(method.name as string),
+        //         range: getNodeRange(method),
+        //     });
+        // }
+        // return result;
+        return [];
+    }
+}
+
+const CHARM_TEST_SOURCE_CODE_UNITTEST_BASE_CLASS = 'TestCase';
+const CHARM_TEST_SOURCE_CODE_PYTEST_CLASS_PREFIX = 'Test';
+const CHARM_TEST_SOURCE_CODE_TEST_FUNCTION_PREFIX = 'test_';
+
+export class CharmTestSourceCodeFileAnalyzer {
+    private _testClasses: SourceCodeCharmTestClass[] | undefined | null = null;
+    private _testFunctions: SourceCodeFunction[] | undefined | null = null;
+
+    constructor(readonly analyzer: SourceCodeFileAnalyzer) { }
+
+    /**
+     * Resets analyses' results.
+     */
+    reset() {
+        this._testClasses = null;
+        this._testFunctions = null;
+    }
+
+    get testClasses(): SourceCodeCharmTestClass[] | undefined {
+        if (this._testClasses !== null) {
+            return this._testClasses;
+        }
+        return this._testClasses = this._getTestClasses();
+    }
+
+    get testFunctions(): SourceCodeFunction[] | undefined {
+        if (this._testFunctions !== null) {
+            return this._testFunctions;
+        }
+        return this._testFunctions = this._getTestFunctions();
+    }
+
+
+    private _getTestClasses(): SourceCodeCharmTestClass[] | undefined {
+        /**
+         * See the Pytest test discovery convention at:
+         *   https://docs.pytest.org/en/7.4.x/explanation/goodpractices.html#conventions-for-python-test-discovery 
+         */
+        const isPytestTestClass = (cls: SourceCodeClass) => cls.name.startsWith(CHARM_TEST_SOURCE_CODE_PYTEST_CLASS_PREFIX);
+        const isUnittestTestClass = (cls: SourceCodeClass) => cls.bases.some(x => x === CHARM_TEST_SOURCE_CODE_UNITTEST_BASE_CLASS);
+
+        return this.analyzer.classes?.filter(x => isUnittestTestClass(x) || isPytestTestClass(x))
+            .map(x => ({
+                dialect: isUnittestTestClass(x) ? 'unittest.TestCase' : 'pytest',
+                testMethods: x.methods.filter(y => this._isTestFunction(y)),
+                ...x,
+            }));
+    }
+
+    private _isTestFunction(fn: SourceCodeFunction): boolean {
+        return fn.name.startsWith(CHARM_TEST_SOURCE_CODE_TEST_FUNCTION_PREFIX);
+    }
+
+    private _getTestFunctions(): SourceCodeFunction[] | undefined {
+        return this.analyzer.functions?.filter(y => this._isTestFunction(y));
+    }
+}
+
 export function getNodeRange(node: any): Range {
     return {
         start: { line: -1 + Number.parseInt(node.lineno), character: Number.parseInt(node.col_offset) },
@@ -834,33 +853,6 @@ export function unquoteSymbol(s: string): string {
         return s;
     }
     return s.substring(1, -1 + s.length);
-}
-
-const POSITION_ZERO = { line: 0, character: 0 };
-export function getTextOverRange(lines: string[], range: Range): string {
-    if (!lines.length) {
-        return '';
-    }
-
-    const start = comparePositions(range.start, POSITION_ZERO) === -1 ? POSITION_ZERO : range.start;
-    const max: Position = { line: -1 + lines.length, character: lines[-1 + lines.length].length };
-    const end = comparePositions(range.end, max) === 1 ? max : range.end;
-
-    if (comparePositions(start, end) === 1) {
-        return '';
-    }
-
-    const portion = lines.slice(start.line, 1 + end.line);
-    portion[-1 + portion.length] = portion[-1 + portion.length].substring(0, end.character);
-    portion[0] = portion[0].substring(start.character);
-
-    if (portion[-1 + portion.length] === '') {
-        portion.pop();
-    }
-    if (portion[0] === '') {
-        portion.splice(0, 1);
-    }
-    return portion.join('\n');
 }
 
 const REGEXP_SPECIAL_CHARS = /[/\-\\^$*+?.()|[\]{}]/g;

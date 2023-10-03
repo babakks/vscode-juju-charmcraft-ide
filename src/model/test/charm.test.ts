@@ -9,8 +9,10 @@ import {
     CharmSourceCodeTree,
     CharmSourceCodeTreeDirectoryEntry,
     CharmSourceCodeTreeFileEntry,
+    CharmTestSourceCodeFileAnalyzer,
     DeepSearchCallback,
     DeepSearchCallbackNode,
+    SourceCodeCharmTestClass,
     SourceCodeClass,
     SourceCodeFileAnalyzer,
     SourceCodeFunction,
@@ -18,7 +20,6 @@ import {
     deepSearchForPattern,
     getNodeExtendedRange,
     getNodeRange,
-    getTextOverRange,
     unquoteSymbol
 } from "../charm";
 import { Range } from "../common";
@@ -31,10 +32,11 @@ suite(CharmSourceCodeFileAnalyzer.name, function () {
         const ast = JSON.parse(new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.json'))));
         return new CharmSourceCodeFileAnalyzer(new SourceCodeFileAnalyzer(content, ast));
     }
+
     test('charm-01', function () {
         const sut = makeSUT('charm-01');
 
-        assert.isDefined(sut.charmClasses);
+        assert.lengthOf(sut.charmClasses!, 3);
         assert.isDefined(sut.mainCharmClass);
         assert.equal(sut.mainCharmClass!.name, 'CharmWithEventHandlers');
 
@@ -72,6 +74,46 @@ suite(CharmSourceCodeFileAnalyzer.name, function () {
         assert.lengthOf(cs.methods, 2);
         assert.deepOwnInclude(cs.methods[0], { name: 'static_method', kind: 'method', isStatic: true, positionalParameters: [], range: { start: { line: 32, character: 4 }, end: { line: 33, character: 12 } }, extendedRange: { start: { line: 32, character: 4 }, end: { line: 35, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
         assert.deepOwnInclude(cs.methods[1], { name: 'static_method_with_decorator', kind: 'method', isStatic: true, positionalParameters: ['param'], range: { start: { line: 36, character: 4 }, end: { line: 37, character: 12 } }, extendedRange: { start: { line: 36, character: 4 }, end: { line: 39, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+    });
+});
+
+suite(CharmTestSourceCodeFileAnalyzer.name, function () {
+    function makeSUT(fixtureName: string): CharmTestSourceCodeFileAnalyzer {
+        const base = path.join(__dirname, '../../../resource/test/ast');
+        const content = new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.py')));
+        const ast = JSON.parse(new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.json'))));
+        return new CharmTestSourceCodeFileAnalyzer(new SourceCodeFileAnalyzer(content, ast));
+    }
+
+    test('charm-test-01-unittest', function () {
+        const sut = makeSUT('charm-test-01-unittest');
+
+        assert.isDefined(sut.testFunctions);
+        assert.isEmpty(sut.testFunctions);
+
+        assert.lengthOf(sut.testClasses!, 2);
+        let counter = 0;
+        let ts: SourceCodeCharmTestClass;
+
+        ts = sut.testClasses![counter++];
+        assert.isDefined(ts);
+        assert.equal(ts.name, 'TestCharmOne');
+        assert.deepStrictEqual(ts.bases, ['TestCase']);
+        assert.deepStrictEqual(ts.dialect, 'unittest.TestCase');
+        assert.deepStrictEqual(ts.range, { start: { line: 7, character: 0 }, end: { line: 12, character: 12 } });
+        assert.deepStrictEqual(ts.extendedRange, { start: { line: 7, character: 0 }, end: { line: 14, character: 0 } });
+        assert.lengthOf(ts.testMethods, 1);
+        assert.deepOwnInclude(ts.testMethods[0], { name: 'test_something', kind: 'method', isStatic: false, positionalParameters: ['self'], range: { start: { line: 11, character: 4 }, end: { line: 12, character: 12 } }, extendedRange: { start: { line: 11, character: 4 }, end: { line: 14, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+
+        ts = sut.testClasses![counter++];
+        assert.isDefined(ts);
+        assert.equal(ts.name, 'TestCharmTwo');
+        assert.deepStrictEqual(ts.bases, ['TestCase']);
+        assert.deepStrictEqual(ts.dialect, 'unittest.TestCase');
+        assert.deepStrictEqual(ts.range, { start: { line: 14, character: 0 }, end: { line: 19, character: 12 } });
+        assert.deepStrictEqual(ts.extendedRange, { start: { line: 14, character: 0 }, end: { line: 23, character: 0 } });
+        assert.lengthOf(ts.testMethods, 1);
+        assert.deepOwnInclude(ts.testMethods[0], { name: 'test_something', kind: 'method', isStatic: false, positionalParameters: ['self'], range: { start: { line: 18, character: 4 }, end: { line: 19, character: 12 } }, extendedRange: { start: { line: 18, character: 4 }, end: { line: 23, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
     });
 });
 
@@ -179,90 +221,6 @@ suite(unquoteSymbol.name, function () {
         assert.equal(unquoteSymbol(`'abc'`), `abc`);
         assert.equal(unquoteSymbol(`"abc"`), `abc`);
     });
-});
-
-suite(getTextOverRange.name, function () {
-    type TestCase = {
-        name: string;
-        lines: string[];
-        range: Range;
-        expected: string;
-    };
-    const tests: TestCase[] = [
-        {
-            name: 'empty lines',
-            lines: [],
-            range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start line > end line (empty lines)',
-            lines: [],
-            range: { start: { line: 1, character: 0 }, end: { line: 0, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start line > end line',
-            lines: ['line 0', 'line 1'],
-            range: { start: { line: 1, character: 0 }, end: { line: 0, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start character > end character (equal lines, empty lines)',
-            lines: [],
-            range: { start: { line: 0, character: 100 }, end: { line: 0, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start character > end character (equal lines)',
-            lines: ['line 0', 'line 1'],
-            range: { start: { line: 0, character: 100 }, end: { line: 0, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start line == end line',
-            lines: ['some text here'],
-            range: { start: { line: 0, character: 5 }, end: { line: 0, character: 9 } },
-            expected: 'text',
-        }, {
-            name: 'start line < end line',
-            lines: ['> line 0 <', '> line 1 <', '> end <'],
-            range: { start: { line: 0, character: 2 }, end: { line: 2, character: 5 } },
-            expected: 'line 0 <\n> line 1 <\n> end',
-        }, {
-            name: 'start character negative (same start/end lines)',
-            lines: ['some text here'],
-            range: { start: { line: 0, character: -99 }, end: { line: 0, character: 4 } },
-            expected: 'some',
-        }, {
-            name: 'start line negative',
-            lines: ['some text here'],
-            range: { start: { line: -99, character: 0 }, end: { line: 0, character: 4 } },
-            expected: 'some',
-        }, {
-            name: 'end character out of bound (same start/end lines)',
-            lines: ['some text here'],
-            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 999 } },
-            expected: 'some text here',
-        }, {
-            name: 'end lines exceeds out of bound',
-            lines: ['some text here'],
-            range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
-            expected: 'some text here',
-        }, {
-            name: 'start character at the end of line',
-            lines: ['line 1', 'line 2'],
-            range: { start: { line: 0, character: 6 }, end: { line: 1, character: 6 } },
-            expected: 'line 2',
-        }, {
-            name: 'end character at the start of line',
-            lines: ['line 1', 'line 2'],
-            range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
-            expected: 'line 1',
-        },
-    ];
-
-    for (const t of tests) {
-        const tt = t;
-        test(tt.name, function () {
-            assert.equal(getTextOverRange(tt.lines, tt.range), tt.expected);
-        });
-    }
 });
 
 suite(deepSearch.name, function () {
