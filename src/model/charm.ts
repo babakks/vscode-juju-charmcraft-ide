@@ -391,6 +391,7 @@ export interface SourceCodeFunction {
     extendedRange: Range;
     kind: SourceCodeFunctionKind;
     isStatic: boolean;
+    isAsync: boolean;
     name: string;
     positionalParameters: string[];
 };
@@ -469,6 +470,7 @@ export class CharmSourceCode {
 const NODE_TYPE_NAME = 'Name';
 const NODE_TYPE_CLASS_DEF = 'ClassDef';
 const NODE_TYPE_FUNCTION_DEF = 'FunctionDef';
+const NODE_TYPE_ASYNC_FUNCTION_DEF = 'AsyncFunctionDef';
 const NODE_TYPE_ARGUMENTS = 'arguments';
 const NODE_TYPE_ARG = 'arg';
 const NODE_TYPE_ATTRIBUTE = 'Attribute';
@@ -582,7 +584,8 @@ export class SourceCodeFileAnalyzer {
         const result: SourceCodeFunction[] = [];
         for (let i = 0; i < body.length; i++) {
             const method = body[i];
-            if (method['$type'] !== NODE_TYPE_FUNCTION_DEF) {
+            if (method['$type'] !== NODE_TYPE_FUNCTION_DEF
+                && method['$type'] !== NODE_TYPE_ASYNC_FUNCTION_DEF) {
                 continue;
             }
 
@@ -595,6 +598,7 @@ export class SourceCodeFileAnalyzer {
                 name: unquoteSymbol(method['name'] as string),
                 kind: isParentAClass ? this._getClassMethodKind(method) : 'function',
                 isStatic: isParentAClass ? this._isClassMethodStatic(method) : false,
+                isAsync: method['$type'] === NODE_TYPE_ASYNC_FUNCTION_DEF,
                 range,
                 extendedRange,
                 positionalParameters,
@@ -801,8 +805,11 @@ export class CharmTestSourceCodeFileAnalyzer {
          * See the Pytest test discovery convention at:
          *   https://docs.pytest.org/en/7.4.x/explanation/goodpractices.html#conventions-for-python-test-discovery 
          */
-        const isPytestTestClass = (cls: SourceCodeClass) => cls.name.startsWith(CHARM_TEST_SOURCE_CODE_PYTEST_CLASS_PREFIX);
-        const isUnittestTestClass = (cls: SourceCodeClass) => cls.bases.some(x => x === CHARM_TEST_SOURCE_CODE_UNITTEST_BASE_CLASS);
+        const isPytestTestClass = (cls: SourceCodeClass) =>
+            cls.name.startsWith(CHARM_TEST_SOURCE_CODE_PYTEST_CLASS_PREFIX)
+            && !cls.methods.find(x => x.name === NODE_NAME_FUNCTION_INIT); // No init/constructor method.
+        const isUnittestTestClass = (cls: SourceCodeClass) =>
+            cls.bases.some(x => x === CHARM_TEST_SOURCE_CODE_UNITTEST_BASE_CLASS);
 
         return this.analyzer.classes?.filter(x => isUnittestTestClass(x) || isPytestTestClass(x))
             .map(x => ({
