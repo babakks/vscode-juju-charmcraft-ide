@@ -35,8 +35,6 @@ export class CharmConfigHoverProvider implements HoverProvider {
             return;
         }
 
-        this.reporter.sendTelemetryEvent(CharmConfigHoverProvider._telemetryEvent);
-
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
@@ -44,6 +42,8 @@ export class CharmConfigHoverProvider implements HoverProvider {
         if (!parameter?.value) {
             return;
         }
+
+        this.reporter.sendTelemetryEvent(CharmConfigHoverProvider._telemetryEvent);
 
         return new Hover(getConfigParamDocumentation(parameter.value, true));
     }
