@@ -2,7 +2,8 @@ import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     Disposable,
     ExtensionContext,
-    ExtensionMode, languages,
+    ExtensionMode, OutputChannel, languages,
+    tests,
     window
 } from 'vscode';
 import { EventHandlerCodeActionProvider } from './codeAction';
@@ -42,6 +43,7 @@ export async function activate(context: ExtensionContext) {
         ...registerCompletionProviders(registry, reporter),
         ...registerHoverProviders(registry, reporter),
         ...registerDefinitionProviders(registry, reporter),
+        ...registerTestProvider(registry, reporter, output),
     );
 
     const dw = new DocumentWatcher(registry);
@@ -113,4 +115,11 @@ function registerDefinitionProviders(registry: Registry, reporter: TelemetryRepo
             new CharmEventDefinitionProvider(registry, reporter),
         ),
     ];
+}
+
+function registerTestProvider(registry: Registry, reporter: TelemetryReporter, output: OutputChannel): Disposable[] {
+    // const controller = tests.createTestController('charmcraft-ide', 'Charmcraft IDE');
+    // const provider = new CharmTestProvider(telemetry, controller, output);
+    // return [controller, provider];
+    return [];
 }

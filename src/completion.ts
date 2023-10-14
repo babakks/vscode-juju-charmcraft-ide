@@ -40,15 +40,15 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
             return;
         }
 
-        if (!file.charmAnalyzer.mainCharmClass) {
+        if (!file.analyzer.mainCharmClass) {
             return;
         }
 
-        if (!isInRange({ line: position.line, character: position.character }, file.charmAnalyzer.mainCharmClass.extendedRange)) {
+        if (!isInRange({ line: position.line, character: position.character }, file.analyzer.mainCharmClass.extendedRange)) {
             return;
         }
 
-        const currentMethod = file.charmAnalyzer.mainCharmClass.methods.find(x => isInRange({ line: position.line, character: position.character }, x.extendedRange));
+        const currentMethod = file.analyzer.mainCharmClass.methods.find(x => isInRange({ line: position.line, character: position.character }, x.extendedRange));
         if (!currentMethod || currentMethod.isStatic) {
             return;
         }
@@ -152,15 +152,15 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
         }
 
 
-        if (!file.charmAnalyzer.mainCharmClass) {
+        if (!file.analyzer.mainCharmClass) {
             return;
         }
 
-        if (!isInRange({ line: position.line, character: position.character }, file.charmAnalyzer.mainCharmClass.extendedRange)) {
+        if (!isInRange({ line: position.line, character: position.character }, file.analyzer.mainCharmClass.extendedRange)) {
             return;
         }
 
-        const currentMethod = file.charmAnalyzer.mainCharmClass.methods.find(x => isInRange({ line: position.line, character: position.character }, x.extendedRange));
+        const currentMethod = file.analyzer.mainCharmClass.methods.find(x => isInRange({ line: position.line, character: position.character }, x.extendedRange));
         if (!currentMethod || currentMethod.isStatic) {
             return;
         }

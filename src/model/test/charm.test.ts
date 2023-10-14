@@ -3,19 +3,17 @@ import { readFileSync } from "fs";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
 import {
-    CharmSourceCode,
-    CharmSourceCodeFile,
-    CharmSourceCodeFileAnalyzer,
-    CharmSourceCodeTree,
-    CharmSourceCodeTreeDirectoryEntry,
-    CharmSourceCodeTreeFileEntry,
-    CharmTestSourceCodeFileAnalyzer,
     DeepSearchCallback,
     DeepSearchCallbackNode,
+    SourceCode,
     SourceCodeCharmTestClass,
     SourceCodeClass,
+    SourceCodeFile,
     SourceCodeFileAnalyzer,
     SourceCodeFunction,
+    SourceCodeTree,
+    SourceCodeTreeDirectoryEntry,
+    SourceCodeTreeFileEntry,
     deepSearch,
     deepSearchForPattern,
     getNodeExtendedRange,
@@ -25,12 +23,12 @@ import {
 import { Range } from "../common";
 import path = require('path');
 
-suite(CharmSourceCodeFileAnalyzer.name, function () {
-    function makeSUT(fixtureName: string): CharmSourceCodeFileAnalyzer {
+suite(SourceCodeFileAnalyzer.name, function () {
+    function makeSUT(fixtureName: string): SourceCodeFileAnalyzer {
         const base = path.join(__dirname, '../../../resource/test/ast');
         const content = new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.py')));
         const ast = JSON.parse(new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.json'))));
-        return new CharmSourceCodeFileAnalyzer(new SourceCodeFileAnalyzer(content, ast));
+        return new SourceCodeFileAnalyzer(content, ast);
     }
 
     test('charm-01', function () {
@@ -75,15 +73,6 @@ suite(CharmSourceCodeFileAnalyzer.name, function () {
         assert.deepOwnInclude(cs.methods[0], { name: 'static_method', kind: 'method', isStatic: true, isAsync: false, positionalParameters: [], range: { start: { line: 32, character: 4 }, end: { line: 33, character: 12 } }, extendedRange: { start: { line: 32, character: 4 }, end: { line: 35, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
         assert.deepOwnInclude(cs.methods[1], { name: 'static_method_with_decorator', kind: 'method', isStatic: true, isAsync: false, positionalParameters: ['param'], range: { start: { line: 36, character: 4 }, end: { line: 37, character: 12 } }, extendedRange: { start: { line: 36, character: 4 }, end: { line: 39, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
     });
-});
-
-suite(CharmTestSourceCodeFileAnalyzer.name, function () {
-    function makeSUT(fixtureName: string): CharmTestSourceCodeFileAnalyzer {
-        const base = path.join(__dirname, '../../../resource/test/ast');
-        const content = new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.py')));
-        const ast = JSON.parse(new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.json'))));
-        return new CharmTestSourceCodeFileAnalyzer(new SourceCodeFileAnalyzer(content, ast));
-    }
 
     test('charm-test-01-unittest', function () {
         const sut = makeSUT('charm-test-01-unittest');
@@ -379,19 +368,19 @@ suite(deepSearchForPattern.name, function () {
     );
 });
 
-suite(CharmSourceCode.name, function () {
-    function file(content: string = ''): CharmSourceCodeTreeFileEntry {
-        return { kind: 'file', data: new CharmSourceCodeFile(content, {}, true) };
+suite(SourceCode.name, function () {
+    function file(content: string = ''): SourceCodeTreeFileEntry {
+        return { kind: 'file', data: new SourceCodeFile(content, {}, true) };
     }
-    function dir(content: CharmSourceCodeTree): CharmSourceCodeTreeDirectoryEntry {
+    function dir(content: SourceCodeTree): SourceCodeTreeDirectoryEntry {
         return { kind: 'directory', data: content };
     }
 
-    suite(CharmSourceCode.prototype.getFiles.name, function () {
+    suite(SourceCode.prototype.getFiles.name, function () {
         type TestCase = {
             name: string;
-            tree: CharmSourceCodeTree;
-            expected: [string, CharmSourceCodeFile][];
+            tree: SourceCodeTree;
+            expected: [string, SourceCodeFile][];
         };
 
         const tests: TestCase[] = [
@@ -451,8 +440,8 @@ suite(CharmSourceCode.name, function () {
             const tt = t;
             test(tt.name, function () {
                 assert.deepStrictEqual(
-                    new CharmSourceCode(tt.tree).getFiles(),
-                    new Map<string, CharmSourceCodeFile>(tt.expected)
+                    new SourceCode(tt.tree).getFiles(),
+                    new Map<string, SourceCodeFile>(tt.expected)
                 );
             });
         }

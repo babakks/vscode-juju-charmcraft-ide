@@ -1,7 +1,18 @@
 import * as vscode from "vscode";
-import { Charm, CharmActions, CharmConfig, CharmMetadata, CharmSourceCode, CharmSourceCodeFile, MapWithNode, Problem, SOURCE_CODE_PROBLEMS, SequenceWithNode, WithNode } from "./model/charm";
-import { rangeToVSCodeRange } from "./util";
+import {
+    Charm,
+    CharmActions,
+    CharmConfig,
+    CharmMetadata,
+    MapWithNode,
+    Problem,
+    SOURCE_CODE_PROBLEMS,
+    SequenceWithNode,
+    SourceCodeFile,
+    WithNode
+} from "./model/charm";
 import { Range, TextPositionMapper, isInRange, zeroRange } from "./model/common";
+import { rangeToVSCodeRange } from "./util";
 
 export class ProblemBasedDiagnostic extends vscode.Diagnostic {
     constructor(readonly problem: Problem, range: vscode.Range, message: string, severity?: vscode.DiagnosticSeverity) {
@@ -142,6 +153,12 @@ export function getAllSourceCodeDiagnostics(charm: Charm): Map<string, vscode.Di
     ));
 }
 
+export function getAllTestSourceCodeDiagnostics(charm: Charm): Map<string, vscode.Diagnostic[]> {
+    return new Map<string, vscode.Diagnostic[]>(Array.from(charm.tests.getFiles().entries()).map(
+        ([relativePath,]) => [relativePath, getTestSourceCodeDiagnostics(charm, relativePath)]
+    ));
+}
+
 const REGEX_SELF_CONFIG_BRACKET = /self\s*(?:\.\s*model\s*)?\.\s*config\s*\[\s*(['"])(?<name>.*?)\1(?:\s*\])?/g;
 const REGEX_SELF_CONFIG_GET_SET = /self\s*(?:\.\s*model\s*)?\.\s*config\s*\.\s*(?:get|set)\s*\(\s*(['"])(?<name>.*?)\1(?:\s*(?:\)|,))?/g;
 const REGEX_SELF_ON = /self\s*\.\s*on\s*\.\s*(?<symbol>\w*)/g;
@@ -157,7 +174,14 @@ export function getSourceCodeDiagnostics(charm: Charm, sourceCodeFileRelativePat
     ] : [];
 }
 
-function getConfigReferenceDiagnostics(charm: Charm, file: CharmSourceCodeFile): vscode.Diagnostic[] {
+export function getTestSourceCodeDiagnostics(charm: Charm, testSourceCodeFileRelativePath: string): vscode.Diagnostic[] {
+    const file = charm.tests.getFile(testSourceCodeFileRelativePath);
+    return file ? [
+        ...[], // No diagnostics for test files yet.
+    ] : [];
+}
+
+function getConfigReferenceDiagnostics(charm: Charm, file: SourceCodeFile): vscode.Diagnostic[] {
     return [
         ...getConfigReferenceDiagnosticsByPattern(charm, file, REGEX_SELF_CONFIG_BRACKET),
         ...getConfigReferenceDiagnosticsByPattern(charm, file, REGEX_SELF_CONFIG_GET_SET),
@@ -165,7 +189,7 @@ function getConfigReferenceDiagnostics(charm: Charm, file: CharmSourceCodeFile):
     ];
 }
 
-function getConfigReferenceDiagnosticsByPattern(charm: Charm, file: CharmSourceCodeFile, pattern: RegExp): vscode.Diagnostic[] {
+function getConfigReferenceDiagnosticsByPattern(charm: Charm, file: SourceCodeFile, pattern: RegExp): vscode.Diagnostic[] {
     const result: vscode.Diagnostic[] = [];
     const matches = file.content.matchAll(pattern);
     for (const m of matches) {
@@ -197,7 +221,7 @@ function getConfigReferenceDiagnosticsByPattern(charm: Charm, file: CharmSourceC
     return result;
 }
 
-function getEventReferenceDiagnostics(charm: Charm, file: CharmSourceCodeFile): vscode.Diagnostic[] {
+function getEventReferenceDiagnostics(charm: Charm, file: SourceCodeFile): vscode.Diagnostic[] {
     const result: vscode.Diagnostic[] = [];
     const matches = file.content.matchAll(REGEX_SELF_ON);
     for (const m of matches) {
@@ -236,15 +260,15 @@ function offsetLengthToRange(index: number, length: number, tpm: TextPositionMap
     };
 }
 
-function isInMainCharmClassAndSelfAccessible(file: CharmSourceCodeFile, index: number): boolean | undefined {
-    if (!file.charmAnalyzer.mainCharmClass) {
+function isInMainCharmClassAndSelfAccessible(file: SourceCodeFile, index: number): boolean | undefined {
+    if (!file.analyzer.mainCharmClass) {
         return undefined;
     }
     const position = file.tpm.indexToPosition(index);
-    if (!isInRange(position, file.charmAnalyzer.mainCharmClass.extendedRange)) {
+    if (!isInRange(position, file.analyzer.mainCharmClass.extendedRange)) {
         return false;
     }
-    const currentMethod = file.charmAnalyzer.mainCharmClass.methods.find(x => isInRange(position, x.extendedRange));
+    const currentMethod = file.analyzer.mainCharmClass.methods.find(x => isInRange(position, x.extendedRange));
     if (!currentMethod || currentMethod.isStatic) {
         return false;
     }

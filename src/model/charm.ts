@@ -1,5 +1,6 @@
 import {
     CHARM_DIR_SRC_MAIN,
+    CHARM_DIR_TESTS,
     CHARM_SOURCE_CODE_CHARM_BASE_CLASS,
     Position,
     Range,
@@ -276,9 +277,8 @@ export interface CharmToxConfigSection {
     name: string;
 }
 
-export class CharmSourceCodeFile {
+export class SourceCodeFile {
     private _analyzer: SourceCodeFileAnalyzer | undefined;
-    private _charmAnalyzer: CharmSourceCodeFileAnalyzer | undefined;
     private _tpm: TextPositionMapper | undefined;
 
     constructor(public content: string, public ast: any, public healthy: boolean) { }
@@ -293,16 +293,6 @@ export class CharmSourceCodeFile {
         return this._analyzer;
     }
 
-    /**
-     * Returns the charm-aware source code analyzer instance.
-     */
-    get charmAnalyzer() {
-        if (!this._charmAnalyzer) {
-            this._charmAnalyzer = new CharmSourceCodeFileAnalyzer(this.analyzer);
-        }
-        return this._charmAnalyzer;
-    }
-
     get tpm() {
         if (!this._tpm) {
             this._tpm = new TextPositionMapper(this.content);
@@ -311,20 +301,20 @@ export class CharmSourceCodeFile {
     }
 }
 
-export type CharmSourceCodeTreeEntry = CharmSourceCodeTreeDirectoryEntry | CharmSourceCodeTreeFileEntry;
+export type SourceCodeTreeEntry = SourceCodeTreeDirectoryEntry | SourceCodeTreeFileEntry;
 
-export interface CharmSourceCodeTree {
-    [key: string]: CharmSourceCodeTreeEntry;
+export interface SourceCodeTree {
+    [key: string]: SourceCodeTreeEntry;
 }
 
-export interface CharmSourceCodeTreeDirectoryEntry {
+export interface SourceCodeTreeDirectoryEntry {
     kind: 'directory';
-    data: CharmSourceCodeTree;
+    data: SourceCodeTree;
 }
 
-export interface CharmSourceCodeTreeFileEntry {
+export interface SourceCodeTreeFileEntry {
     kind: 'file';
-    data: CharmSourceCodeFile;
+    data: SourceCodeFile;
 }
 
 export interface SourceCodeCharmClass extends SourceCodeClass {
@@ -396,10 +386,10 @@ export interface SourceCodeFunction {
     positionalParameters: string[];
 };
 
-export class CharmSourceCode {
-    constructor(readonly tree: CharmSourceCodeTree) { }
+export class SourceCode {
+    constructor(readonly tree: SourceCodeTree) { }
 
-    private _getEntryAt(relativePath: string): CharmSourceCodeTreeFileEntry | CharmSourceCodeTreeDirectoryEntry | undefined {
+    private _getEntryAt(relativePath: string): SourceCodeTreeFileEntry | SourceCodeTreeDirectoryEntry | undefined {
         const components = relativePath.split('/');
         let dir = this.tree;
         for (let i = 0; i < components.length; i++) {
@@ -423,13 +413,13 @@ export class CharmSourceCode {
      * Returns a flat map of files and their relative path in the source code
      * tree. Note that the results are not ordered in a specific manner.
      */
-    getFiles(): Map<string, CharmSourceCodeFile> {
-        const result = new Map<string, CharmSourceCodeFile>();
+    getFiles(): Map<string, SourceCodeFile> {
+        const result = new Map<string, SourceCodeFile>();
 
-        const stack: [string, CharmSourceCodeTreeEntry][] = [];
-        function push(tree: CharmSourceCodeTree, relativePath?: string) {
+        const stack: [string, SourceCodeTreeEntry][] = [];
+        function push(tree: SourceCodeTree, relativePath?: string) {
             stack.push(...Object.entries(tree).map(([k, v]) =>
-                [relativePath !== undefined ? relativePath + '/' + k : k, v] as [string, CharmSourceCodeTreeEntry]
+                [relativePath !== undefined ? relativePath + '/' + k : k, v] as [string, SourceCodeTreeEntry]
             ));
         }
 
@@ -449,12 +439,12 @@ export class CharmSourceCode {
         return result;
     }
 
-    getFile(relativePath: string): CharmSourceCodeFile | undefined {
+    getFile(relativePath: string): SourceCodeFile | undefined {
         const entry = this._getEntryAt(relativePath);
         return entry?.kind === 'file' ? entry.data : undefined;
     }
 
-    updateFile(relativePath: string, file: CharmSourceCodeFile) {
+    updateFile(relativePath: string, file: SourceCodeFile) {
         const entry = this._getEntryAt(relativePath);
         if (entry?.kind === 'file') {
             entry.data = file;
@@ -486,10 +476,19 @@ const CONSTANT_VALUE_MAIN = '__main__';
 const CONSTANT_VALUE_SETTER = 'setter';
 const CONSTANT_VALUE_STATIC_METHOD = 'staticmethod';
 
+const TEST_UNITTEST_BASE_CLASS = 'TestCase';
+const TEST_PYTEST_CLASS_PREFIX = 'Test';
+const TEST_FUNCTION_PREFIX = 'test_';
+
 export class SourceCodeFileAnalyzer {
+    readonly tpm: TextPositionMapper;
+
     private _classes: SourceCodeClass[] | undefined | null = null;
     private _functions: SourceCodeFunction[] | undefined | null = null;
-    readonly tpm: TextPositionMapper;
+    private _charmClasses: SourceCodeClass[] | undefined | null = null;
+    private _mainCharmClass: SourceCodeClass | undefined | null = null;
+    private _testClasses: SourceCodeCharmTestClass[] | undefined | null = null;
+    private _testFunctions: SourceCodeFunction[] | undefined | null = null;
 
     constructor(readonly content: string, readonly ast: any | undefined) {
         this.tpm = new TextPositionMapper(this.content);
@@ -501,8 +500,16 @@ export class SourceCodeFileAnalyzer {
     reset() {
         this._classes = null;
         this._functions = null;
+        this._charmClasses = null;
+        this._mainCharmClass = null;
+        this._testClasses = null;
+        this._testFunctions = null;
     }
 
+    /**
+     * Returns the list of classes defined in the file-scope. This also includes
+     * test and charm-based classes. 
+     */
     get classes(): SourceCodeClass[] | undefined {
         if (this._classes !== null) {
             return this._classes;
@@ -510,11 +517,53 @@ export class SourceCodeFileAnalyzer {
         return this._classes = this._getClasses(this.ast, this.tpm.all());
     }
 
+    /**
+     * Returns the list of functions defined in the file-scope. This also includes
+     * test functions. 
+     */
     get functions(): SourceCodeFunction[] | undefined {
         if (this._functions !== null) {
             return this._functions;
         }
         return this._functions = this._getFunctions(this.ast, this.tpm.all());
+    }
+
+    /**
+     * Returns the list of charm-based classes, ordered by their lexical
+     * position, in the file-scope.
+     */
+    get charmClasses(): SourceCodeClass[] | undefined {
+        if (this._charmClasses !== null) {
+            return this._charmClasses;
+        }
+        return this._charmClasses = this._getCharmClasses();
+    }
+
+    get mainCharmClass(): SourceCodeClass | undefined {
+        if (this._mainCharmClass !== null) {
+            return this._mainCharmClass;
+        }
+        return this._mainCharmClass = this._getMainCharmClass();
+    }
+
+    /**
+     * Returns the list of test classes defined in the file-scope. 
+     */
+    get testClasses(): SourceCodeCharmTestClass[] | undefined {
+        if (this._testClasses !== null) {
+            return this._testClasses;
+        }
+        return this._testClasses = this._getTestClasses();
+    }
+
+    /**
+     * Returns the list of test functions defined in the file-scope. 
+     */
+    get testFunctions(): SourceCodeFunction[] | undefined {
+        if (this._testFunctions !== null) {
+            return this._testFunctions;
+        }
+        return this._testFunctions = this._getTestFunctions();
     }
 
     private _getClasses(parent: any, parentExtendedRange: Range): SourceCodeClass[] | undefined {
@@ -667,41 +716,9 @@ export class SourceCodeFileAnalyzer {
         }
         return false;
     }
-}
-
-export class CharmSourceCodeFileAnalyzer {
-    private _charmClasses: SourceCodeClass[] | undefined | null = null;
-    private _mainCharmClass: SourceCodeClass | undefined | null = null;
-
-    constructor(readonly analyzer: SourceCodeFileAnalyzer) { }
-
-    /**
-     * Resets analyses' results.
-     */
-    reset() {
-        this._charmClasses = null;
-        this._mainCharmClass = null;
-    }
-
-    /**
-     * Charm-based classes, ordered by their lexical position.
-     */
-    get charmClasses(): SourceCodeClass[] | undefined {
-        if (this._charmClasses !== null) {
-            return this._charmClasses;
-        }
-        return this._charmClasses = this._getCharmClasses();
-    }
-
-    get mainCharmClass(): SourceCodeClass | undefined {
-        if (this._mainCharmClass !== null) {
-            return this._mainCharmClass;
-        }
-        return this._mainCharmClass = this._getMainCharmClass();
-    }
 
     private _getCharmClasses(): SourceCodeCharmClass[] | undefined {
-        return this.analyzer.classes?.filter(x => x.bases.indexOf(CHARM_SOURCE_CODE_CHARM_BASE_CLASS) !== -1)
+        return this.classes?.filter(x => x.bases.indexOf(CHARM_SOURCE_CODE_CHARM_BASE_CLASS) !== -1)
             .map(x => ({
                 ...x,
                 // TODO `getClassSubscribedEvents` is not implemented yet.
@@ -715,7 +732,7 @@ export class CharmSourceCodeFileAnalyzer {
             return undefined;
         }
 
-        const body = this.analyzer.ast?.['body'];
+        const body = this.ast?.['body'];
         if (!body || !Array.isArray(body)) {
             return undefined;
         }
@@ -739,7 +756,7 @@ export class CharmSourceCodeFileAnalyzer {
                 continue;
             }
 
-            const nodeText = this.analyzer.tpm.getTextOverRange(getNodeRange(x));
+            const nodeText = this.tpm.getTextOverRange(getNodeRange(x));
             const charmClass = classes.find(x => nodeText.match(new RegExp(`(^\\s*|\\W)${escapeRegex(x.name)}(\\W|\\s*$)`)));
             if (charmClass) {
                 return charmClass;
@@ -765,40 +782,6 @@ export class CharmSourceCodeFileAnalyzer {
         // return result;
         return [];
     }
-}
-
-const CHARM_TEST_SOURCE_CODE_UNITTEST_BASE_CLASS = 'TestCase';
-const CHARM_TEST_SOURCE_CODE_PYTEST_CLASS_PREFIX = 'Test';
-const CHARM_TEST_SOURCE_CODE_TEST_FUNCTION_PREFIX = 'test_';
-
-export class CharmTestSourceCodeFileAnalyzer {
-    private _testClasses: SourceCodeCharmTestClass[] | undefined | null = null;
-    private _testFunctions: SourceCodeFunction[] | undefined | null = null;
-
-    constructor(readonly analyzer: SourceCodeFileAnalyzer) { }
-
-    /**
-     * Resets analyses' results.
-     */
-    reset() {
-        this._testClasses = null;
-        this._testFunctions = null;
-    }
-
-    get testClasses(): SourceCodeCharmTestClass[] | undefined {
-        if (this._testClasses !== null) {
-            return this._testClasses;
-        }
-        return this._testClasses = this._getTestClasses();
-    }
-
-    get testFunctions(): SourceCodeFunction[] | undefined {
-        if (this._testFunctions !== null) {
-            return this._testFunctions;
-        }
-        return this._testFunctions = this._getTestFunctions();
-    }
-
 
     private _getTestClasses(): SourceCodeCharmTestClass[] | undefined {
         /**
@@ -806,12 +789,12 @@ export class CharmTestSourceCodeFileAnalyzer {
          *   https://docs.pytest.org/en/7.4.x/explanation/goodpractices.html#conventions-for-python-test-discovery 
          */
         const isPytestTestClass = (cls: SourceCodeClass) =>
-            cls.name.startsWith(CHARM_TEST_SOURCE_CODE_PYTEST_CLASS_PREFIX)
+            cls.name.startsWith(TEST_PYTEST_CLASS_PREFIX)
             && !cls.methods.find(x => x.name === NODE_NAME_FUNCTION_INIT); // No init/constructor method.
         const isUnittestTestClass = (cls: SourceCodeClass) =>
-            cls.bases.some(x => x === CHARM_TEST_SOURCE_CODE_UNITTEST_BASE_CLASS);
+            cls.bases.some(x => x === TEST_UNITTEST_BASE_CLASS);
 
-        return this.analyzer.classes?.filter(x => isUnittestTestClass(x) || isPytestTestClass(x))
+        return this.classes?.filter(x => isUnittestTestClass(x) || isPytestTestClass(x))
             .map(x => ({
                 dialect: isUnittestTestClass(x) ? 'unittest.TestCase' : 'pytest',
                 testMethods: x.methods.filter(y => this._isTestFunction(y)),
@@ -820,11 +803,11 @@ export class CharmTestSourceCodeFileAnalyzer {
     }
 
     private _isTestFunction(fn: SourceCodeFunction): boolean {
-        return fn.name.startsWith(CHARM_TEST_SOURCE_CODE_TEST_FUNCTION_PREFIX);
+        return fn.name.startsWith(TEST_FUNCTION_PREFIX);
     }
 
     private _getTestFunctions(): SourceCodeFunction[] | undefined {
-        return this.analyzer.functions?.filter(y => this._isTestFunction(y));
+        return this.functions?.filter(y => this._isTestFunction(y));
     }
 }
 
@@ -1046,7 +1029,8 @@ export class Charm {
     private _toxConfig: CharmToxConfig = emptyToxConfig();
 
     private _events: CharmEvent[] = [];
-    private _src: CharmSourceCode = new CharmSourceCode({});
+    private _src = new SourceCode({});
+    private _tests = new SourceCode({});
 
     constructor() { }
 
@@ -1074,8 +1058,12 @@ export class Charm {
         return this._toxConfig;
     }
 
-    get src(): CharmSourceCode {
+    get src(): SourceCode {
         return this._src;
+    }
+
+    get tests(): SourceCode {
+        return this._tests;
     }
 
     async updateActions(actions: CharmActions) {
@@ -1096,8 +1084,12 @@ export class Charm {
         this._toxConfig = toxConfig;
     }
 
-    async updateSourceCode(src: CharmSourceCode) {
+    async updateSourceCode(src: SourceCode) {
         this._src = src;
+    }
+
+    async updateTestSourceCode(tests: SourceCode) {
+        this._tests = tests;
     }
 
     private _repopulateEvents() {
