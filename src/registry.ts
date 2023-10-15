@@ -85,6 +85,13 @@ export class Registry implements Disposable {
         return Array.from(this._set).map(x => x.model);
     }
 
+    /**
+     * Locates corresponding charm for a given URI which could point to either a
+     * file or a directory. 
+     * @returns Corresponding charm and the path of the given URI relative to
+     * the charm. Note that, independent of the platform, the relative path is
+     * separated by `/` (forward slash).
+     */
     getCharmByUri(uri: Uri): { workspaceCharm: WorkspaceCharm; relativePath: string } | { workspaceCharm: undefined; relativePath: undefined } {
         const u = uri.toString();
         for (const charm of this._set) {
