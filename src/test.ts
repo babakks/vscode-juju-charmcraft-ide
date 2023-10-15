@@ -25,6 +25,7 @@ import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import assert = require('assert');
 import path = require('path');
 import { WorkspaceCharm } from './workspace';
+import { CHARM_DIR_TESTS } from './model/common';
 
 type TestData = CharmTestData
     | DirectoryTestData
@@ -93,6 +94,7 @@ export class CharmTestProvider implements Disposable {
         this.controller.resolveHandler = async test => {
             if (!test) {
                 await this._discoverAllTests();
+                this._purgeEntriesWithNoChildren();
                 return;
             }
 
@@ -115,6 +117,7 @@ export class CharmTestProvider implements Disposable {
                 assert(test.uri);
                 await this._discoverTestsInFile(test.uri);
             }
+            this._purgeEntriesWithNoChildren();
         };
 
         this.controller.refreshHandler = async (token: CancellationToken) => {
@@ -122,8 +125,8 @@ export class CharmTestProvider implements Disposable {
         };
 
         this._disposables.push(
-            // When text documents are open, parse tests in them.
-            workspace.onDidOpenTextDocument(e => this._discoverTestsInFile(e.uri, e.getText())),
+            // // When text documents are open, parse tests in them.
+            // workspace.onDidOpenTextDocument(e => this._discoverTestsInFile(e.uri)),
             // // We could also listen to document changes to re-parse unsaved changes:
             // vscode.workspace.onDidChangeTextDocument(e => this.parseTestsInDocument(e.document)),
             controller.createRunProfile('Run', TestRunProfileKind.Run, (request, token) => this._startTestRun(false, request, token)),
@@ -242,18 +245,19 @@ export class CharmTestProvider implements Disposable {
         await this._discoverTestsInFile(test.uri);
     }
 
-    private async _discoverTestsInFile(uri: Uri, content?: string) {
+    private async _discoverTestsInFile(uri: Uri) {
         if (uri.scheme !== 'file' || !uri.path.endsWith('.py')) {
-            return;
-        }
-
-        content ??= await tryReadWorkspaceFileAsText(uri);
-        if (content === undefined) {
             return;
         }
 
         const { workspaceCharm, relativePath } = this.registry.getCharmByUri(uri);
         if (!workspaceCharm) {
+            return;
+        }
+
+        const pathComponents = relativePath.split('/');
+        if (pathComponents[0] !== CHARM_DIR_TESTS) {
+            // Only tests under the `tests` directory will be discovered.
             return;
         }
 
@@ -264,18 +268,17 @@ export class CharmTestProvider implements Disposable {
 
         let updated = false;
 
-        const charmId = workspaceCharm.home.path;
+        const charmId = workspaceCharm.testsUri.path;
         let charmItem = this.controller.items.get(charmId);
         if (!charmItem) {
             const label = workspace.asRelativePath(workspaceCharm.home);
-            charmItem = this.controller.createTestItem(charmId, label, workspaceCharm.home);
+            charmItem = this.controller.createTestItem(charmId, label, workspaceCharm.testsUri);
             this.controller.items.add(charmItem);
             this._map.set(charmItem, { kind: 'charm' } as CharmTestData);
             updated = true;
         }
 
-        const pathComponents = relativePath.split('/');
-        const dirs = pathComponents.slice(0, -1);
+        const dirs = pathComponents.slice(1, -1); // Skipping index 0, because it's the `tests` directory. 
         const filename = pathComponents[-1 + pathComponents.length];
 
         let parentItem: TestItem = charmItem;
