@@ -192,7 +192,7 @@ function getConfigReferenceDiagnosticsByPattern(charm: Charm, file: SourceCodeFi
         /**
          * If main charm class data is available, it should be checked that the
          * matched expression is within the main class, and `self` is accessible
-         * in the block.  
+         * in the block.
          */
         if (isInMainCharmClassAndSelfAccessible(file, m.index) === false) {
             continue;
@@ -224,7 +224,7 @@ function getEventReferenceDiagnostics(charm: Charm, file: SourceCodeFile): vscod
         /**
          * If main charm class data is available, it should be checked that the
          * matched expression is within the main class, and `self` is accessible
-         * in the block.  
+         * in the block.
          */
         if (isInMainCharmClassAndSelfAccessible(file, m.index) === false) {
             continue;

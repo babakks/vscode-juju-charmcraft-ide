@@ -8,7 +8,7 @@ const DIRTY_DOCUMENT_REFRESH_INTERVAL = 1500; // (ms)
 /**
  * Watches live documents (i.e., documents opened in the editor) for unsaved
  * changes and trigger corresponding charms to update their cache with the
- * latest content. 
+ * latest content.
  */
 export class DocumentWatcher implements Disposable {
     private readonly _listeners: Disposable[] = [];

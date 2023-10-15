@@ -242,7 +242,7 @@ export interface CharmEvent {
     name: string;
     source: CharmEventSource;
     /**
-     * Name of the action, if the source of this event is an action. 
+     * Name of the action, if the source of this event is an action.
      */
     sourceActionName?: string;
     symbol: string;
@@ -342,7 +342,7 @@ export interface SourceCodeClass {
     raw: any;
     range: Range;
     /**
-     * Extended (greedy) range of the node that covers trailing whitespace or empty lines. 
+     * Extended (greedy) range of the node that covers trailing whitespace or empty lines.
      */
     extendedRange: Range;
     name: string;
@@ -378,7 +378,7 @@ export interface SourceCodeFunction {
     raw: any;
     range: Range;
     /**
-     * Extended (greedy) range of the node that covers trailing whitespace or empty lines. 
+     * Extended (greedy) range of the node that covers trailing whitespace or empty lines.
      */
     extendedRange: Range;
     kind: SourceCodeFunctionKind;
@@ -418,7 +418,7 @@ export class SourceCode {
     /**
      * Returns a flat map of files and their relative path in the source code
      * tree. Note that the results are not ordered in a specific manner.
-     * 
+     *
      * Note that independent of the platform, relative paths are separated with
      * `/` (forward slash).
      */
@@ -473,7 +473,7 @@ export class SourceCode {
      * `/` (forward slash).
      */
     isMain(relativePath: string): boolean {
-        // TODO: This may not be the exact criteria for the main charm file. 
+        // TODO: This may not be the exact criteria for the main charm file.
         return relativePath === `${CHARM_DIR_SRC}/${CHARM_DIR_SRC_MAIN}`;
     }
 }
@@ -529,7 +529,7 @@ export class SourceCodeFileAnalyzer {
 
     /**
      * Returns the list of classes defined in the file-scope. This also includes
-     * test and charm-based classes. 
+     * test and charm-based classes.
      */
     get classes(): SourceCodeClass[] | undefined {
         if (this._classes !== null) {
@@ -540,7 +540,7 @@ export class SourceCodeFileAnalyzer {
 
     /**
      * Returns the list of functions defined in the file-scope. This also includes
-     * test functions. 
+     * test functions.
      */
     get functions(): SourceCodeFunction[] | undefined {
         if (this._functions !== null) {
@@ -568,7 +568,7 @@ export class SourceCodeFileAnalyzer {
     }
 
     /**
-     * Returns the list of test classes defined in the file-scope. 
+     * Returns the list of test classes defined in the file-scope.
      */
     get testClasses(): SourceCodeCharmTestClass[] | undefined {
         if (this._testClasses !== null) {
@@ -578,7 +578,7 @@ export class SourceCodeFileAnalyzer {
     }
 
     /**
-     * Returns the list of test functions defined in the file-scope. 
+     * Returns the list of test functions defined in the file-scope.
      */
     get testFunctions(): SourceCodeFunction[] | undefined {
         if (this._testFunctions !== null) {
@@ -807,7 +807,7 @@ export class SourceCodeFileAnalyzer {
     private _getTestClasses(): SourceCodeCharmTestClass[] | undefined {
         /**
          * See the Pytest test discovery convention at:
-         *   https://docs.pytest.org/en/7.4.x/explanation/goodpractices.html#conventions-for-python-test-discovery 
+         *   https://docs.pytest.org/en/7.4.x/explanation/goodpractices.html#conventions-for-python-test-discovery
          */
         const isPytestTestClass = (cls: SourceCodeClass) =>
             cls.name.startsWith(TEST_PYTEST_CLASS_PREFIX)

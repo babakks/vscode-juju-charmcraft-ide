@@ -87,7 +87,7 @@ export class Registry implements Disposable {
 
     /**
      * Locates corresponding charm for a given URI which could point to either a
-     * file or a directory. 
+     * file or a directory.
      * @returns Corresponding charm and the path of the given URI relative to
      * the charm. Note that, independent of the platform, the relative path is
      * separated by `/` (forward slash).

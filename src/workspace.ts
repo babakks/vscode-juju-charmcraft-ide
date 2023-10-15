@@ -75,7 +75,7 @@ export class WorkspaceCharm implements vscode.Disposable {
     readonly sourceCodeUris: readonly Uri[];
 
     /**
-     * Persisted model of the charm. 
+     * Persisted model of the charm.
      */
     readonly model: Charm;
 
@@ -403,7 +403,7 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     /**
-     * @returns `undefined` when there's no dirty document with the given URI. 
+     * @returns `undefined` when there's no dirty document with the given URI.
      */
     private _getDirtyDocumentContent(uri: Uri): string | undefined {
         const docs = Array.from(vscode.workspace.textDocuments);

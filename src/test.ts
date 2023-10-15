@@ -278,7 +278,7 @@ export class CharmTestProvider implements Disposable {
             updated = true;
         }
 
-        const dirs = pathComponents.slice(1, -1); // Skipping index 0, because it's the `tests` directory. 
+        const dirs = pathComponents.slice(1, -1); // Skipping index 0, because it's the `tests` directory.
         const filename = pathComponents[-1 + pathComponents.length];
 
         let parentItem: TestItem = charmItem;

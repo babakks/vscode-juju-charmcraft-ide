@@ -820,7 +820,7 @@ export function parseToxINI(text: string): CharmToxConfig {
             /*
              * NOTE the `ini` package does not support multiline values which is common
              * for `description` or `commands` in `tox.ini` file. Therefore, we just
-             * use the section names. 
+             * use the section names.
              */
         };
         return result;
