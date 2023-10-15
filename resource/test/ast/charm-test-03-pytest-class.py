@@ -5,7 +5,7 @@
 class TestClass:
     def test_something(self, test):
         pass
-    
+
     async def test_something_async(self, test):
         pass
 
