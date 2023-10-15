@@ -157,3 +157,9 @@ export class TextPositionMapper {
         return portion.join('\n');
     }
 }
+
+const REGEXP_SPECIAL_CHARS = /[/\-\\^$*+?.()|[\]{}]/g;
+
+export function escapeRegex(s: string): string {
+    return s.replace(REGEXP_SPECIAL_CHARS, '\\$&');
+}

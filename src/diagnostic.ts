@@ -148,14 +148,8 @@ export function getMetadataDiagnostics(metadata: CharmMetadata): vscode.Diagnost
 }
 
 export function getAllSourceCodeDiagnostics(charm: Charm): Map<string, vscode.Diagnostic[]> {
-    return new Map<string, vscode.Diagnostic[]>(Array.from(charm.src.getFiles().entries()).map(
+    return new Map<string, vscode.Diagnostic[]>(Array.from(charm.sourceCode.getFiles().entries()).map(
         ([relativePath,]) => [relativePath, getSourceCodeDiagnostics(charm, relativePath)]
-    ));
-}
-
-export function getAllTestSourceCodeDiagnostics(charm: Charm): Map<string, vscode.Diagnostic[]> {
-    return new Map<string, vscode.Diagnostic[]>(Array.from(charm.tests.getFiles().entries()).map(
-        ([relativePath,]) => [relativePath, getTestSourceCodeDiagnostics(charm, relativePath)]
     ));
 }
 
@@ -164,20 +158,13 @@ const REGEX_SELF_CONFIG_GET_SET = /self\s*(?:\.\s*model\s*)?\.\s*config\s*\.\s*(
 const REGEX_SELF_ON = /self\s*\.\s*on\s*\.\s*(?<symbol>\w*)/g;
 
 export function getSourceCodeDiagnostics(charm: Charm, sourceCodeFileRelativePath: string): vscode.Diagnostic[] {
-    if (!charm.src.isMain(sourceCodeFileRelativePath)) {
+    if (!charm.sourceCode.isMain(sourceCodeFileRelativePath)) {
         return [];
     }
 
-    const file = charm.src.getFile(sourceCodeFileRelativePath);
+    const file = charm.sourceCode.getFile(sourceCodeFileRelativePath);
     return file ? [
         ...getConfigReferenceDiagnostics(charm, file),
-    ] : [];
-}
-
-export function getTestSourceCodeDiagnostics(charm: Charm, testSourceCodeFileRelativePath: string): vscode.Diagnostic[] {
-    const file = charm.tests.getFile(testSourceCodeFileRelativePath);
-    return file ? [
-        ...[], // No diagnostics for test files yet.
     ] : [];
 }
 

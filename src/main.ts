@@ -20,7 +20,6 @@ import { Registry } from './registry';
 import { integrateWithYAMLExtension } from './schema';
 import { CharmcraftTreeDataProvider } from './tree';
 import { DocumentWatcher } from './watcher';
-import path = require('path');
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 

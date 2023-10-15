@@ -3,8 +3,6 @@ import { readFileSync } from "fs";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
 import {
-    DeepSearchCallback,
-    DeepSearchCallbackNode,
     SourceCode,
     SourceCodeCharmTestClass,
     SourceCodeClass,
@@ -14,13 +12,11 @@ import {
     SourceCodeTree,
     SourceCodeTreeDirectoryEntry,
     SourceCodeTreeFileEntry,
-    deepSearch,
-    deepSearchForPattern,
     getNodeExtendedRange,
     getNodeRange,
     unquoteSymbol
 } from "../charm";
-import { Range } from "../common";
+import { Range, escapeRegex } from "../common";
 import path = require('path');
 
 suite(SourceCodeFileAnalyzer.name, function () {
@@ -261,113 +257,6 @@ suite(unquoteSymbol.name, function () {
     });
 });
 
-suite(deepSearch.name, function () {
-    type TestCase = {
-        name: string;
-        node: any;
-        expectedCallbackArgs: {
-            key: any;
-            skipKey?: true;
-            nodeKind: string;
-            skipNodeKind?: true;
-            nodeValue: any;
-            skipNodeValue?: true
-        }[];
-    };
-    const tests: TestCase[] = [
-        {
-            name: 'empty object ({})',
-            node: {},
-            expectedCallbackArgs: [{ key: 0, nodeKind: 'object', nodeValue: {} }],
-        }, {
-            name: 'flat object ({a:0})',
-            node: { a: 0 },
-            expectedCallbackArgs: [{ key: 0, nodeKind: 'object', nodeValue: { a: 0 } }],
-        }, {
-            name: 'nested objects ({a:0,b:{c:0}})',
-            node: { a: 0, b: { c: 0 } },
-            expectedCallbackArgs: [
-                { key: 0, nodeKind: 'object', nodeValue: { a: 0, b: { c: 0 } } },
-                { key: 'b', nodeKind: 'object', nodeValue: { c: 0 } },
-            ],
-        }, {
-            name: 'empty array ([])',
-            node: [],
-            expectedCallbackArgs: [{ key: 0, nodeKind: 'array', nodeValue: [] }],
-        }, {
-            name: 'flat array [0]',
-            node: [0],
-            expectedCallbackArgs: [{ key: 0, nodeKind: 'array', nodeValue: [0] }],
-        }, {
-            name: 'nested arrays [0,[1]]',
-            node: [0, [1]],
-            expectedCallbackArgs: [
-                { key: 0, nodeKind: 'array', nodeValue: [0, [1]] },
-                { key: 1, nodeKind: 'array', nodeValue: [1] },
-            ],
-        }, {
-            name: 'nested empty object and array',
-            node: [{}],
-            expectedCallbackArgs: [
-                { key: 0, nodeKind: 'array', nodeValue: [{}] },
-                { key: 0, nodeKind: 'object', nodeValue: {} },
-            ],
-        }, {
-            name: 'nested objects and arrays',
-            node: [0, { a: 0, b: [{ c: 2 }] }],
-            expectedCallbackArgs: [
-                { key: 0, nodeKind: 'array', nodeValue: [0, { a: 0, b: [{ c: 2 }] }] },
-                { key: 1, nodeKind: 'object', nodeValue: { a: 0, b: [{ c: 2 }] } },
-                { key: 'b', nodeKind: 'array', nodeValue: [{ c: 2 }] },
-                { key: 0, nodeKind: 'object', nodeValue: { c: 2 } },
-            ]
-        }
-    ];
-
-    for (const t of tests) {
-        const tt = t;
-        test(tt.name, function () {
-            const expected = tt.expectedCallbackArgs.reverse();
-            deepSearch(tt.node, function (key: any, node: DeepSearchCallbackNode): boolean | DeepSearchCallback {
-                if (expected.length === 0) {
-                    assert.fail('unexpected call of callback function');
-                }
-                const expectedArgs = expected.pop();
-                if (!expectedArgs) {
-                    return true;
-                }
-                if (!expectedArgs.skipKey) {
-                    assert.deepEqual(key, expectedArgs.key, 'key does not match');
-                }
-                if (!expectedArgs.skipNodeKind) {
-                    assert.deepEqual(node.kind, expectedArgs.nodeKind, 'node.kind does not match');
-                }
-                if (!expectedArgs.skipNodeValue) {
-                    assert.deepEqual(node.value, expectedArgs.nodeValue, 'node.value does not match');
-                }
-                return true;
-            });
-        });
-    }
-});
-
-suite(deepSearchForPattern.name, function () {
-    deepSearchForPattern(
-        [
-            {
-                name: 'john',
-                attributes: [
-
-                ]
-            },
-            {
-
-            }
-        ],
-        [{}]
-    );
-});
-
 suite(SourceCode.name, function () {
     function file(content: string = ''): SourceCodeTreeFileEntry {
         return { kind: 'file', data: new SourceCodeFile(content, {}, true) };
@@ -446,4 +335,39 @@ suite(SourceCode.name, function () {
             });
         }
     });
+});
+
+suite(escapeRegex.name, function () {
+    type TestCase = {
+        name: string;
+        arg: string;
+        expected: string;
+    };
+
+    const tests: TestCase[] = [
+        {
+            name: 'empty',
+            arg: '',
+            expected: '',
+        }, {
+            name: 'whitespace',
+            arg: ' \t',
+            expected: ' \t',
+        }, {
+            name: 'only special chars',
+            arg: '/-\\^$*+?.()|[]{}',
+            expected: '\\/\\-\\\\\\^\\$\\*\\+\\?\\.\\(\\)\\|\\[\\]\\{\\}',
+        }, {
+            name: 'mixed',
+            arg: 'no special chars so far, /-\\^$*+?.()|[]{}, no specials chars here, too',
+            expected: 'no special chars so far, \\/\\-\\\\\\^\\$\\*\\+\\?\\.\\(\\)\\|\\[\\]\\{\\}, no specials chars here, too',
+        },
+    ];
+
+    for (const t of tests) {
+        const tt = t;
+        test(tt.name, function () {
+            assert.strictEqual(escapeRegex(tt.arg), tt.expected);
+        });
+    }
 });

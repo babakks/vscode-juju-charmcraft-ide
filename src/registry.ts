@@ -2,7 +2,6 @@ import { Disposable, EventEmitter, OutputChannel, Uri, DiagnosticCollection, Can
 import * as constant from './model/common';
 import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
 import { WorkspaceCharm } from './workspace';
-import path = require('path');
 
 /**
  * Registry of discovered charms.
@@ -83,15 +82,11 @@ export class Registry implements Disposable {
         return Array.from(this._set).map(x => x.model);
     }
 
-    getCharmBySourceCodeFile(uri: Uri): { workspaceCharm: WorkspaceCharm; relativeSourcePath: string } | { workspaceCharm: undefined; relativeSourcePath: undefined } {
-        const { workspaceCharm: charm, relativePath } = this.getCharmByFile(uri);
-        if (!charm) {
-            return { workspaceCharm: undefined, relativeSourcePath: undefined };
-        }
-        const prefix = constant.CHARM_DIR_SRC + '/';
-        return relativePath.startsWith(prefix)
-            ? { workspaceCharm: charm, relativeSourcePath: relativePath.replace(prefix, '') }
-            : { workspaceCharm: undefined, relativeSourcePath: undefined };
+    getCharmBySourceCodeFile(uri: Uri): { workspaceCharm: WorkspaceCharm; relativePath: string } | { workspaceCharm: undefined; relativePath: undefined } {
+        const { workspaceCharm, relativePath } = this.getCharmByFile(uri);
+        return workspaceCharm && relativePath !== undefined
+            ? { workspaceCharm, relativePath }
+            : { workspaceCharm: undefined, relativePath: undefined };
     }
 
     getCharmByFile(uri: Uri): { workspaceCharm: WorkspaceCharm; relativePath: string } | { workspaceCharm: undefined; relativePath: undefined; } {

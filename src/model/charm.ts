@@ -1,4 +1,5 @@
 import {
+    CHARM_DIR_SRC,
     CHARM_DIR_SRC_MAIN,
     CHARM_DIR_TESTS,
     CHARM_SOURCE_CODE_CHARM_BASE_CLASS,
@@ -6,6 +7,7 @@ import {
     Range,
     TextPositionMapper,
     comparePositions,
+    escapeRegex,
     toValidSymbol
 } from "./common";
 
@@ -386,6 +388,10 @@ export interface SourceCodeFunction {
     positionalParameters: string[];
 };
 
+/**
+ * Note that independent of the platform, relative paths referenced are separated
+ * with `/` (forward slash).
+ */
 export class SourceCode {
     constructor(readonly tree: SourceCodeTree) { }
 
@@ -412,6 +418,9 @@ export class SourceCode {
     /**
      * Returns a flat map of files and their relative path in the source code
      * tree. Note that the results are not ordered in a specific manner.
+     * 
+     * Note that independent of the platform, relative paths are separated with
+     * `/` (forward slash).
      */
     getFiles(): Map<string, SourceCodeFile> {
         const result = new Map<string, SourceCodeFile>();
@@ -439,11 +448,19 @@ export class SourceCode {
         return result;
     }
 
+    /**
+     * Note that independent of the platform, relative paths are separated with
+     * `/` (forward slash).
+     */
     getFile(relativePath: string): SourceCodeFile | undefined {
         const entry = this._getEntryAt(relativePath);
         return entry?.kind === 'file' ? entry.data : undefined;
     }
 
+    /**
+     * Note that independent of the platform, relative paths are separated with
+     * `/` (forward slash).
+     */
     updateFile(relativePath: string, file: SourceCodeFile) {
         const entry = this._getEntryAt(relativePath);
         if (entry?.kind === 'file') {
@@ -451,9 +468,13 @@ export class SourceCode {
         }
     }
 
+    /**
+     * Note that independent of the platform, relative paths are separated with
+     * `/` (forward slash).
+     */
     isMain(relativePath: string): boolean {
         // TODO: This may not be the exact criteria for the main charm file. 
-        return relativePath === CHARM_DIR_SRC_MAIN;
+        return relativePath === `${CHARM_DIR_SRC}/${CHARM_DIR_SRC_MAIN}`;
     }
 }
 
@@ -845,56 +866,6 @@ export function unquoteSymbol(s: string): string {
     return s.substring(1, -1 + s.length);
 }
 
-const REGEXP_SPECIAL_CHARS = /[/\-\\^$*+?.()|[\]{}]/g;
-export function escapeRegex(s: string): string {
-    return s.replace(REGEXP_SPECIAL_CHARS, '\\$&');
-}
-
-export type DeepSearchCallbackNode = { kind: 'object'; value: object } | { kind: 'array'; value: Array<any> };
-export type DeepSearchCallback = (key: any, node: DeepSearchCallbackNode) => boolean | DeepSearchCallback;
-
-export function deepSearch(node: any, callback: DeepSearchCallback) {
-    _deepSearch([node], callback);
-    function _deepSearch(node: any, callback: DeepSearchCallback) {
-        if (typeof node !== 'object') {
-            return;
-        }
-        if (Array.isArray(node)) {
-            for (let i = 0; i < node.length; i++) {
-                const element = node[i];
-                if (typeof element !== 'object') {
-                    continue;
-                }
-                const arg: DeepSearchCallbackNode = Array.isArray(element) ? { kind: 'array', value: element } : { kind: 'object', value: element };
-                const dig = callback(i, arg);
-                if (dig === false) {
-                    continue;
-                }
-                const nextCallback = dig === true ? callback : dig;
-                _deepSearch(element, nextCallback);
-            }
-        } else {
-            for (const key in node) {
-                const value = node[key];
-                if (typeof value !== 'object') {
-                    continue;
-                }
-                const arg: DeepSearchCallbackNode = Array.isArray(value) ? { kind: 'array', value: value } : { kind: 'object', value: value };
-                const dig = callback(key, arg);
-                if (dig === false) {
-                    continue;
-                }
-                const nextCallback = dig === true ? callback : dig;
-                _deepSearch(value, nextCallback);
-            }
-        }
-    }
-}
-
-export function deepSearchForPattern(node: any, pattern: any): any | undefined {
-
-}
-
 function withReference(text: string, ...urls: string[]): string {
     return `${text}\n\n*Reference(s):*\n${urls.map(x => `  - ${x}`).join('\n')}`;
 }
@@ -1029,8 +1000,7 @@ export class Charm {
     private _toxConfig: CharmToxConfig = emptyToxConfig();
 
     private _events: CharmEvent[] = [];
-    private _src = new SourceCode({});
-    private _tests = new SourceCode({});
+    private _sourceCode = new SourceCode({});
 
     constructor() { }
 
@@ -1058,12 +1028,8 @@ export class Charm {
         return this._toxConfig;
     }
 
-    get src(): SourceCode {
-        return this._src;
-    }
-
-    get tests(): SourceCode {
-        return this._tests;
+    get sourceCode(): SourceCode {
+        return this._sourceCode;
     }
 
     async updateActions(actions: CharmActions) {
@@ -1084,12 +1050,8 @@ export class Charm {
         this._toxConfig = toxConfig;
     }
 
-    async updateSourceCode(src: SourceCode) {
-        this._src = src;
-    }
-
-    async updateTestSourceCode(tests: SourceCode) {
-        this._tests = tests;
+    async updateSourceCode(sourceCode: SourceCode) {
+        this._sourceCode = sourceCode;
     }
 
     private _repopulateEvents() {
@@ -1110,4 +1072,3 @@ export class Charm {
         }
     }
 }
-

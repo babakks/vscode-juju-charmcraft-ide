@@ -4,11 +4,9 @@ import { Disposable, Uri } from 'vscode';
 import {
     getActionsDiagnostics,
     getAllSourceCodeDiagnostics,
-    getSourceCodeDiagnostics,
-    getTestSourceCodeDiagnostics,
     getConfigDiagnostics,
     getMetadataDiagnostics,
-    getAllTestSourceCodeDiagnostics
+    getSourceCodeDiagnostics
 } from './diagnostic';
 import {
     Charm,
@@ -25,6 +23,7 @@ import {
     emptyToxConfig
 } from './model/charm';
 import {
+    CHARM_DIR_LIB,
     CHARM_DIR_SRC,
     CHARM_DIR_TESTS,
     CHARM_DIR_VENV,
@@ -36,50 +35,6 @@ import {
 import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from './parser';
 import { tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
-import path = require('path');
-
-export async function discoverSourceCodeTree(charmHome: vscode.Uri, token?: vscode.CancellationToken): Promise<SourceCodeTree | undefined> {
-    async function readDir(uri: vscode.Uri): Promise<SourceCodeTree | undefined> {
-        if (token?.isCancellationRequested) {
-            return undefined;
-        }
-
-        const result: SourceCodeTree = {};
-        const children = await vscode.workspace.fs.readDirectory(uri);
-        for (const [name, entryType] of children) {
-            const entryUri = vscode.Uri.joinPath(uri, name);
-            if (entryType === vscode.FileType.File && name.endsWith('.py')) {
-                const file = await createSourceCodeFile(entryUri);
-                result[name] = {
-                    kind: 'file',
-                    data: file,
-                };
-            } else if (entryType === vscode.FileType.Directory) {
-                const subdir = await readDir(entryUri);
-                if (!subdir) {
-                    return undefined;
-                }
-                result[name] = { kind: 'directory', data: subdir, };
-            }
-        }
-        return result;
-    }
-    return await readDir(charmHome);
-}
-
-export async function createSourceCodeFile(uri: vscode.Uri): Promise<SourceCodeFile> {
-    const content = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-    return await createSourceCodeFileFromContent(content);
-}
-
-export async function createSourceCodeFileFromContent(content: string): Promise<SourceCodeFile> {
-    const ast = await getPythonAST(content);
-    return new SourceCodeFile(content, ast, ast !== undefined);
-}
-
-function createFileWithOldAST(newContent: string, oldAST: any): SourceCodeFile {
-    return new SourceCodeFile(newContent, oldAST, false);
-}
 
 const WATCH_GLOB_PATTERN = `{${[
     CHARM_DIR_VENV,
@@ -95,8 +50,23 @@ export class WorkspaceCharm implements vscode.Disposable {
     private _disposables: Disposable[] = [];
     private readonly watcher: vscode.FileSystemWatcher;
 
-    private readonly _srcDir: Uri;
-    private readonly _testsDir: Uri;
+    /**
+     * URI of the charm's `src` directory. This property is always assigned with
+     * the standard path, even if the directory does not exist.
+     */
+    readonly srcUri: Uri;
+
+    /**
+     * URI of the charm's `tests` directory. This property is always assigned with
+     * the standard path, even if the directory does not exist.
+     */
+    readonly testsUri: Uri;
+
+    /**
+     * URI of the charm's `lib` directory. This property is always assigned with
+     * the standard path, even if the directory does not exist.
+     */
+    readonly libUri: Uri;
 
     /**
      * Persisted model of the charm. 
@@ -190,8 +160,9 @@ export class WorkspaceCharm implements vscode.Disposable {
         this.actionsUri = Uri.joinPath(this.home, CHARM_FILE_ACTIONS_YAML);
         this.metadataUri = Uri.joinPath(this.home, CHARM_FILE_METADATA_YAML);
         this.toxConfigUri = Uri.joinPath(this.home, CHARM_FILE_TOX_INI);
-        this._srcDir = Uri.joinPath(this.home, CHARM_DIR_SRC);
-        this._testsDir = Uri.joinPath(this.home, CHARM_DIR_TESTS);
+        this.srcUri = Uri.joinPath(this.home, CHARM_DIR_SRC);
+        this.testsUri = Uri.joinPath(this.home, CHARM_DIR_TESTS);
+        this.libUri = Uri.joinPath(this.home, CHARM_DIR_LIB);
         this.configUri = Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
         this.virtualEnvUri = Uri.joinPath(this.home, CHARM_DIR_VENV);
         this._disposables.push(
@@ -207,19 +178,27 @@ export class WorkspaceCharm implements vscode.Disposable {
         this._disposables.forEach(x => x.dispose());
     }
 
-    private _getRelativePathToSrc(uri: Uri): string | undefined {
-        const prefix = this._srcDir.path + '/';
+    private _getRelativePath(uri: Uri, base?: Uri): string | undefined {
+        const prefix = (base ?? this.home).path + '/';
         return uri.path.startsWith(prefix) ? uri.path.replace(prefix, '') : undefined;
     }
 
-    private _getRelativePathToTests(uri: Uri): string | undefined {
-        const prefix = this._testsDir.path + '/';
-        return uri.path.startsWith(prefix) ? uri.path.replace(prefix, '') : undefined;
+    private _isNestedUnder(uri: Uri, parent: Uri): boolean {
+        const prefix = parent.path + '/';
+        return uri.path.startsWith(prefix);
     }
 
-    private _getRelativePath(uri: Uri): string | undefined {
-        const prefix = this.home.path + '/';
-        return uri.path.startsWith(prefix) ? uri.path.replace(prefix, '') : undefined;
+    /**
+     * @returns Path of the given URI relative to the charm's directory, if it's
+     * a source code file (e.g., is inside `src` or `tests` directories);
+     * otherwise, `undefined`.
+     */
+    private _getSourceCodeRelativePath(uri: Uri): string | undefined {
+        const relativePath = this._getRelativePath(uri);
+        if (!relativePath) {
+            return;
+        }
+        return this._isNestedUnder(uri, this.srcUri) || this._isNestedUnder(uri, this.testsUri) ? relativePath : undefined;
     }
 
     /**
@@ -257,7 +236,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         return this._hasToxConfig;
     }
 
-    private async _onFileSystemEvent(kind: 'change' | 'create' | 'delete', uri: vscode.Uri) {
+    private async _onFileSystemEvent(kind: 'change' | 'create' | 'delete', uri: Uri) {
         if (uri.path === this.virtualEnvUri.path) {
             await this._refreshVirtualEnv();
         } else if (uri.path === this.actionsUri.path) {
@@ -269,25 +248,19 @@ export class WorkspaceCharm implements vscode.Disposable {
         } else if (uri.path === this.toxConfigUri.path) {
             await this._refreshToxConfig();
         } else {
-            if (this._getRelativePathToSrc(uri)) {
+            if (this._getSourceCodeRelativePath(uri)) {
                 if (kind === 'change') {
                     await this._refreshSourceCodeFile(uri);
                 } else {
                     await this._refreshSourceCodeTree();
                 }
-            } else if (this._getRelativePathToTests(uri)) {
-                if (kind === 'change') {
-                    await this._refreshTestSourceCodeFile(uri);
-                } else {
-                    await this._refreshTestSourceCodeTree();
-                }
             }
         }
     }
 
-    private _updateDiagnostics(map: Map<string, vscode.Diagnostic[]>, baseURI: vscode.Uri) {
+    private _updateDiagnostics(map: Map<string, vscode.Diagnostic[]>) {
         for (const [relativePath, diags] of map) {
-            const uri = vscode.Uri.joinPath(baseURI, relativePath);
+            const uri = Uri.joinPath(this.home, relativePath);
             this._updateDiagnosticsByURI(uri, diags);
         }
     }
@@ -305,7 +278,6 @@ export class WorkspaceCharm implements vscode.Disposable {
             this._refreshMetadata(),
             this._refreshToxConfig(),
             this._refreshSourceCodeTree(),
-            this._refreshTestSourceCodeTree(),
         ]);
     }
 
@@ -380,73 +352,40 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     private async _refreshSourceCodeFile(uri: Uri) {
-        let file = await createSourceCodeFile(uri);
-        const relativePath = this._getRelativePathToSrc(uri);
+        const relativePath = this._getSourceCodeRelativePath(uri);
         if (!relativePath) {
             return;
         }
 
+        let file = await createSourceCodeFile(uri);
+
         // Keeping old AST data if there's no AST available (e.g., due to Python parser error in the middle of
         // incomplete changes).
         if (!file.ast) {
-            const oldAST = this.model.src.getFile(relativePath);
+            const oldAST = this.model.sourceCode.getFile(relativePath);
             if (oldAST) {
                 file = createFileWithOldAST(file.content, oldAST);
                 this._log(`failed to generate AST; keeping old AST data: ${relativePath}`);
             }
         }
 
-        this.model.src.updateFile(relativePath, file);
+        this.model.sourceCode.updateFile(relativePath, file);
         await this.updateLiveSourceCodeFile(uri);
     }
 
     private async _refreshSourceCodeTree() {
-        const tree = await discoverSourceCodeTree(this._srcDir);
+        const tree = await discoverSourceCodeTree(this.home, [this.srcUri, this.testsUri]);
         if (!tree) {
             return;
         }
         this.model.updateSourceCode(new SourceCode(tree));
         this.live.updateSourceCode(new SourceCode(tree));
-        this._updateDiagnostics(getAllSourceCodeDiagnostics(this.live), this._srcDir);
-    }
-
-
-    private async _refreshTestSourceCodeFile(uri: Uri) {
-        let file = await createSourceCodeFile(uri);
-        const relativePath = this._getRelativePathToTests(uri);
-        if (!relativePath) {
-            return;
-        }
-
-        // Keeping old AST data if there's no AST available (e.g., due to Python parser error in the middle of
-        // incomplete changes).
-        if (!file.ast) {
-            const oldAST = this.model.tests.getFile(relativePath);
-            if (oldAST) {
-                file = createFileWithOldAST(file.content, oldAST);
-                this._log(`failed to generate AST; keeping old AST data: ${relativePath}`);
-            }
-        }
-
-        this.model.tests.updateFile(relativePath, file);
-        await this.updateLiveTestSourceCodeFile(uri);
-    }
-
-    private async _refreshTestSourceCodeTree() {
-        const tree = await discoverSourceCodeTree(this._testsDir);
-        if (!tree) {
-            return;
-        }
-        this.model.updateTestSourceCode(new SourceCode(tree));
-        this.live.updateTestSourceCode(new SourceCode(tree));
-        this._updateDiagnostics(getAllTestSourceCodeDiagnostics(this.live), this._testsDir);
+        this._updateDiagnostics(getAllSourceCodeDiagnostics(this.live));
     }
 
     async updateLiveFile(uri: Uri) {
-        if (this._getRelativePathToSrc(uri) !== undefined) {
+        if (this._getSourceCodeRelativePath(uri)) {
             await this.updateLiveSourceCodeFile(uri);
-        } else if (this._getRelativePathToTests(uri) !== undefined) {
-            await this.updateLiveTestSourceCodeFile(uri);
         } else if (uri.path === this.configUri.path) {
             await this.updateLiveConfigFile();
         } else if (uri.path === this.actionsUri.path) {
@@ -525,23 +464,23 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     async updateLiveSourceCodeFile(uri: Uri) {
-        const relativePath = this._getRelativePathToSrc(uri);
+        const relativePath = this._getSourceCodeRelativePath(uri);
         if (!relativePath) {
             return undefined;
         }
 
         const content = this._getDirtyDocumentContent(uri);
         if (content === undefined) {
-            const file = this.model.src.getFile(relativePath);
+            const file = this.model.sourceCode.getFile(relativePath);
             if (file) {
-                this.live.src.updateFile(relativePath, file);
+                this.live.sourceCode.updateFile(relativePath, file);
                 this._updateDiagnosticsByURI(uri, getSourceCodeDiagnostics(this.live, relativePath));
             }
             return;
         }
 
         // using cached data to avoid unnecessary running of python AST parser.
-        const cached = this.live.src.getFile(relativePath);
+        const cached = this.live.sourceCode.getFile(relativePath);
         if (cached?.content === content) {
             return;
         }
@@ -552,57 +491,78 @@ export class WorkspaceCharm implements vscode.Disposable {
         // Keeping old AST data if there's no AST available (e.g., due to Python parser error in the middle of
         // incomplete changes).
         if (!file.ast) {
-            const oldAST = this.live.src.getFile(relativePath);
+            const oldAST = this.live.sourceCode.getFile(relativePath);
             if (oldAST) {
                 file = createFileWithOldAST(file.content, oldAST);
                 this._log(`failed to generate AST; keeping old AST data: ${relativePath}`);
             }
         }
 
-        this.live.src.updateFile(relativePath, file);
+        this.live.sourceCode.updateFile(relativePath, file);
         this._updateDiagnosticsByURI(uri, getSourceCodeDiagnostics(this.live, relativePath));
-    }
-
-    async updateLiveTestSourceCodeFile(uri: Uri) {
-        const relativePath = this._getRelativePathToTests(uri);
-        if (!relativePath) {
-            return undefined;
-        }
-
-        const content = this._getDirtyDocumentContent(uri);
-        if (content === undefined) {
-            const file = this.model.tests.getFile(relativePath);
-            if (file) {
-                this.live.tests.updateFile(relativePath, file);
-                this._updateDiagnosticsByURI(uri, getTestSourceCodeDiagnostics(this.live, relativePath));
-            }
-            return;
-        }
-
-        // using cached data to avoid unnecessary running of python AST parser.
-        const cached = this.live.tests.getFile(relativePath);
-        if (cached?.content === content) {
-            return;
-        }
-
-        this._log(`source refreshed: ${relativePath}`);
-        let file = await createSourceCodeFileFromContent(content);
-
-        // Keeping old AST data if there's no AST available (e.g., due to Python parser error in the middle of
-        // incomplete changes).
-        if (!file.ast) {
-            const oldAST = this.live.tests.getFile(relativePath);
-            if (oldAST) {
-                file = createFileWithOldAST(file.content, oldAST);
-                this._log(`failed to generate AST; keeping old AST data: ${relativePath}`);
-            }
-        }
-
-        this.live.tests.updateFile(relativePath, file);
-        this._updateDiagnosticsByURI(uri, getTestSourceCodeDiagnostics(this.live, relativePath));
     }
 
     private _log(s: string) {
         this.output.appendLine(`${new Date().toISOString()} ${this.home.path} ${s}`);
     }
+}
+
+export async function discoverSourceCodeTree(
+    root: Uri,
+    onlyInclude?: Uri[],
+    token?: vscode.CancellationToken
+): Promise<SourceCodeTree | undefined> {
+    async function readDir(uri: Uri, onlyInclude?: Uri[]): Promise<SourceCodeTree | undefined> {
+        if (token?.isCancellationRequested) {
+            return undefined;
+        }
+
+        const result: SourceCodeTree = {};
+        let children = await vscode.workspace.fs.readDirectory(uri);
+
+        if (onlyInclude) {
+            children = children.filter(([name, entryType]) => {
+                const childUri = Uri.joinPath(uri, name);
+                const isIncluded = !onlyInclude ? true : onlyInclude.some(x =>
+                    childUri.path === x.path
+                    || childUri.path.startsWith(x.path + '/')
+                    || entryType === vscode.FileType.Directory && x.path.startsWith(childUri.path + '/')
+                );
+                return isIncluded;
+            });
+        }
+
+        for (const [name, entryType] of children) {
+            const entryUri = Uri.joinPath(uri, name);
+            if (entryType === vscode.FileType.File && name.endsWith('.py')) {
+                const file = await createSourceCodeFile(entryUri);
+                result[name] = {
+                    kind: 'file',
+                    data: file,
+                };
+            } else if (entryType === vscode.FileType.Directory) {
+                const subdir = await readDir(entryUri, onlyInclude);
+                if (!subdir) {
+                    return undefined;
+                }
+                result[name] = { kind: 'directory', data: subdir, };
+            }
+        }
+        return result;
+    }
+    return await readDir(root, onlyInclude);
+}
+
+export async function createSourceCodeFile(uri: Uri): Promise<SourceCodeFile> {
+    const content = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+    return await createSourceCodeFileFromContent(content);
+}
+
+export async function createSourceCodeFileFromContent(content: string): Promise<SourceCodeFile> {
+    const ast = await getPythonAST(content);
+    return new SourceCodeFile(content, ast, ast !== undefined);
+}
+
+function createFileWithOldAST(newContent: string, oldAST: any): SourceCodeFile {
+    return new SourceCodeFile(newContent, oldAST, false);
 }

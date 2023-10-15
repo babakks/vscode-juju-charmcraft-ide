@@ -26,16 +26,16 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): Promise<CompletionItem[] | CompletionList<CompletionItem> | undefined> {
-        const { workspaceCharm, relativeSourcePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm, relativePath } = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
 
-        if (!workspaceCharm.live.src.isMain(relativeSourcePath)) {
+        if (!workspaceCharm.live.sourceCode.isMain(relativePath)) {
             return;
         }
 
-        const file = workspaceCharm.live.src.getFile(relativeSourcePath);
+        const file = workspaceCharm.live.sourceCode.getFile(relativePath);
         if (!file) {
             return;
         }
@@ -137,16 +137,16 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): ProviderResult<CompletionItem[] | CompletionList<CompletionItem>> {
-        const { workspaceCharm, relativeSourcePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm, relativePath } = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
 
-        if (!workspaceCharm.live.src.isMain(relativeSourcePath)) {
+        if (!workspaceCharm.live.sourceCode.isMain(relativePath)) {
             return;
         }
 
-        const file = workspaceCharm.live.src.getFile(relativeSourcePath);
+        const file = workspaceCharm.live.sourceCode.getFile(relativePath);
         if (!file) {
             return;
         }

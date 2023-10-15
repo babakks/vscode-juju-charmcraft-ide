@@ -19,16 +19,16 @@ export class EventHandlerCodeActionProvider implements CodeActionProvider {
             return;
         }
 
-        const { workspaceCharm, relativeSourcePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm, relativePath } = this.registry.getCharmBySourceCodeFile(document.uri);
         if (!workspaceCharm) {
             return;
         }
 
-        if (!workspaceCharm.model.src.isMain(relativeSourcePath)) {
+        if (!workspaceCharm.model.sourceCode.isMain(relativePath)) {
             return;
         }
 
-        const file = workspaceCharm.live.src.getFile(relativeSourcePath);
+        const file = workspaceCharm.live.sourceCode.getFile(relativePath);
         if (!file) {
             return;
         }
