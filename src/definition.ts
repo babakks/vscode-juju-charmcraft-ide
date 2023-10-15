@@ -22,7 +22,7 @@ export class CharmConfigDefinitionProvider implements DefinitionProvider {
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideDefinition(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Definition | LocationLink[]> {
-        const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
@@ -62,7 +62,7 @@ export class CharmEventDefinitionProvider implements DefinitionProvider {
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideDefinition(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Definition | LocationLink[]> {
-        const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }

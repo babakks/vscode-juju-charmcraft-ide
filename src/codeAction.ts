@@ -19,7 +19,7 @@ export class EventHandlerCodeActionProvider implements CodeActionProvider {
             return;
         }
 
-        const { workspaceCharm, relativePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm, relativePath } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm) {
             return;
         }

@@ -19,7 +19,7 @@ export class CharmConfigHoverProvider implements HoverProvider {
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
@@ -56,7 +56,7 @@ export class CharmEventHoverProvider implements HoverProvider {
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }

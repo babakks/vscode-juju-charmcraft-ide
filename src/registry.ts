@@ -16,6 +16,9 @@ export class Registry implements Disposable {
     readonly onActiveCharmChanged = this._onActiveCharmChanged.event;
 
     private readonly _onChanged = new EventEmitter<void>();
+    /**
+     * Fires when charms change (e.g., a new charm is added/removed).
+     */
     readonly onChanged = this._onChanged.event;
 
     private readonly _onCharmVirtualEnvChanged = new EventEmitter<WorkspaceCharm>();
@@ -82,14 +85,7 @@ export class Registry implements Disposable {
         return Array.from(this._set).map(x => x.model);
     }
 
-    getCharmBySourceCodeFile(uri: Uri): { workspaceCharm: WorkspaceCharm; relativePath: string } | { workspaceCharm: undefined; relativePath: undefined } {
-        const { workspaceCharm, relativePath } = this.getCharmByFile(uri);
-        return workspaceCharm && relativePath !== undefined
-            ? { workspaceCharm, relativePath }
-            : { workspaceCharm: undefined, relativePath: undefined };
-    }
-
-    getCharmByFile(uri: Uri): { workspaceCharm: WorkspaceCharm; relativePath: string } | { workspaceCharm: undefined; relativePath: undefined; } {
+    getCharmByUri(uri: Uri): { workspaceCharm: WorkspaceCharm; relativePath: string } | { workspaceCharm: undefined; relativePath: undefined } {
         const u = uri.toString();
         for (const charm of this._set) {
             const home = charm.home.toString() + '/';

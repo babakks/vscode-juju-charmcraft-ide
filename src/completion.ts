@@ -26,7 +26,7 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     async provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): Promise<CompletionItem[] | CompletionList<CompletionItem> | undefined> {
-        const { workspaceCharm, relativePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm, relativePath } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
@@ -137,7 +137,7 @@ export class CharmEventCompletionProvider implements CompletionItemProvider<Comp
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: CompletionContext): ProviderResult<CompletionItem[] | CompletionList<CompletionItem>> {
-        const { workspaceCharm, relativePath } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm, relativePath } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
