@@ -2,7 +2,7 @@ import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     Disposable,
     ExtensionContext,
-    ExtensionMode, OutputChannel, languages,
+    ExtensionMode, OutputChannel, Uri, languages,
     tests,
     window
 } from 'vscode';
@@ -18,6 +18,7 @@ import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './d
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
 import { Registry } from './registry';
 import { integrateWithYAMLExtension } from './schema';
+import { CharmTestProvider } from './test';
 import { CharmcraftTreeDataProvider } from './tree';
 import { DocumentWatcher } from './watcher';
 
@@ -29,6 +30,9 @@ export async function activate(context: ExtensionContext) {
 
     const output = window.createOutputChannel('Charmcraft IDE');
     context.subscriptions.push(output);
+
+    const testOutput = window.createOutputChannel('Charmcraft IDE (tests)');
+    context.subscriptions.push(testOutput);
 
     const diagnostics = languages.createDiagnosticCollection('Charmcraft IDE');
     context.subscriptions.push(diagnostics);
@@ -42,7 +46,7 @@ export async function activate(context: ExtensionContext) {
         ...registerCompletionProviders(registry, reporter),
         ...registerHoverProviders(registry, reporter),
         ...registerDefinitionProviders(registry, reporter),
-        ...registerTestProvider(registry, reporter, output),
+        ...registerTestProvider(registry, reporter, output, testOutput, context.logUri),
     );
 
     const dw = new DocumentWatcher(registry);
@@ -116,9 +120,8 @@ function registerDefinitionProviders(registry: Registry, reporter: TelemetryRepo
     ];
 }
 
-function registerTestProvider(registry: Registry, reporter: TelemetryReporter, output: OutputChannel): Disposable[] {
-    // const controller = tests.createTestController('charmcraft-ide', 'Charmcraft IDE');
-    // const provider = new CharmTestProvider(telemetry, controller, output);
-    // return [controller, provider];
-    return [];
+function registerTestProvider(registry: Registry, reporter: TelemetryReporter, output: OutputChannel, testOutput: OutputChannel, logUri: Uri): Disposable[] {
+    const controller = tests.createTestController('charmcraft-ide', 'Charmcraft IDE');
+    const provider = new CharmTestProvider(registry, reporter, controller, output, testOutput, logUri);
+    return [controller, provider];
 }
