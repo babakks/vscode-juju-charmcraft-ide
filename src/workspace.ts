@@ -69,6 +69,12 @@ export class WorkspaceCharm implements vscode.Disposable {
     readonly libUri: Uri;
 
     /**
+     * Array of source codes (e.g., charm source code or tests) that are tracked
+     * by this instance.
+     */
+    readonly sourceCodeUris: readonly Uri[];
+
+    /**
      * Persisted model of the charm. 
      */
     readonly model: Charm;
@@ -162,6 +168,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         this.toxConfigUri = Uri.joinPath(this.home, CHARM_FILE_TOX_INI);
         this.srcUri = Uri.joinPath(this.home, CHARM_DIR_SRC);
         this.testsUri = Uri.joinPath(this.home, CHARM_DIR_TESTS);
+        this.sourceCodeUris = [this.srcUri, this.testsUri];
         this.libUri = Uri.joinPath(this.home, CHARM_DIR_LIB);
         this.configUri = Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
         this.virtualEnvUri = Uri.joinPath(this.home, CHARM_DIR_VENV);
@@ -190,15 +197,15 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     /**
      * @returns Path of the given URI relative to the charm's directory, if it's
-     * a source code file (e.g., is inside `src` or `tests` directories);
-     * otherwise, `undefined`.
+     * a source code file (i.e., it's under any of the URIs listed by
+     * {@link sourceCodeUris}); otherwise, `undefined`.
      */
     private _getSourceCodeRelativePath(uri: Uri): string | undefined {
         const relativePath = this._getRelativePath(uri);
         if (!relativePath) {
             return;
         }
-        return this._isNestedUnder(uri, this.srcUri) || this._isNestedUnder(uri, this.testsUri) ? relativePath : undefined;
+        return this.sourceCodeUris.some(x => this._isNestedUnder(uri, x)) ? relativePath : undefined;
     }
 
     /**
@@ -374,7 +381,7 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     private async _refreshSourceCodeTree() {
-        const tree = await discoverSourceCodeTree(this.home, [this.srcUri, this.testsUri]);
+        const tree = await discoverSourceCodeTree(this.home, Array.from(this.sourceCodeUris));
         if (!tree) {
             return;
         }
