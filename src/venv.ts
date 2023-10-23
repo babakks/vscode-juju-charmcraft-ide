@@ -199,7 +199,13 @@ export class VirtualEnv implements vscode.Disposable {
         return result;
     }
 
-    getPythonExecutablePath(): string {
+    async getPythonExecutablePath(): Promise<string> {
+        const command = "which python3";
+        const output = await this._exec(this.charmHome.path, command);
+        if (output.code === 0) {
+            return output.stdout.trim();
+        }
+        // Use the static `venv/bin/python3` as fallback.
         return vscode.Uri.joinPath(this.charmHome, this.virtualEnvDir, 'bin', 'python3').path;
     }
 }
