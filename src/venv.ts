@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import path = require('path');
 import * as vscode from 'vscode';
+import { CHARM_DIR_LIB, CHARM_DIR_SRC, CHARM_DIR_TESTS } from './model/common';
 
 export interface ExecutionResult {
     code: number | null;
@@ -11,6 +12,21 @@ export interface ExecutionResult {
 export type ExecutionEnv = {
     [key: string]: string | undefined;
 };
+
+/**
+ * Environment variables which are set/reset when activating/deactivating a
+ * virtual env.
+ */
+const VIRTUAL_ENV_RELATED_ENV_VARS = [
+    '_OLD_VIRTUAL_PATH',
+    '_OLD_VIRTUAL_PS1',
+    '_OLD_VIRTUAL_PYTHONHOME',
+    'PATH',
+    'PS1',
+    'PYTHONHOME',
+    'VIRTUAL_ENV_PROMPT',
+    'VIRTUAL_ENV',
+];
 
 export class VirtualEnv implements vscode.Disposable {
     private readonly _disposables: vscode.Disposable[] = [];
@@ -43,9 +59,6 @@ export class VirtualEnv implements vscode.Disposable {
     }
 
     async create(): Promise<ExecutionResult> {
-        // if (this.isCreated) {
-        //     throw new Error('Virtual environment is already created');
-        // }
         const result = await this._exec(
             this.charmHome.path,
             'sh',
@@ -60,9 +73,6 @@ export class VirtualEnv implements vscode.Disposable {
     }
 
     async delete(): Promise<ExecutionResult> {
-        // if (!this.isCreated) {
-        //     throw new Error('Virtual environment is not created yet');
-        // }
         const result = await this._exec(
             this.charmHome.path,
             'sh',
@@ -87,6 +97,32 @@ export class VirtualEnv implements vscode.Disposable {
      */
     async exec(command: string, args?: string[], cwd?: vscode.Uri, env?: ExecutionEnv): Promise<ExecutionResult> {
         return await this._exec(cwd?.fsPath ?? this.charmHome.path, command, args, env);
+    }
+
+    execInTerminal(group: string, command: string, cwd?: vscode.Uri, env?: ExecutionEnv, terminalName?: string): vscode.Terminal {
+        const terminal = this._getOrCreateTerminal(group, cwd, env, terminalName);
+        const modifiedCommand = this._prependActivateCommand(command);
+        terminal.sendText(modifiedCommand, true);
+        return terminal;
+    }
+
+    private _getOrCreateTerminal(group: string, cwd?: vscode.Uri, env?: ExecutionEnv, terminalName?: string): vscode.Terminal {
+        const getKey = () => JSON.stringify([group, cwd?.path ?? this.charmHome.path]);
+        const terminal = this._terminalMap.get(getKey());
+        if (terminal) {
+            return terminal;
+        }
+        const created = vscode.window.createTerminal({
+            name: terminalName || group || undefined,
+            cwd: cwd ?? this.charmHome,
+            env,
+        });
+        this._terminalMap.set(getKey(), created);
+        return created;
+    }
+
+    private _prependActivateCommand(command: string): string {
+        return `. ${quoteForShell(`${this.virtualEnvDir}/bin/activate`)} && ${command}`;
     }
 
     private async _exec(
@@ -132,30 +168,39 @@ export class VirtualEnv implements vscode.Disposable {
         });
     }
 
-    execInTerminal(group: string, command: string, cwd?: vscode.Uri, env?: ExecutionEnv, terminalName?: string): vscode.Terminal {
-        const terminal = this._getOrCreateTerminal(group, cwd, env, terminalName);
-        const modifiedCommand = this._prependActivateCommand(command);
-        terminal.sendText(modifiedCommand, true);
-        return terminal;
-    }
-
-    private _getOrCreateTerminal(group: string, cwd?: vscode.Uri, env?: ExecutionEnv, terminalName?: string): vscode.Terminal {
-        const getKey = () => JSON.stringify([group, cwd?.path ?? this.charmHome.path]);
-        const terminal = this._terminalMap.get(getKey());
-        if (terminal) {
-            return terminal;
+    /**
+     * Computes environment variables set when activating the virtual environment.
+     *
+     * @param addSourceCodeDirsToPythonPath If set, the result will contain the
+     * `PYTHONPATH` environment variable including charm source code directories
+     * (i.e., `src`, `lib`, and `tests`).
+     */
+    async computeActivationEnvVars(addSourceCodeDirsToPythonPath?: boolean): Promise<{ [key: string]: string } | undefined> {
+        const command = "python3 -c 'import json, os; print(json.dumps(dict(os.environ)));'";
+        const output = await this._exec(this.charmHome.path, command);
+        if (output.code !== 0) {
+            return undefined;
         }
-        const created = vscode.window.createTerminal({
-            name: terminalName || group || undefined,
-            cwd: cwd ?? this.charmHome,
-            env,
-        });
-        this._terminalMap.set(getKey(), created);
-        return created;
+        const parsed = JSON.parse(output.stdout);
+        const result = VIRTUAL_ENV_RELATED_ENV_VARS.reduce((r, x) => {
+            if (x in parsed) {
+                r[x] = parsed[x];
+            };
+            return r;
+        }, {} as { [key: string]: string });
+
+        if (addSourceCodeDirsToPythonPath) {
+            result['PYTHONPATH'] = (result['PYTHONPATH'] ? result['PYTHONPATH'] + ':' : '') +
+                [CHARM_DIR_LIB,
+                    CHARM_DIR_SRC,
+                    CHARM_DIR_TESTS,
+                ].map(x => vscode.Uri.joinPath(this.charmHome, x).path).join(':');
+        }
+        return result;
     }
 
-    private _prependActivateCommand(command: string): string {
-        return `. ${quoteForShell(`${this.virtualEnvDir}/bin/activate`)} && ${command}`;
+    getPythonExecutablePath(): string {
+        return vscode.Uri.joinPath(this.charmHome, this.virtualEnvDir, 'bin', 'python3').path;
     }
 }
 
