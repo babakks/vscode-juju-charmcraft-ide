@@ -7,7 +7,7 @@ import {
     window
 } from 'vscode';
 import { EventHandlerCodeActionProvider } from './codeAction';
-import { Commands } from './command';
+import { InternalCommands, registerCommands } from './command';
 import {
     CHARM_CONFIG_COMPLETION_TRIGGER_CHARS,
     CHARM_EVENT_COMPLETION_TRIGGER_CHARS,
@@ -41,14 +41,6 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(registry);
     await registry.refresh();
 
-    context.subscriptions.push(
-        ...registerCodeActionProviders(registry, reporter),
-        ...registerCompletionProviders(registry, reporter),
-        ...registerHoverProviders(registry, reporter),
-        ...registerDefinitionProviders(registry, reporter),
-        ...registerTestProvider(registry, reporter, output, testOutput, context.logUri),
-    );
-
     const dw = new DocumentWatcher(registry);
     context.subscriptions.push(dw);
     dw.enable();
@@ -57,9 +49,16 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(tdp);
     context.subscriptions.push(window.createTreeView('charmcraft-charms', { treeDataProvider: tdp }));
 
-    const commands = new Commands(context, reporter, registry, tdp);
-    context.subscriptions.push(commands);
-    commands.register();
+    const ic = new InternalCommands(context, registry, tdp);
+
+    context.subscriptions.push(
+        ...registerCommands(ic, reporter),
+        ...registerCodeActionProviders(registry, reporter),
+        ...registerCompletionProviders(registry, reporter),
+        ...registerHoverProviders(registry, reporter),
+        ...registerDefinitionProviders(registry, reporter),
+        ...registerTestProvider(registry, ic, reporter, output, testOutput, context.logUri),
+    );
 
     // Note that we shouldn't `await` on this call, because it could ask for user decision (e.g., to install the YAML
     // extension) and get blocked for an unknown time duration (possibly never, if user decides to skip the message).
@@ -120,8 +119,8 @@ function registerDefinitionProviders(registry: Registry, reporter: TelemetryRepo
     ];
 }
 
-function registerTestProvider(registry: Registry, reporter: TelemetryReporter, output: OutputChannel, testOutput: OutputChannel, logUri: Uri): Disposable[] {
+function registerTestProvider(registry: Registry, ic: InternalCommands, reporter: TelemetryReporter, output: OutputChannel, testOutput: OutputChannel, logUri: Uri): Disposable[] {
     const controller = tests.createTestController('charmcraft-ide', 'Charmcraft IDE');
-    const provider = new CharmTestProvider(registry, reporter, controller, output, testOutput, logUri);
+    const provider = new CharmTestProvider(registry, ic, reporter, controller, output, testOutput, logUri);
     return [controller, provider];
 }
