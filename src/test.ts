@@ -12,6 +12,7 @@ import {
     TestController,
     TestItem,
     TestItemCollection,
+    TestMessage,
     TestRun,
     TestRunProfileKind,
     TestRunRequest,
@@ -26,35 +27,45 @@ import assert = require('assert');
 import path = require('path');
 import { WorkspaceCharm } from './workspace';
 import { CHARM_DIR_TESTS } from './model/common';
+import { spawn } from 'child_process';
+import { randomUUID } from 'crypto';
+import { COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT } from './command.const';
+import { InternalCommands } from './command';
 
-type TestData = CharmTestData
-    | DirectoryTestData
-    | FileTestData
-    | FunctionTestData
-    | ClassTestData
-    | MethodTestData;
+type TestData = CharmTestData | DirectoryTestData | FileTestData | FunctionTestData | ClassTestData | MethodTestData;
 
-interface MethodTestData {
+interface TestDataBase {
+    /**
+     * Test item URI.
+     */
+    uri: Uri;
+};
+
+interface MethodTestData extends TestDataBase {
     kind: 'method';
+    class: string;
+    name: string;
 }
 
-interface ClassTestData {
+interface ClassTestData extends TestDataBase {
     kind: 'class';
+    name: string;
 }
 
-interface FunctionTestData {
+interface FunctionTestData extends TestDataBase {
     kind: 'function';
+    name: string;
 }
 
-interface FileTestData {
+interface FileTestData extends TestDataBase {
     kind: 'file';
 }
 
-interface DirectoryTestData {
+interface DirectoryTestData extends TestDataBase {
     kind: 'directory';
 }
 
-interface CharmTestData {
+interface CharmTestData extends TestDataBase {
     kind: 'charm';
 }
 
@@ -81,12 +92,13 @@ export class CharmTestProvider implements Disposable {
     readonly onUpdate = this._onUpdate.event;
 
     constructor(
-        public readonly registry: Registry,
-        public readonly reporter: TelemetryReporter,
-        public readonly controller: TestController,
-        public readonly output: OutputChannel,
-        public readonly testOutput: OutputChannel,
-        public readonly logUri: Uri,
+        readonly registry: Registry,
+        readonly ic: InternalCommands,
+        readonly reporter: TelemetryReporter,
+        readonly controller: TestController,
+        readonly output: OutputChannel,
+        readonly testOutput: OutputChannel,
+        readonly logUri: Uri,
     ) {
         // First, create the `resolveHandler`. This may initially be called with
         // "undefined" to ask for all tests in the workspace to be discovered, usually
@@ -274,7 +286,11 @@ export class CharmTestProvider implements Disposable {
             const label = workspace.asRelativePath(workspaceCharm.home);
             charmItem = this.controller.createTestItem(charmId, label, workspaceCharm.testsUri);
             this.controller.items.add(charmItem);
-            this._map.set(charmItem, { kind: 'charm' } as CharmTestData);
+            const testData: CharmTestData = {
+                kind: 'charm',
+                uri,
+            };
+            this._map.set(charmItem, testData);
             updated = true;
         }
 
@@ -288,7 +304,11 @@ export class CharmTestProvider implements Disposable {
             if (!dirItem) {
                 dirItem = this.controller.createTestItem(dirId, dir, Uri.joinPath(parentItem.uri!, dir));
                 parentItem.children.add(dirItem);
-                this._map.set(dirItem, { kind: 'directory' } as DirectoryTestData);
+                const testData: DirectoryTestData = {
+                    kind: 'directory',
+                    uri,
+                };
+                this._map.set(dirItem, testData);
                 updated = true;
             }
             parentItem = dirItem;
@@ -299,7 +319,11 @@ export class CharmTestProvider implements Disposable {
         if (!fileItem) {
             fileItem = this.controller.createTestItem(fileId, filename, uri);
             parentItem.children.add(fileItem);
-            this._map.set(fileItem, { kind: 'file' } as FileTestData);
+            const testData: FileTestData = {
+                kind: 'file',
+                uri,
+            };
+            this._map.set(fileItem, testData);
             updated = true;
         }
 
@@ -310,7 +334,12 @@ export class CharmTestProvider implements Disposable {
                 funcItem = this.controller.createTestItem(funcId, func.name, uri);
                 funcItem.range = rangeToVSCodeRange(func.range);
                 fileItem.children.add(funcItem);
-                this._map.set(funcItem, { kind: 'function' } as FunctionTestData);
+                const testData: FunctionTestData = {
+                    kind: 'function',
+                    uri,
+                    name: func.name,
+                };
+                this._map.set(funcItem, testData);
                 updated = true;
             }
         }
@@ -322,7 +351,12 @@ export class CharmTestProvider implements Disposable {
                 classItem = this.controller.createTestItem(classId, cls.name, uri);
                 classItem.range = rangeToVSCodeRange(cls.range);
                 fileItem.children.add(classItem);
-                this._map.set(classItem, { kind: 'class' } as ClassTestData);
+                const testData: ClassTestData = {
+                    kind: 'class',
+                    uri,
+                    name: cls.name,
+                };
+                this._map.set(classItem, testData);
                 updated = true;
             }
 
@@ -333,7 +367,13 @@ export class CharmTestProvider implements Disposable {
                     methodItem = this.controller.createTestItem(methodId, method.name, uri);
                     methodItem.range = rangeToVSCodeRange(method.range);
                     classItem.children.add(methodItem);
-                    this._map.set(methodItem, { kind: 'method' } as MethodTestData);
+                    const testData: MethodTestData = {
+                        kind: 'method',
+                        uri,
+                        class: cls.name,
+                        name: method.name,
+                    };
+                    this._map.set(methodItem, testData);
                     updated = true;
                 }
             }
@@ -424,7 +464,7 @@ export class CharmTestProvider implements Disposable {
     }
 
     private async _startTestRun(isDebug: boolean, request: TestRunRequest, token: CancellationToken) {
-        const queue: { test: TestItem; data: MethodTestData | FunctionTestData }[] = [];
+        const queue: { test: TestItem; data: DirectoryTestData | FileTestData | ClassTestData | MethodTestData | FunctionTestData }[] = [];
         const run = this.controller.createTestRun(request);
 
         function gatherTestItems(collection: TestItemCollection) {
@@ -444,7 +484,7 @@ export class CharmTestProvider implements Disposable {
                     continue;
                 }
 
-                if (data.kind !== 'method' && data.kind !== 'function') {
+                if (data.kind === 'charm') {
                     await discoverTests(gatherTestItems(test.children));
                 } else {
                     run.enqueued(test);
@@ -488,193 +528,231 @@ export class CharmTestProvider implements Disposable {
         await runTestQueue();
     };
 
-    private async _run(run: TestRun, test: TestItem, data: MethodTestData | FunctionTestData, token: CancellationToken) {
-        // assert(test.uri);
+    private async _run(run: TestRun, test: TestItem, data: DirectoryTestData | FileTestData | ClassTestData | MethodTestData | FunctionTestData, token: CancellationToken) {
+        const { workspaceCharm, relativePath } = this.registry.getCharmByUri(data.uri);
+        if (!workspaceCharm) {
+            this._log('failed to locate corresponding charm; skipping.', run, test);
+            run.skipped(test);
+            return;
+        }
 
-        // const execution = (await this._go()).settings.getExecutionCommand('go');
-        // if (!execution) {
-        //     this._log(_FAILED_TO_RETRIEVE_GO_EXECUTION_PARAMS_ERROR_MESSAGE, run);
-        //     run.skipped(test);
-        //     return;
-        // }
+        if (!workspaceCharm.hasVirtualEnv && !await this.ic.askAndSetupVirtualEnvFirst(workspaceCharm, true)) {
+            this._log('charm has no virtual env; skipping.', run, test);
+            run.skipped(test);
+            return;
+        }
 
-        // const cmd = this.adapter.getRunCommand(data, test.uri.fsPath);
-        // const testDirectory = dirname(test.uri.fsPath);
-        // const command = cmd.command || execution.binPath;
-        // const args = cmd.args || ['test'];
+        const env = await workspaceCharm.virtualEnv.computeActivationEnvVars(true);
+        if (!env) {
+            this._log('failed to compute env vars to activate venv; skipping.', run, test);
+            run.skipped(test);
+            return;
+        }
 
-        // type ProcessResult = { code: number | null; stdout: string; stderr: string; };
-        // test.busy = true;
-        // const start = Date.now();
-        // const result = await new Promise<ProcessResult>(resolve => {
-        //     assert(test.uri);
-        //     const cp = spawn(command, args, {
-        //         cwd: testDirectory,
-        //         env: execution.env as NodeJS.ProcessEnv || undefined,
-        //     });
-        //     const result: ProcessResult = {
-        //         code: 0,
-        //         stdout: '',
-        //         stderr: '',
-        //     };
-        //     cp.stdout.on('data', (data) => {
-        //         result.stdout += (data.toString() as string).replace(/\r?\n/g, '\r\n');
-        //     });
-        //     cp.stderr.on('data', (data) => {
-        //         result.stderr += (data.toString() as string).replace(/\r?\n/g, '\r\n');;
-        //     });
-        //     cp.on('close', (code) => {
-        //         result.code = code;
-        //         resolve(result);
-        //     });
-        // });
-        // test.busy = false;
-        // if (result.code === 0) {
-        //     if (result.stdout) {
-        //         this._log(result.stdout, run);
-        //     }
-        //     run.passed(test, Date.now() - start);
-        // } else {
-        //     this._log(`test failed (exit code: ${result.code}): ${test.id}`, run);
-        //     if (result.stdout) {
-        //         this._log(result.stdout, run);
-        //     }
-        //     if (result.stderr) {
-        //         this._log(result.stderr, run);
-        //     }
-        //     run.failed(test, new TestMessage(`${result.stdout}\r\n${result.stderr}`), Date.now() - start);
-        // }
+        const { command, args, cwd } = this._getPytestCommand(data, workspaceCharm.home, relativePath);
+
+        type ProcessResult = { code: number | null; stdout: string; stderr: string; };
+        test.busy = true;
+        const start = Date.now();
+        const result = await new Promise<ProcessResult>(resolve => {
+            const cp = spawn(command, args, {
+                cwd: cwd.path,
+                env: env,
+            });
+            const result: ProcessResult = {
+                code: 0,
+                stdout: '',
+                stderr: '',
+            };
+            cp.stdout.on('data', (data) => {
+                result.stdout += (data.toString() as string).replace(/\r?\n/g, '\r\n');
+            });
+            cp.stderr.on('data', (data) => {
+                result.stderr += (data.toString() as string).replace(/\r?\n/g, '\r\n');;
+            });
+            cp.on('close', (code) => {
+                result.code = code;
+                resolve(result);
+            });
+        });
+        test.busy = false;
+        if (result.code === 0) {
+            if (result.stdout) {
+                this._log(result.stdout, run, test);
+            }
+            run.passed(test, Date.now() - start);
+        } else {
+            this._log(`test failed (exit code: ${result.code}): ${test.id}`, run, test);
+            if (result.stdout) {
+                this._log(result.stdout, run, test);
+            }
+            if (result.stderr) {
+                this._log(result.stderr, run, test);
+            }
+            run.failed(test, new TestMessage(`${result.stdout}\r\n${result.stderr}`), Date.now() - start);
+        }
     }
 
-    private async _debug(run: TestRun, test: TestItem, data: MethodTestData | FunctionTestData, token: CancellationToken) {
-        // assert(test.uri);
+    private async _debug(run: TestRun, test: TestItem, data: DirectoryTestData | FileTestData | ClassTestData | MethodTestData | FunctionTestData, token: CancellationToken) {
+        const { workspaceCharm, relativePath } = this.registry.getCharmByUri(data.uri);
+        if (!workspaceCharm) {
+            this._log('failed to locate corresponding charm; skipping.', run, test);
+            run.skipped(test);
+            return;
+        }
 
-        // const execution = (await this._go()).settings.getExecutionCommand('go');
-        // if (!execution) {
-        //     this._log(_FAILED_TO_RETRIEVE_GO_EXECUTION_PARAMS_ERROR_MESSAGE, run);
-        //     run.skipped(test);
-        //     return;
-        // }
+        if (!workspaceCharm.hasVirtualEnv && !await this.ic.askAndSetupVirtualEnvFirst(workspaceCharm, true)) {
+            this._log('charm has no virtual env; skipping.', run, test);
+            run.skipped(test);
+            return;
+        }
 
-        // const goCheckSessionIDKey = 'goTestSessionID' as const;
-        // const sessionId = randomUUID();
+        const env = await workspaceCharm.virtualEnv.computeActivationEnvVars(true);
+        if (!env) {
+            this._log('failed to compute env vars to activate venv; skipping.', run, test);
+            run.skipped(test);
+            return;
+        }
 
-        // let tracker: GoTestDebugAdapterTracker | undefined = undefined;
-        // const trackerListener = this._onCreateDebugAdapterTracker.event(e => {
-        //     if (e.tracker || e.session.configuration[goCheckSessionIDKey] !== sessionId) {
-        //         return;
-        //     }
-        //     e.tracker = tracker = new GoTestDebugAdapterTracker();
-        //     trackerListener.dispose();
-        // });
-        // this._disposables.push(trackerListener);
+        const { pytestArgs, cwd } = this._getPytestCommand(data, workspaceCharm.home, relativePath);
 
-        // const testDirectory = dirname(test.uri.fsPath);
-        // const cmd = this.adapter.getDebugCommand(data, test.uri.fsPath);
-        // const program = cmd.program || testDirectory;
-        // const args = cmd.args || [];
+        const sessionIDKey = 'charmcraftIDETestSessionID' as const;
+        const sessionId = randomUUID();
 
-        // let sessionStartSignal: (value: DebugSession) => void;
-        // const sessionStartPromise = new Promise<DebugSession>(resolve => { sessionStartSignal = resolve; });
-        // const listener = debug.onDidStartDebugSession(e => {
-        //     if (e.configuration[goCheckSessionIDKey] === sessionId) {
-        //         sessionStartSignal(e);
-        //         listener.dispose();
-        //     }
-        // });
-        // this._disposables.push(listener);
+        let tracker: TestDebugAdapterTracker | undefined = undefined;
+        const trackerListener = this._onCreateDebugAdapterTracker.event(e => {
+            if (e.tracker || e.session.configuration[sessionIDKey] !== sessionId) {
+                return;
+            }
+            e.tracker = tracker = new TestDebugAdapterTracker();
+            trackerListener.dispose();
+        });
+        this._disposables.push(trackerListener);
 
-        // const logFile = this._getLogFilePath(sessionId);
-        // const started = await debug.startDebugging(
-        //     workspace.getWorkspaceFolder(test.uri),
-        //     {
-        //         [goCheckSessionIDKey]: sessionId,
-        //         type: 'go',
-        //         request: 'launch',
-        //         mode: 'test',
-        //         name: `Debug test ${test.id}`,
-        //         cwd: testDirectory,
-        //         env: execution?.env,
-        //         program,
-        //         args,
-        //         showLog: true,
-        //         /**
-        //          * As of vscode-go extension docs, the `logDest` option is only available on Linux or Mac.
-        //          *
-        //          * See "logDest" description in:
-        //          *   https://github.com/golang/vscode-go/blob/d9015c19ed5be58bb51f3c53b651fe2468540086/docs/debugging.md#configuration
-        //          */
-        //         ...(['darwin', 'linux'].includes(platform()) ? { logDest: logFile.fsPath } : {}),
-        //     },
-        // );
+        let sessionStartSignal: (value: DebugSession) => void;
+        const sessionStartPromise = new Promise<DebugSession>(resolve => { sessionStartSignal = resolve; });
+        const listener = debug.onDidStartDebugSession(e => {
+            if (e.configuration[sessionIDKey] === sessionId) {
+                sessionStartSignal(e);
+                listener.dispose();
+            }
+        });
+        this._disposables.push(listener);
 
-        // if (!started) {
-        //     this._log('error: debug session did not start', run);
-        //     run.skipped(test);
-        //     return;
-        // }
+        const started = await debug.startDebugging(
+            workspace.getWorkspaceFolder(data.uri),
+            {
+                [sessionIDKey]: sessionId,
+                type: 'python',
+                request: 'launch',
+                module: 'pytest',
+                name: `Debug test ${test.id}`,
+                debugLauncherPython: await workspaceCharm.virtualEnv.getPythonExecutablePath(),
+                cwd: cwd.path,
+                env,
+                args: pytestArgs,
+                console: "internalConsole",
+            },
+        );
 
-        // let sessionStopSignal: () => void;
-        // const sessionStopPromise = new Promise<void>(resolve => { sessionStopSignal = resolve; });
+        if (!started) {
+            this._log('error: debug session did not start', run, test);
+            run.skipped(test);
+            return;
+        }
 
-        // const listener2 = debug.onDidTerminateDebugSession(e => {
-        //     if (e.configuration[goCheckSessionIDKey] === sessionId) {
-        //         if (tracker) {
-        //             const stdout = tracker.stdout.join('\r\n');
-        //             const stderr = tracker.stderr.join('\r\n');
-        //             const others = tracker.others.join('\r\n');
-        //             const trail = [stdout, stderr, others].join('\r\n');
-        //             const markAsFailed = () => run.failed(test, new TestMessage(trail));
-        //             const markAsPassed = () => run.passed(test);
-        //             this._log(trail);
-        //             if (tracker.error) {
-        //                 markAsFailed();
-        //             } else if (tracker.exitCode !== undefined) {
-        //                 if (!tracker.exitCode) {
-        //                     markAsPassed();
-        //                 } else {
-        //                     markAsFailed();
-        //                 }
-        //             } else {
-        //                 if (/^PASS$/m.exec(stdout)) {
-        //                     markAsPassed();
-        //                 } else if (/^FAIL$/m.exec(stdout)) {
-        //                     markAsFailed();
-        //                 } else {
-        //                     run.skipped(test);
-        //                 }
-        //             }
-        //         } else {
-        //             run.skipped(test);
-        //         }
+        let sessionStopSignal: () => void;
+        const sessionStopPromise = new Promise<void>(resolve => { sessionStopSignal = resolve; });
 
-        //         const debuggerLog = tryReadFileSync(logFile.fsPath);
-        //         if (debuggerLog) {
-        //             this._log(debuggerLog.replace(/\r?\n/g, '\r\n'), run);
-        //         }
+        const listener2 = debug.onDidTerminateDebugSession(e => {
+            if (e.configuration[sessionIDKey] === sessionId) {
+                if (tracker) {
+                    const join = (lines: string[]) => lines.join('\n').replace(/[^\r]\n/, '\r\n');
+                    const stdout = join(tracker.stdout);
+                    const stderr = join(tracker.stderr);
+                    const others = join(tracker.others);
+                    const trail = [stdout, stderr, others].join('\r\n');
+                    const markAsFailed = () => run.failed(test, new TestMessage(trail));
+                    const markAsPassed = () => run.passed(test);
+                    this._log(trail);
+                    if (tracker.exitCode !== undefined) {
+                        if (!tracker.exitCode) {
+                            markAsPassed();
+                        } else {
+                            markAsFailed();
+                        }
+                    } else if (tracker.error) {
+                        markAsFailed();
+                    } else {
+                        /**
+                         * As a fallback try to parse the summary lines like these:
+                         *   - "============================== 1 failed in 3.19s ==============================="
+                         *   - "============================== 1 passed in 8.12s ==============================="
+                         *   - "========================= 1 failed, 2 passed in 0.02s =========================="
+                         */
+                        const lines = stdout.trim().split('\n');
+                        const summaryLine = lines[-1 + lines.length].trim();
+                        const match = summaryLine.match(/^=+(.*?)=+$/g);
+                        if (!match) {
+                            run.skipped(test);
+                        } else {
+                            if (match[1].includes('failed')) {
+                                markAsFailed();
+                            } else if (match[1].includes('passed')) {
+                                markAsPassed();
+                            } else {
+                                run.skipped(test);
+                            }
+                        }
+                    }
+                } else {
+                    run.skipped(test);
+                }
 
-        //         listener2.dispose();
-        //         sessionStopSignal();
-        //     }
-        // });
-        // this._disposables.push(listener2);
+                listener2.dispose();
+                sessionStopSignal();
+            }
+        });
+        this._disposables.push(listener2);
 
-        // const session = await sessionStartPromise;
-        // const cancelListener = token.onCancellationRequested(e => {
-        //     debug.stopDebugging(session);
-        //     cancelListener.dispose();
-        // });
-        // this._disposables.push(cancelListener);
-        // await sessionStopPromise;
+        const session = await sessionStartPromise;
+        const cancelListener = token.onCancellationRequested(e => {
+            debug.stopDebugging(session);
+            cancelListener.dispose();
+        });
+        this._disposables.push(cancelListener);
+        await sessionStopPromise;
+    }
+
+    private _getPytestCommand(
+        data: DirectoryTestData | FileTestData | ClassTestData | MethodTestData | FunctionTestData,
+        charmHome: Uri,
+        relativePath: string,
+    ): { cwd: Uri; command: string; args: string[], pytestArgs: string[] } {
+        const command = 'python3';
+        const pytestArgs = ['-v', '--tb', 'native', '--log-cli-level=INFO', '--cache-clear'];
+        if (data.kind === 'directory' || data.kind === 'file') {
+            pytestArgs.push(relativePath);
+        } else if (data.kind === 'class' || data.kind === 'function') {
+            pytestArgs.push(`${relativePath}::${data.name}`);
+        } else {
+            pytestArgs.push(`${relativePath}::${data.class}::${data.name}`);
+        }
+        const args = ['-m', 'pytest', ...pytestArgs];
+        return { command, args, pytestArgs, cwd: charmHome };
     }
 
     private _getLogFilePath(name: string): Uri {
         return Uri.joinPath(this.logUri, name);
     }
 
-    private _log(message: string, run?: TestRun) {
-        this.output.appendLine(message);
-        run?.appendOutput(message);
+    private _log(message: string, run?: TestRun, test?: TestItem) {
+        this.testOutput.appendLine(message);
+        run?.appendOutput(
+            message,
+            test?.uri && test?.range ? { uri: test.uri, range: test.range } : undefined,
+            test,
+        );
     }
 }
 
@@ -725,7 +803,7 @@ function* childGenerator(testItem: TestItem) {
     }
 }
 
-class GoTestDebugAdapterTracker implements DebugAdapterTracker {
+class TestDebugAdapterTracker implements DebugAdapterTracker {
     public readonly stdout: string[] = [];
     public readonly stderr: string[] = [];
     public readonly others: string[] = [];
@@ -744,7 +822,15 @@ class GoTestDebugAdapterTracker implements DebugAdapterTracker {
      * The debug adapter has sent a Debug Adapter Protocol message to the editor.
      */
     onDidSendMessage(message: any): void {
-        if (message['type'] !== 'event' || message['event'] !== 'output') {
+        if (message['type'] !== 'event') {
+            return;
+        }
+
+        if (message['event'] === 'exited' && message.body?.exitCode !== undefined) {
+            this._exitCode = message.body?.exitCode as number;
+        }
+
+        if (message['event'] !== 'output') {
             return;
         }
         if (message.body.category === 'stdout') {
@@ -767,6 +853,9 @@ class GoTestDebugAdapterTracker implements DebugAdapterTracker {
      * The debug adapter has exited with the given exit code or signal.
      */
     onExit(code: number | undefined, signal: string | undefined): void {
+        if (code === undefined) {
+            return;
+        }
         this._exitCode = code;
     }
 }
