@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.6
+
+- Add run/debug tests feature.
+
 ## 0.0.5
 
 - Introduce Charmcraft tree to the activity bar.
@@ -15,4 +19,4 @@
 
 ## 0.0.1
 
-- Initial release
+- Initial release.
