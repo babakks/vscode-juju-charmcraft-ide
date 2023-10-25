@@ -6,7 +6,8 @@ import { WorkspaceCharm } from "./workspace";
 import { COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT } from "./command.const";
 
 type TreeItemModel =
-    CharmTreeItemModel
+    NoCharmTreeItemModel
+    | CharmTreeItemModel
     | NoVirtualEnvWarningTreeItemModel
     | ConfigTreeItemModel
     | ActionsTreeItemModel
@@ -16,6 +17,10 @@ type TreeItemModel =
 
 type WithWorkspaceCharm = {
     workspaceCharm: WorkspaceCharm;
+};
+
+export type NoCharmTreeItemModel = {
+    kind: 'noCharmDetected';
 };
 
 export type CharmTreeItemModel = WithWorkspaceCharm & {
@@ -86,6 +91,13 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
     }
 
     getTreeItem(element: TreeItemModel): TreeItem | Thenable<TreeItem> {
+        if (element.kind === 'noCharmDetected') {
+            const item = new TreeItem("No Charms Detected");
+            item.iconPath = new ThemeIcon('info');
+            item.collapsibleState = TreeItemCollapsibleState.None;
+            return item;
+        }
+
         if (element.kind === 'charm') {
             const isActive = this.registry.getActiveCharm() === element.workspaceCharm;
 
@@ -206,12 +218,21 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
     getChildren(element?: TreeItemModel | undefined): ProviderResult<TreeItemModel[]> {
         if (!element) {
-            return Array.from(this.registry.getWorkspaceCharms()).sort((a, b) => {
+            const workspaceCharms = this.registry.getWorkspaceCharms();
+            if (!workspaceCharms.length) {
+                return [{ kind: 'noCharmDetected' } as NoCharmTreeItemModel];
+            }
+
+            return workspaceCharms.sort((a, b) => {
                 return getWorkspaceCharmLabel(a).localeCompare(getWorkspaceCharmLabel(b));
             }).map(x => ({
                 kind: 'charm',
                 workspaceCharm: x,
             } as CharmTreeItemModel));
+        }
+
+        if (element.kind === 'noCharmDetected') {
+            return;
         }
 
         const workspaceCharm = element.workspaceCharm;
