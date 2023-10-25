@@ -614,6 +614,8 @@ export class CharmTestProvider implements Disposable {
             return;
         }
 
+        const pythonBinaryPath = await workspaceCharm.virtualEnv.getPythonExecutablePath();
+
         const { pytestArgs, cwd } = this._getPytestCommand(data, workspaceCharm.home, relativePath);
 
         const sessionIDKey = 'charmcraftIDETestSessionID' as const;
@@ -647,7 +649,8 @@ export class CharmTestProvider implements Disposable {
                 request: 'launch',
                 module: 'pytest',
                 name: `Debug test ${test.id}`,
-                debugLauncherPython: await workspaceCharm.virtualEnv.getPythonExecutablePath(),
+                debugLauncherPython: pythonBinaryPath,
+                python: pythonBinaryPath,
                 cwd: cwd.path,
                 env,
                 args: pytestArgs,
@@ -667,13 +670,19 @@ export class CharmTestProvider implements Disposable {
         const listener2 = debug.onDidTerminateDebugSession(e => {
             if (e.configuration[sessionIDKey] === sessionId) {
                 if (tracker) {
-                    const join = (lines: string[]) => lines.join('\n').replace(/[^\r]\n/, '\r\n');
+                    const join = (lines: string[]) => lines.join('\n').replace(/\r/g, '').replace(/\n/g, '\r\n');
                     const stdout = join(tracker.stdout);
                     const stderr = join(tracker.stderr);
                     const others = join(tracker.others);
                     const trail = [stdout, stderr, others].join('\r\n');
-                    const markAsFailed = () => run.failed(test, new TestMessage(trail));
-                    const markAsPassed = () => run.passed(test);
+                    const markAsFailed = () => {
+                        run.appendOutput(trail, test.uri && test.range ? { uri: test.uri, range: test.range } : undefined, test);
+                        run.failed(test, new TestMessage(trail));
+                    };
+                    const markAsPassed = () => {
+                        run.appendOutput(trail, test.uri && test.range ? { uri: test.uri, range: test.range } : undefined, test);
+                        run.passed(test);
+                    };
                     this._log(trail);
                     if (tracker.exitCode !== undefined) {
                         if (!tracker.exitCode) {
@@ -730,7 +739,7 @@ export class CharmTestProvider implements Disposable {
         relativePath: string,
     ): { cwd: Uri; command: string; args: string[], pytestArgs: string[] } {
         const command = 'python3';
-        const pytestArgs = ['-v', '--tb', 'native', '--log-cli-level=INFO', '--cache-clear'];
+        const pytestArgs = ['-v', '--tb', 'native', '--log-cli-level=INFO', '--cache-clear', '--color=no'];
         if (data.kind === 'directory' || data.kind === 'file') {
             pytestArgs.push(relativePath);
         } else if (data.kind === 'class' || data.kind === 'function') {
@@ -740,10 +749,6 @@ export class CharmTestProvider implements Disposable {
         }
         const args = ['-m', 'pytest', ...pytestArgs];
         return { command, args, pytestArgs, cwd: charmHome };
-    }
-
-    private _getLogFilePath(name: string): Uri {
-        return Uri.joinPath(this.logUri, name);
     }
 
     private _log(message: string, run?: TestRun, test?: TestItem) {
