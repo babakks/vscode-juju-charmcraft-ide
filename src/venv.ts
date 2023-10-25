@@ -190,11 +190,13 @@ export class VirtualEnv implements vscode.Disposable {
         }, {} as { [key: string]: string });
 
         if (addSourceCodeDirsToPythonPath) {
-            result['PYTHONPATH'] = (result['PYTHONPATH'] ? result['PYTHONPATH'] + ':' : '') +
-                [CHARM_DIR_LIB,
-                    CHARM_DIR_SRC,
-                    CHARM_DIR_TESTS,
-                ].map(x => vscode.Uri.joinPath(this.charmHome, x).path).join(':');
+            const paths = [
+                '.',
+                CHARM_DIR_LIB,
+                CHARM_DIR_SRC,
+                CHARM_DIR_TESTS,
+            ].map(x => vscode.Uri.joinPath(this.charmHome, x).path).join(':');
+            result['PYTHONPATH'] = (result['PYTHONPATH'] ? result['PYTHONPATH'] + ':' : '') + paths;
         }
         return result;
     }
