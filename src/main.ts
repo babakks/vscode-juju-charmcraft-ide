@@ -2,7 +2,7 @@ import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     Disposable,
     ExtensionContext,
-    ExtensionMode, OutputChannel, Uri, languages,
+    ExtensionMode, OutputChannel, Uri, commands, languages,
     tests,
     window
 } from 'vscode';
@@ -64,6 +64,10 @@ export async function activate(context: ExtensionContext) {
     // extension) and get blocked for an unknown time duration (possibly never, if user decides to skip the message).
     integrateWithYAMLExtension(context).catch(reason => {
         output.appendLine(`failed to integrate with YAML extension: ${reason}`);
+    });
+
+    commands.executeCommand('testing.refreshTests').then(undefined, reason => {
+        output.appendLine(`failed to trigger 'testing.refreshTests': ${reason}`);
     });
 }
 
