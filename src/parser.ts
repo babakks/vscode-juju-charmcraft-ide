@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
+import * as ini from 'ini';
 import { tmpdir } from 'os';
 import {
     Alias,
@@ -34,12 +35,10 @@ import {
     SequenceWithNode,
     WithNode,
     YAMLNode,
-    YAML_PROBLEMS,
-    getTextOverRange
+    YAML_PROBLEMS
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
-import * as ini from 'ini';
 
 
 /**
@@ -96,7 +95,7 @@ export class YAMLParser {
             node: {
                 kind: 'map',
                 range,
-                text: getTextOverRange(this.tpm.lines, range),
+                text: this.tpm.getTextOverRange(range),
                 raw: node,
                 problems: [],
             }
@@ -110,7 +109,7 @@ export class YAMLParser {
             node: {
                 kind: 'sequence',
                 range,
-                text: getTextOverRange(this.tpm.lines, range),
+                text: this.tpm.getTextOverRange(range),
                 raw: node,
                 problems: [],
             }
@@ -124,7 +123,7 @@ export class YAMLParser {
             node: {
                 kind: 'scalar',
                 range,
-                text: getTextOverRange(this.tpm.lines, range),
+                text: this.tpm.getTextOverRange(range),
                 raw: node,
                 problems: [],
             }
@@ -143,7 +142,7 @@ export class YAMLParser {
             node: {
                 kind: 'pair',
                 range,
-                text: getTextOverRange(this.tpm.lines, range),
+                text: this.tpm.getTextOverRange(range),
                 raw: node,
                 pairKeyRange: this._nodeRangeToRange(node.key.range, this.tpm),
                 pairValueRange: node.value ? this._nodeRangeToRange(node.value.range, this.tpm) : undefined,
@@ -821,7 +820,7 @@ export function parseToxINI(text: string): CharmToxConfig {
             /*
              * NOTE the `ini` package does not support multiline values which is common
              * for `description` or `commands` in `tox.ini` file. Therefore, we just
-             * use the section names. 
+             * use the section names.
              */
         };
         return result;

@@ -2,7 +2,6 @@ import { Disposable, EventEmitter, OutputChannel, Uri, DiagnosticCollection, Can
 import * as constant from './model/common';
 import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
 import { WorkspaceCharm } from './workspace';
-import path = require('path');
 
 /**
  * Registry of discovered charms.
@@ -17,6 +16,9 @@ export class Registry implements Disposable {
     readonly onActiveCharmChanged = this._onActiveCharmChanged.event;
 
     private readonly _onChanged = new EventEmitter<void>();
+    /**
+     * Fires when charms change (e.g., a new charm is added/removed).
+     */
     readonly onChanged = this._onChanged.event;
 
     private readonly _onCharmVirtualEnvChanged = new EventEmitter<WorkspaceCharm>();
@@ -83,18 +85,14 @@ export class Registry implements Disposable {
         return Array.from(this._set).map(x => x.model);
     }
 
-    getCharmBySourceCodeFile(uri: Uri): { workspaceCharm: WorkspaceCharm; relativeSourcePath: string } | { workspaceCharm: undefined; relativeSourcePath: undefined } {
-        const { workspaceCharm: charm, relativePath } = this.getCharmByFile(uri);
-        if (!charm) {
-            return { workspaceCharm: undefined, relativeSourcePath: undefined };
-        }
-        const prefix = constant.CHARM_DIR_SRC + '/';
-        return relativePath.startsWith(prefix)
-            ? { workspaceCharm: charm, relativeSourcePath: relativePath.replace(prefix, '') }
-            : { workspaceCharm: undefined, relativeSourcePath: undefined };
-    }
-
-    getCharmByFile(uri: Uri): { workspaceCharm: WorkspaceCharm; relativePath: string } | { workspaceCharm: undefined; relativePath: undefined; } {
+    /**
+     * Locates corresponding charm for a given URI which could point to either a
+     * file or a directory.
+     * @returns Corresponding charm and the path of the given URI relative to
+     * the charm. Note that, independent of the platform, the relative path is
+     * separated by `/` (forward slash).
+     */
+    getCharmByUri(uri: Uri): { workspaceCharm: WorkspaceCharm; relativePath: string } | { workspaceCharm: undefined; relativePath: undefined } {
         const u = uri.toString();
         for (const charm of this._set) {
             const home = charm.home.toString() + '/';

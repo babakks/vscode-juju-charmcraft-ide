@@ -2,11 +2,12 @@ import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     Disposable,
     ExtensionContext,
-    ExtensionMode, languages,
+    ExtensionMode, OutputChannel, Uri, commands, languages,
+    tests,
     window
 } from 'vscode';
 import { EventHandlerCodeActionProvider } from './codeAction';
-import { Commands } from './command';
+import { InternalCommands, registerCommands } from './command';
 import {
     CHARM_CONFIG_COMPLETION_TRIGGER_CHARS,
     CHARM_EVENT_COMPLETION_TRIGGER_CHARS,
@@ -17,9 +18,9 @@ import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './d
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
 import { Registry } from './registry';
 import { integrateWithYAMLExtension } from './schema';
+import { CharmTestProvider } from './test';
 import { CharmcraftTreeDataProvider } from './tree';
 import { DocumentWatcher } from './watcher';
-import path = require('path');
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 
@@ -30,19 +31,15 @@ export async function activate(context: ExtensionContext) {
     const output = window.createOutputChannel('Charmcraft IDE');
     context.subscriptions.push(output);
 
+    const testOutput = window.createOutputChannel('Charmcraft IDE (tests)');
+    context.subscriptions.push(testOutput);
+
     const diagnostics = languages.createDiagnosticCollection('Charmcraft IDE');
     context.subscriptions.push(diagnostics);
 
     const registry = new Registry(output, diagnostics);
     context.subscriptions.push(registry);
     await registry.refresh();
-
-    context.subscriptions.push(
-        ...registerCodeActionProviders(registry, reporter),
-        ...registerCompletionProviders(registry, reporter),
-        ...registerHoverProviders(registry, reporter),
-        ...registerDefinitionProviders(registry, reporter),
-    );
 
     const dw = new DocumentWatcher(registry);
     context.subscriptions.push(dw);
@@ -52,14 +49,25 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(tdp);
     context.subscriptions.push(window.createTreeView('charmcraft-charms', { treeDataProvider: tdp }));
 
-    const commands = new Commands(context, reporter, registry, tdp);
-    context.subscriptions.push(commands);
-    commands.register();
+    const ic = new InternalCommands(context, registry, tdp);
+
+    context.subscriptions.push(
+        ...registerCommands(ic, reporter),
+        ...registerCodeActionProviders(registry, reporter),
+        ...registerCompletionProviders(registry, reporter),
+        ...registerHoverProviders(registry, reporter),
+        ...registerDefinitionProviders(registry, reporter),
+        ...registerTestProvider(registry, ic, reporter, output, testOutput, context.logUri),
+    );
 
     // Note that we shouldn't `await` on this call, because it could ask for user decision (e.g., to install the YAML
     // extension) and get blocked for an unknown time duration (possibly never, if user decides to skip the message).
     integrateWithYAMLExtension(context).catch(reason => {
         output.appendLine(`failed to integrate with YAML extension: ${reason}`);
+    });
+
+    commands.executeCommand('testing.refreshTests').then(undefined, reason => {
+        output.appendLine(`failed to trigger 'testing.refreshTests': ${reason}`);
     });
 }
 
@@ -113,4 +121,10 @@ function registerDefinitionProviders(registry: Registry, reporter: TelemetryRepo
             new CharmEventDefinitionProvider(registry, reporter),
         ),
     ];
+}
+
+function registerTestProvider(registry: Registry, ic: InternalCommands, reporter: TelemetryReporter, output: OutputChannel, testOutput: OutputChannel, logUri: Uri): Disposable[] {
+    const controller = tests.createTestController('charmcraft-ide', 'Charmcraft IDE');
+    const provider = new CharmTestProvider(registry, ic, reporter, controller, output, testOutput, logUri);
+    return [controller, provider];
 }

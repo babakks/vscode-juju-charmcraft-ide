@@ -129,4 +129,37 @@ export class TextPositionMapper {
             end: this.indexToPosition(this.content.length),
         };
     }
+
+    getTextOverRange(range: Range): string {
+        if (!this.lines.length) {
+            return '';
+        }
+
+        const zero = zeroPosition();
+        const start = comparePositions(range.start, zero) === -1 ? zero : range.start;
+        const max: Position = { line: -1 + this.lines.length, character: this.lines[-1 + this.lines.length].length };
+        const end = comparePositions(range.end, max) === 1 ? max : range.end;
+
+        if (comparePositions(start, end) === 1) {
+            return '';
+        }
+
+        const portion = this.lines.slice(start.line, 1 + end.line);
+        portion[-1 + portion.length] = portion[-1 + portion.length].substring(0, end.character);
+        portion[0] = portion[0].substring(start.character);
+
+        if (portion[-1 + portion.length] === '') {
+            portion.pop();
+        }
+        if (portion[0] === '') {
+            portion.splice(0, 1);
+        }
+        return portion.join('\n');
+    }
+}
+
+const REGEXP_SPECIAL_CHARS = /[/\-\\^$*+?.()|[\]{}]/g;
+
+export function escapeRegex(s: string): string {
+    return s.replace(REGEXP_SPECIAL_CHARS, '\\$&');
 }

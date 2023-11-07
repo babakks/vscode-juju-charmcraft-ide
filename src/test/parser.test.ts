@@ -1,11 +1,8 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
-import { TextDecoder } from "util";
-import { Problem, CharmMetadata, CharmAction, CharmConfigParameter, emptyYAMLNode, CharmConfig, SequenceWithNode, CharmActions, WithNode, MapWithNode, CharmToxConfig } from "../model/charm";
-import { YAMLParser, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from "../parser";
-import path = require("path");
-import { readFileSync } from "fs";
+import { CharmActions, CharmConfig, CharmToxConfig, MapWithNode, Problem, SequenceWithNode, WithNode } from "../model/charm";
 import { Range } from "../model/common";
+import { YAMLParser, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from "../parser";
 
 function cursorOverMap<T>(map: MapWithNode<T> | undefined) {
     let index = -1;

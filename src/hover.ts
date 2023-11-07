@@ -19,7 +19,7 @@ export class CharmConfigHoverProvider implements HoverProvider {
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }
@@ -35,8 +35,6 @@ export class CharmConfigHoverProvider implements HoverProvider {
             return;
         }
 
-        this.reporter.sendTelemetryEvent(CharmConfigHoverProvider._telemetryEvent);
-
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
@@ -44,6 +42,8 @@ export class CharmConfigHoverProvider implements HoverProvider {
         if (!parameter?.value) {
             return;
         }
+
+        this.reporter.sendTelemetryEvent(CharmConfigHoverProvider._telemetryEvent);
 
         return new Hover(getConfigParamDocumentation(parameter.value, true));
     }
@@ -56,7 +56,7 @@ export class CharmEventHoverProvider implements HoverProvider {
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }
 
     provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover> {
-        const { workspaceCharm } = this.registry.getCharmBySourceCodeFile(document.uri);
+        const { workspaceCharm } = this.registry.getCharmByUri(document.uri);
         if (!workspaceCharm || token.isCancellationRequested) {
             return;
         }

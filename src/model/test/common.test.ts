@@ -218,4 +218,88 @@ suite(TextPositionMapper.name, function () {
             });
         }
     });
+
+    suite(TextPositionMapper.prototype.getTextOverRange.name, function () {
+        type TestCase = {
+            name: string;
+            content: string;
+            range: Range;
+            expected: string;
+        };
+        const tests: TestCase[] = [
+            {
+                name: 'empty lines',
+                content: '',
+                range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
+                expected: '',
+            }, {
+                name: 'start line > end line (empty lines)',
+                content: '',
+                range: { start: { line: 1, character: 0 }, end: { line: 0, character: 0 } },
+                expected: '',
+            }, {
+                name: 'start line > end line',
+                content: 'line 0\nline 1',
+                range: { start: { line: 1, character: 0 }, end: { line: 0, character: 0 } },
+                expected: '',
+            }, {
+                name: 'start character > end character (equal lines, empty lines)',
+                content: '',
+                range: { start: { line: 0, character: 100 }, end: { line: 0, character: 0 } },
+                expected: '',
+            }, {
+                name: 'start character > end character (equal lines)',
+                content: 'line 0\nline 1',
+                range: { start: { line: 0, character: 100 }, end: { line: 0, character: 0 } },
+                expected: '',
+            }, {
+                name: 'start line == end line',
+                content: 'some text here',
+                range: { start: { line: 0, character: 5 }, end: { line: 0, character: 9 } },
+                expected: 'text',
+            }, {
+                name: 'start line < end line',
+                content: '> line 0 <\n> line 1 <\n> end <',
+                range: { start: { line: 0, character: 2 }, end: { line: 2, character: 5 } },
+                expected: 'line 0 <\n> line 1 <\n> end',
+            }, {
+                name: 'start character negative (same start/end lines)',
+                content: 'some text here',
+                range: { start: { line: 0, character: -99 }, end: { line: 0, character: 4 } },
+                expected: 'some',
+            }, {
+                name: 'start line negative',
+                content: 'some text here',
+                range: { start: { line: -99, character: 0 }, end: { line: 0, character: 4 } },
+                expected: 'some',
+            }, {
+                name: 'end character out of bound (same start/end lines)',
+                content: 'some text here',
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 999 } },
+                expected: 'some text here',
+            }, {
+                name: 'end lines exceeds out of bound',
+                content: 'some text here',
+                range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
+                expected: 'some text here',
+            }, {
+                name: 'start character at the end of line',
+                content: 'line 1\nline 2',
+                range: { start: { line: 0, character: 6 }, end: { line: 1, character: 6 } },
+                expected: 'line 2',
+            }, {
+                name: 'end character at the start of line',
+                content: 'line 1\nline 2',
+                range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
+                expected: 'line 1',
+            },
+        ];
+
+        for (const t of tests) {
+            const tt = t;
+            test(tt.name, function () {
+                assert.equal(new TextPositionMapper(tt.content).getTextOverRange(tt.range), tt.expected);
+            });
+        }
+    });
 });

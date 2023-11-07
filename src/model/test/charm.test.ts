@@ -3,72 +3,151 @@ import { readFileSync } from "fs";
 import { suite, test } from "mocha";
 import { TextDecoder } from "util";
 import {
-    CharmClassMethod,
-    CharmSourceCode,
-    CharmSourceCodeFile,
-    CharmSourceCodeFileAnalyzer,
-    CharmSourceCodeTree,
-    CharmSourceCodeTreeDirectoryEntry, CharmSourceCodeTreeFileEntry,
-    DeepSearchCallback,
-    DeepSearchCallbackNode,
-    deepSearch,
-    deepSearchForPattern,
+    SourceCode,
+    SourceCodeCharmTestClass,
+    SourceCodeClass,
+    SourceCodeFile,
+    SourceCodeFileAnalyzer,
+    SourceCodeFunction,
+    SourceCodeTree,
+    SourceCodeTreeDirectoryEntry,
+    SourceCodeTreeFileEntry,
     getNodeExtendedRange,
     getNodeRange,
-    getTextOverRange,
     unquoteSymbol
 } from "../charm";
-import { Range } from "../common";
+import { Range, escapeRegex } from "../common";
 import path = require('path');
 
-suite(CharmSourceCodeFileAnalyzer.name, function () {
-    function makeSUT(fixtureName: string): CharmSourceCodeFileAnalyzer {
+suite(SourceCodeFileAnalyzer.name, function () {
+    function makeSUT(fixtureName: string): SourceCodeFileAnalyzer {
         const base = path.join(__dirname, '../../../resource/test/ast');
         const content = new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.py')));
         const ast = JSON.parse(new TextDecoder().decode(readFileSync(path.join(base, fixtureName + '.json'))));
-        return new CharmSourceCodeFileAnalyzer(content, ast);
+        return new SourceCodeFileAnalyzer(content, ast);
     }
+
     test('charm-01', function () {
         const sut = makeSUT('charm-01');
 
-        assert.isDefined(sut.charmClasses);
+        assert.lengthOf(sut.charmClasses!, 3);
         assert.isDefined(sut.mainCharmClass);
         assert.equal(sut.mainCharmClass!.name, 'CharmWithEventHandlers');
 
-        const cs0 = sut.charmClasses![0];
-        assert.isDefined(cs0);
-        assert.equal(cs0.name, 'CharmWithEventHandlers');
-        assert.equal(cs0.base, 'CharmBase');
-        assert.deepStrictEqual(cs0.range, { start: { line: 7, character: 0 }, end: { line: 17, character: 12 } });
-        assert.deepStrictEqual(cs0.extendedRange, { start: { line: 7, character: 0 }, end: { line: 19, character: 0 } });
-        assert.deepStrictEqual(cs0.methods, [
-            { name: '__init__', kind: 'method', isStatic: false, positionalParameters: ['self'], range: { start: { line: 8, character: 4 }, end: { line: 11, character: 79 } }, extendedRange: { start: { line: 8, character: 4 }, end: { line: 13, character: 0 } } },
-            { name: '_on_start', kind: 'method', isStatic: false, positionalParameters: ['self', 'event'], range: { start: { line: 13, character: 4 }, end: { line: 14, character: 12 } }, extendedRange: { start: { line: 13, character: 4 }, end: { line: 16, character: 0 } } },
-            { name: '_on_config_changed', kind: 'method', isStatic: false, positionalParameters: ['self', 'event'], range: { start: { line: 16, character: 4 }, end: { line: 17, character: 12 } }, extendedRange: { start: { line: 16, character: 4 }, end: { line: 19, character: 0 } } },
-        ] satisfies CharmClassMethod[]);
+        let counter = 0;
+        let cs: SourceCodeClass;
 
-        const cs1 = sut.charmClasses![1];
-        assert.isDefined(cs1);
-        assert.equal(cs1.name, 'CharmWithProperties');
-        assert.equal(cs1.base, 'CharmBase');
-        assert.deepStrictEqual(cs1.range, { start: { line: 19, character: 0 }, end: { line: 29, character: 12 } });
-        assert.deepStrictEqual(cs1.extendedRange, { start: { line: 19, character: 0 }, end: { line: 31, character: 0 } });
-        assert.deepStrictEqual(cs1.methods, [
-            { name: '__init__', kind: 'method', isStatic: false, positionalParameters: ['self'], range: { start: { line: 20, character: 4 }, end: { line: 21, character: 31 } }, extendedRange: { start: { line: 20, character: 4 }, end: { line: 23, character: 0 } } },
-            { name: 'some_property', kind: 'getter', isStatic: false, positionalParameters: ['self'], range: { start: { line: 24, character: 4 }, end: { line: 25, character: 12 } }, extendedRange: { start: { line: 24, character: 4 }, end: { line: 27, character: 0 } } },
-            { name: 'some_property', kind: 'setter', isStatic: false, positionalParameters: ['self', 'value'], range: { start: { line: 28, character: 4 }, end: { line: 29, character: 12 } }, extendedRange: { start: { line: 28, character: 4 }, end: { line: 31, character: 0 } } },
-        ] satisfies CharmClassMethod[]);
+        cs = sut.charmClasses![counter++];
+        assert.isDefined(cs);
+        assert.equal(cs.name, 'CharmWithEventHandlers');
+        assert.deepStrictEqual(cs.bases, ['CharmBase']);
+        assert.deepStrictEqual(cs.range, { start: { line: 7, character: 0 }, end: { line: 17, character: 12 } });
+        assert.deepStrictEqual(cs.extendedRange, { start: { line: 7, character: 0 }, end: { line: 19, character: 0 } });
+        assert.lengthOf(cs.methods, 3);
+        assert.deepOwnInclude(cs.methods[0], { name: '__init__', kind: 'method', isStatic: false, isAsync: false, positionalParameters: ['self'], range: { start: { line: 8, character: 4 }, end: { line: 11, character: 79 } }, extendedRange: { start: { line: 8, character: 4 }, end: { line: 13, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+        assert.deepOwnInclude(cs.methods[1], { name: '_on_start', kind: 'method', isStatic: false, isAsync: false, positionalParameters: ['self', 'event'], range: { start: { line: 13, character: 4 }, end: { line: 14, character: 12 } }, extendedRange: { start: { line: 13, character: 4 }, end: { line: 16, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+        assert.deepOwnInclude(cs.methods[2], { name: '_on_config_changed', kind: 'method', isStatic: false, isAsync: false, positionalParameters: ['self', 'event'], range: { start: { line: 16, character: 4 }, end: { line: 17, character: 12 } }, extendedRange: { start: { line: 16, character: 4 }, end: { line: 19, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
 
-        const cs2 = sut.charmClasses![2];
-        assert.isDefined(cs2);
-        assert.equal(cs2.name, 'CharmWithStaticMethods');
-        assert.equal(cs2.base, 'CharmBase');
-        assert.deepStrictEqual(cs2.range, { start: { line: 31, character: 0 }, end: { line: 37, character: 12 } });
-        assert.deepStrictEqual(cs2.extendedRange, { start: { line: 31, character: 0 }, end: { line: 39, character: 0 } });
-        assert.deepStrictEqual(cs2.methods, [
-            { name: 'static_method', kind: 'method', isStatic: true, positionalParameters: [], range: { start: { line: 32, character: 4 }, end: { line: 33, character: 12 } }, extendedRange: { start: { line: 32, character: 4 }, end: { line: 35, character: 0 } } },
-            { name: 'static_method_with_decorator', kind: 'method', isStatic: true, positionalParameters: ['param'], range: { start: { line: 36, character: 4 }, end: { line: 37, character: 12 } }, extendedRange: { start: { line: 36, character: 4 }, end: { line: 39, character: 0 } } },
-        ] satisfies CharmClassMethod[]);
+        cs = sut.charmClasses![counter++];
+        assert.isDefined(cs);
+        assert.equal(cs.name, 'CharmWithProperties');
+        assert.deepStrictEqual(cs.bases, ['CharmBase']);
+        assert.deepStrictEqual(cs.range, { start: { line: 19, character: 0 }, end: { line: 29, character: 12 } });
+        assert.deepStrictEqual(cs.extendedRange, { start: { line: 19, character: 0 }, end: { line: 31, character: 0 } });
+        assert.lengthOf(cs.methods, 3);
+        assert.deepOwnInclude(cs.methods[0], { name: '__init__', kind: 'method', isStatic: false, isAsync: false, positionalParameters: ['self'], range: { start: { line: 20, character: 4 }, end: { line: 21, character: 31 } }, extendedRange: { start: { line: 20, character: 4 }, end: { line: 23, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+        assert.deepOwnInclude(cs.methods[1], { name: 'some_property', kind: 'getter', isStatic: false, isAsync: false, positionalParameters: ['self'], range: { start: { line: 24, character: 4 }, end: { line: 25, character: 12 } }, extendedRange: { start: { line: 24, character: 4 }, end: { line: 27, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+        assert.deepOwnInclude(cs.methods[2], { name: 'some_property', kind: 'setter', isStatic: false, isAsync: false, positionalParameters: ['self', 'value'], range: { start: { line: 28, character: 4 }, end: { line: 29, character: 12 } }, extendedRange: { start: { line: 28, character: 4 }, end: { line: 31, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+
+        cs = sut.charmClasses![counter++];
+        assert.isDefined(cs);
+        assert.equal(cs.name, 'CharmWithStaticMethods');
+        assert.deepStrictEqual(cs.bases, ['CharmBase']);
+        assert.deepStrictEqual(cs.range, { start: { line: 31, character: 0 }, end: { line: 37, character: 12 } });
+        assert.deepStrictEqual(cs.extendedRange, { start: { line: 31, character: 0 }, end: { line: 39, character: 0 } });
+        assert.lengthOf(cs.methods, 2);
+        assert.deepOwnInclude(cs.methods[0], { name: 'static_method', kind: 'method', isStatic: true, isAsync: false, positionalParameters: [], range: { start: { line: 32, character: 4 }, end: { line: 33, character: 12 } }, extendedRange: { start: { line: 32, character: 4 }, end: { line: 35, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+        assert.deepOwnInclude(cs.methods[1], { name: 'static_method_with_decorator', kind: 'method', isStatic: true, isAsync: false, positionalParameters: ['param'], range: { start: { line: 36, character: 4 }, end: { line: 37, character: 12 } }, extendedRange: { start: { line: 36, character: 4 }, end: { line: 39, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+    });
+
+    test('charm-test-01-unittest', function () {
+        const sut = makeSUT('charm-test-01-unittest');
+
+        assert.isEmpty(sut.testFunctions);
+        assert(sut.testClasses);
+        assert.lengthOf(sut.testClasses, 2);
+        let tc: SourceCodeCharmTestClass;
+
+        tc = sut.testClasses[0];
+        assert.isDefined(tc);
+        assert.equal(tc.name, 'TestCharmOne');
+        assert.deepStrictEqual(tc.bases, ['TestCase']);
+        assert.deepStrictEqual(tc.dialect, 'unittest.TestCase');
+        assert.deepStrictEqual(tc.range, { start: { line: 7, character: 0 }, end: { line: 12, character: 12 } });
+        assert.deepStrictEqual(tc.extendedRange, { start: { line: 7, character: 0 }, end: { line: 14, character: 0 } });
+        assert.lengthOf(tc.testMethods, 1);
+        assert.deepOwnInclude(tc.testMethods[0], { name: 'test_something', kind: 'method', isStatic: false, isAsync: false, positionalParameters: ['self'], range: { start: { line: 11, character: 4 }, end: { line: 12, character: 12 } }, extendedRange: { start: { line: 11, character: 4 }, end: { line: 14, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+
+        tc = sut.testClasses[1];
+        assert.isDefined(tc);
+        assert.equal(tc.name, 'TestCharmTwo');
+        assert.deepStrictEqual(tc.bases, ['TestCase']);
+        assert.deepStrictEqual(tc.dialect, 'unittest.TestCase');
+        assert.deepStrictEqual(tc.range, { start: { line: 14, character: 0 }, end: { line: 19, character: 12 } });
+        assert.deepStrictEqual(tc.extendedRange, { start: { line: 14, character: 0 }, end: { line: 23, character: 0 } });
+        assert.lengthOf(tc.testMethods, 1);
+        assert.deepOwnInclude(tc.testMethods[0], { name: 'test_something', kind: 'method', isStatic: false, isAsync: false, positionalParameters: ['self'], range: { start: { line: 18, character: 4 }, end: { line: 19, character: 12 } }, extendedRange: { start: { line: 18, character: 4 }, end: { line: 23, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+    });
+
+    test('charm-test-02-pytest-function', function () {
+        const sut = makeSUT('charm-test-02-pytest-function');
+
+        assert.isEmpty(sut.testClasses);
+        assert(sut.testFunctions);
+        assert.lengthOf(sut.testFunctions, 2);
+        let tf: SourceCodeFunction;
+
+        tf = sut.testFunctions[0];
+        assert.deepOwnInclude(tf, {
+            name: 'test_something',
+            isStatic: false,
+            isAsync: false,
+            kind: 'function',
+            positionalParameters: ['test'],
+            range: { start: { line: 4, character: 0 }, end: { line: 5, character: 8 } },
+            extendedRange: { start: { line: 4, character: 0 }, end: { line: 7, character: 0 } },
+        } satisfies Omit<SourceCodeFunction, 'raw'>);
+
+        tf = sut.testFunctions[1];
+        assert.deepOwnInclude(tf, {
+            name: 'test_something_async',
+            isStatic: false,
+            isAsync: true,
+            kind: 'function',
+            positionalParameters: ['test'],
+            range: { start: { line: 7, character: 0 }, end: { line: 8, character: 8 } },
+            extendedRange: { start: { line: 7, character: 0 }, end: { line: 12, character: 0 } },
+        } satisfies Omit<SourceCodeFunction, 'raw'>);
+    });
+
+    test('charm-test-03-pytest-class', function () {
+        const sut = makeSUT('charm-test-03-pytest-class');
+
+        assert.isEmpty(sut.testFunctions);
+        assert(sut.testClasses);
+        assert.lengthOf(sut.testClasses, 1);
+        let tc: SourceCodeCharmTestClass;
+
+        tc = sut.testClasses[0];
+        assert.isDefined(tc);
+        assert.equal(tc.name, 'TestClass');
+        assert.deepStrictEqual(tc.bases, []);
+        assert.deepStrictEqual(tc.dialect, 'pytest');
+        assert.deepStrictEqual(tc.range, { start: { line: 4, character: 0 }, end: { line: 12, character: 12 } });
+        assert.deepStrictEqual(tc.extendedRange, { start: { line: 4, character: 0 }, end: { line: 14, character: 0 } });
+        assert.lengthOf(tc.testMethods, 2);
+        assert.deepOwnInclude(tc.testMethods[0], { name: 'test_something', kind: 'method', isStatic: false, isAsync: false, positionalParameters: ['self', 'test'], range: { start: { line: 5, character: 4 }, end: { line: 6, character: 12 } }, extendedRange: { start: { line: 5, character: 4 }, end: { line: 8, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
+        assert.deepOwnInclude(tc.testMethods[1], { name: 'test_something_async', kind: 'method', isStatic: false, isAsync: true, positionalParameters: ['self', 'test'], range: { start: { line: 8, character: 4 }, end: { line: 9, character: 12 } }, extendedRange: { start: { line: 8, character: 4 }, end: { line: 11, character: 0 } } } satisfies Omit<SourceCodeFunction, 'raw'>);
     });
 });
 
@@ -178,210 +257,19 @@ suite(unquoteSymbol.name, function () {
     });
 });
 
-suite(getTextOverRange.name, function () {
-    type TestCase = {
-        name: string;
-        lines: string[];
-        range: Range;
-        expected: string;
-    };
-    const tests: TestCase[] = [
-        {
-            name: 'empty lines',
-            lines: [],
-            range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start line > end line (empty lines)',
-            lines: [],
-            range: { start: { line: 1, character: 0 }, end: { line: 0, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start line > end line',
-            lines: ['line 0', 'line 1'],
-            range: { start: { line: 1, character: 0 }, end: { line: 0, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start character > end character (equal lines, empty lines)',
-            lines: [],
-            range: { start: { line: 0, character: 100 }, end: { line: 0, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start character > end character (equal lines)',
-            lines: ['line 0', 'line 1'],
-            range: { start: { line: 0, character: 100 }, end: { line: 0, character: 0 } },
-            expected: '',
-        }, {
-            name: 'start line == end line',
-            lines: ['some text here'],
-            range: { start: { line: 0, character: 5 }, end: { line: 0, character: 9 } },
-            expected: 'text',
-        }, {
-            name: 'start line < end line',
-            lines: ['> line 0 <', '> line 1 <', '> end <'],
-            range: { start: { line: 0, character: 2 }, end: { line: 2, character: 5 } },
-            expected: 'line 0 <\n> line 1 <\n> end',
-        }, {
-            name: 'start character negative (same start/end lines)',
-            lines: ['some text here'],
-            range: { start: { line: 0, character: -99 }, end: { line: 0, character: 4 } },
-            expected: 'some',
-        }, {
-            name: 'start line negative',
-            lines: ['some text here'],
-            range: { start: { line: -99, character: 0 }, end: { line: 0, character: 4 } },
-            expected: 'some',
-        }, {
-            name: 'end character out of bound (same start/end lines)',
-            lines: ['some text here'],
-            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 999 } },
-            expected: 'some text here',
-        }, {
-            name: 'end lines exceeds out of bound',
-            lines: ['some text here'],
-            range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
-            expected: 'some text here',
-        }, {
-            name: 'start character at the end of line',
-            lines: ['line 1', 'line 2'],
-            range: { start: { line: 0, character: 6 }, end: { line: 1, character: 6 } },
-            expected: 'line 2',
-        }, {
-            name: 'end character at the start of line',
-            lines: ['line 1', 'line 2'],
-            range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
-            expected: 'line 1',
-        },
-    ];
-
-    for (const t of tests) {
-        const tt = t;
-        test(tt.name, function () {
-            assert.equal(getTextOverRange(tt.lines, tt.range), tt.expected);
-        });
+suite(SourceCode.name, function () {
+    function file(content: string = ''): SourceCodeTreeFileEntry {
+        return { kind: 'file', data: new SourceCodeFile(content, {}, true) };
     }
-});
-
-suite(deepSearch.name, function () {
-    type TestCase = {
-        name: string;
-        node: any;
-        expectedCallbackArgs: {
-            key: any;
-            skipKey?: true;
-            nodeKind: string;
-            skipNodeKind?: true;
-            nodeValue: any;
-            skipNodeValue?: true
-        }[];
-    };
-    const tests: TestCase[] = [
-        {
-            name: 'empty object ({})',
-            node: {},
-            expectedCallbackArgs: [{ key: 0, nodeKind: 'object', nodeValue: {} }],
-        }, {
-            name: 'flat object ({a:0})',
-            node: { a: 0 },
-            expectedCallbackArgs: [{ key: 0, nodeKind: 'object', nodeValue: { a: 0 } }],
-        }, {
-            name: 'nested objects ({a:0,b:{c:0}})',
-            node: { a: 0, b: { c: 0 } },
-            expectedCallbackArgs: [
-                { key: 0, nodeKind: 'object', nodeValue: { a: 0, b: { c: 0 } } },
-                { key: 'b', nodeKind: 'object', nodeValue: { c: 0 } },
-            ],
-        }, {
-            name: 'empty array ([])',
-            node: [],
-            expectedCallbackArgs: [{ key: 0, nodeKind: 'array', nodeValue: [] }],
-        }, {
-            name: 'flat array [0]',
-            node: [0],
-            expectedCallbackArgs: [{ key: 0, nodeKind: 'array', nodeValue: [0] }],
-        }, {
-            name: 'nested arrays [0,[1]]',
-            node: [0, [1]],
-            expectedCallbackArgs: [
-                { key: 0, nodeKind: 'array', nodeValue: [0, [1]] },
-                { key: 1, nodeKind: 'array', nodeValue: [1] },
-            ],
-        }, {
-            name: 'nested empty object and array',
-            node: [{}],
-            expectedCallbackArgs: [
-                { key: 0, nodeKind: 'array', nodeValue: [{}] },
-                { key: 0, nodeKind: 'object', nodeValue: {} },
-            ],
-        }, {
-            name: 'nested objects and arrays',
-            node: [0, { a: 0, b: [{ c: 2 }] }],
-            expectedCallbackArgs: [
-                { key: 0, nodeKind: 'array', nodeValue: [0, { a: 0, b: [{ c: 2 }] }] },
-                { key: 1, nodeKind: 'object', nodeValue: { a: 0, b: [{ c: 2 }] } },
-                { key: 'b', nodeKind: 'array', nodeValue: [{ c: 2 }] },
-                { key: 0, nodeKind: 'object', nodeValue: { c: 2 } },
-            ]
-        }
-    ];
-
-    for (const t of tests) {
-        const tt = t;
-        test(tt.name, function () {
-            const expected = tt.expectedCallbackArgs.reverse();
-            deepSearch(tt.node, function (key: any, node: DeepSearchCallbackNode): boolean | DeepSearchCallback {
-                if (expected.length === 0) {
-                    assert.fail('unexpected call of callback function');
-                }
-                const expectedArgs = expected.pop();
-                if (!expectedArgs) {
-                    return true;
-                }
-                if (!expectedArgs.skipKey) {
-                    assert.deepEqual(key, expectedArgs.key, 'key does not match');
-                }
-                if (!expectedArgs.skipNodeKind) {
-                    assert.deepEqual(node.kind, expectedArgs.nodeKind, 'node.kind does not match');
-                }
-                if (!expectedArgs.skipNodeValue) {
-                    assert.deepEqual(node.value, expectedArgs.nodeValue, 'node.value does not match');
-                }
-                return true;
-            });
-        });
-    }
-});
-
-suite(deepSearchForPattern.name, function () {
-    deepSearchForPattern(
-        [
-            {
-                name: 'john',
-                attributes: [
-
-                ]
-            },
-            {
-
-            }
-        ],
-        [{}]
-    );
-});
-
-suite(CharmSourceCode.name, function () {
-    function file(content: string = ''): CharmSourceCodeTreeFileEntry {
-        return { kind: 'file', data: new CharmSourceCodeFile(content, {}, true) };
-    }
-    function dir(content: CharmSourceCodeTree): CharmSourceCodeTreeDirectoryEntry {
+    function dir(content: SourceCodeTree): SourceCodeTreeDirectoryEntry {
         return { kind: 'directory', data: content };
     }
 
-    suite(CharmSourceCode.prototype.getFiles.name, function () {
+    suite(SourceCode.prototype.getFiles.name, function () {
         type TestCase = {
             name: string;
-            tree: CharmSourceCodeTree;
-            expected: [string, CharmSourceCodeFile][];
+            tree: SourceCodeTree;
+            expected: [string, SourceCodeFile][];
         };
 
         const tests: TestCase[] = [
@@ -441,10 +329,45 @@ suite(CharmSourceCode.name, function () {
             const tt = t;
             test(tt.name, function () {
                 assert.deepStrictEqual(
-                    new CharmSourceCode(tt.tree).getFiles(),
-                    new Map<string, CharmSourceCodeFile>(tt.expected)
+                    new SourceCode(tt.tree).getFiles(),
+                    new Map<string, SourceCodeFile>(tt.expected)
                 );
             });
         }
     });
+});
+
+suite(escapeRegex.name, function () {
+    type TestCase = {
+        name: string;
+        arg: string;
+        expected: string;
+    };
+
+    const tests: TestCase[] = [
+        {
+            name: 'empty',
+            arg: '',
+            expected: '',
+        }, {
+            name: 'whitespace',
+            arg: ' \t',
+            expected: ' \t',
+        }, {
+            name: 'only special chars',
+            arg: '/-\\^$*+?.()|[]{}',
+            expected: '\\/\\-\\\\\\^\\$\\*\\+\\?\\.\\(\\)\\|\\[\\]\\{\\}',
+        }, {
+            name: 'mixed',
+            arg: 'no special chars so far, /-\\^$*+?.()|[]{}, no specials chars here, too',
+            expected: 'no special chars so far, \\/\\-\\\\\\^\\$\\*\\+\\?\\.\\(\\)\\|\\[\\]\\{\\}, no specials chars here, too',
+        },
+    ];
+
+    for (const t of tests) {
+        const tt = t;
+        test(tt.name, function () {
+            assert.strictEqual(escapeRegex(tt.arg), tt.expected);
+        });
+    }
 });
