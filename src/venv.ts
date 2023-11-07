@@ -87,7 +87,11 @@ export class VirtualEnv implements vscode.Disposable {
     }
 
     async setup(): Promise<ExecutionResult> {
-        const result = await this._exec(this.charmHome.path, 'sh', [getResourceScriptPath('setup.sh')]);
+        /**
+         * It's more standard to just use the sh as shell, but the `setup.sh`
+         * script use some special bash functionalities.
+         */
+        const result = await this._exec(this.charmHome.path, 'bash', [getResourceScriptPath('setup.sh')]);
         return result;
     }
 
