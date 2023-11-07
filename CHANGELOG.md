@@ -3,6 +3,7 @@
 ## 0.0.6
 
 - Add run/debug tests feature.
+- Improve setting up tox environments.
 
 ## 0.0.5
 
