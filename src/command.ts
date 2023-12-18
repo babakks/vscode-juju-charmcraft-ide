@@ -1,6 +1,5 @@
 import TelemetryReporter from '@vscode/extension-telemetry';
 import {
-    Disposable,
     ExtensionContext, MessageItem,
     ProgressLocation,
     commands, extensions, window,
