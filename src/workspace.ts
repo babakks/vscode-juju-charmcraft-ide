@@ -183,6 +183,11 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     dispose() {
         this._disposables.forEach(x => x.dispose());
+        this._onConfigChanged.dispose();
+        this._onActionsChanged.dispose();
+        this._onMetadataChanged.dispose();
+        this._onVirtualEnvChanged.dispose();
+        this._onToxConfigChanged.dispose();
     }
 
     private _getRelativePath(uri: Uri, base?: Uri): string | undefined {

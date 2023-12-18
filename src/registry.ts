@@ -54,8 +54,14 @@ export class Registry implements Disposable {
     constructor(readonly output: OutputChannel, readonly diagnostics: DiagnosticCollection) { }
 
     dispose() {
-        this._onChanged.dispose();
         this._set.forEach(charm => this._removeAndDisposeCharm(charm));
+        this._onActiveCharmChanged.dispose();
+        this._onCharmVirtualEnvChanged.dispose();
+        this._onCharmConfigChanged.dispose();
+        this._onCharmActionsChanged.dispose();
+        this._onCharmMetadataChanged.dispose();
+        this._onCharmToxConfigChanged.dispose();
+        this._onChanged.dispose();
     }
 
     private _removeAndDisposeCharm(charm: WorkspaceCharm) {

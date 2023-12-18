@@ -161,6 +161,8 @@ export class CharmTestProvider implements Disposable {
     dispose() {
         this._disposeCurrentWatchers();
         this._disposables.forEach(x => x.dispose());
+        this._onCreateDebugAdapterTracker.dispose();
+        this._onUpdate.dispose();
     }
 
     private _disposeCurrentWatchers() {
