@@ -1,12 +1,23 @@
-import { Disposable, EventEmitter, OutputChannel, Uri, DiagnosticCollection, CancellationToken, workspace, FileType } from 'vscode';
-import * as constant from './model/common';
+import {
+    CancellationToken,
+    DiagnosticCollection,
+    Disposable,
+    EventEmitter,
+    FileType,
+    OutputChannel,
+    Uri,
+    workspace,
+} from 'vscode';
+import { ConfigManager, WorkspaceConfig } from './config';
 import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
-import { WorkspaceCharm } from './workspace';
+import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
 
 /**
  * Registry of discovered charms.
  */
 export class Registry implements Disposable {
+    private readonly _disposables: Disposable[] = [];
+
     private readonly _set = new Set<WorkspaceCharm>();
     private readonly _disposablesPerCharm = new Map<WorkspaceCharm, Disposable[]>();
 
@@ -51,10 +62,22 @@ export class Registry implements Disposable {
      */
     readonly onCharmToxConfigChanged = this._onCharmToxConfigChanged.event;
 
-    constructor(readonly output: OutputChannel, readonly diagnostics: DiagnosticCollection) { }
+    constructor(
+        readonly configManager: ConfigManager,
+        readonly output: OutputChannel,
+        readonly diagnostics: DiagnosticCollection,
+    ) {
+        this._disposables.push(
+            this.configManager.onChanged(async () => {
+                this._reset();
+                await this.refresh();
+            })
+        );
+    }
 
     dispose() {
-        this._set.forEach(charm => this._removeAndDisposeCharm(charm));
+        this._disposeCharms();
+        this._disposables.forEach(x => x.dispose());
         this._onActiveCharmChanged.dispose();
         this._onCharmVirtualEnvChanged.dispose();
         this._onCharmConfigChanged.dispose();
@@ -62,6 +85,15 @@ export class Registry implements Disposable {
         this._onCharmMetadataChanged.dispose();
         this._onCharmToxConfigChanged.dispose();
         this._onChanged.dispose();
+    }
+
+    private _disposeCharms() {
+        this._set.forEach(charm => this._removeAndDisposeCharm(charm));
+    }
+
+    private _reset() {
+        this.setActiveCharm(undefined);
+        this._disposeCharms();
     }
 
     private _removeAndDisposeCharm(charm: WorkspaceCharm) {
@@ -118,7 +150,8 @@ export class Registry implements Disposable {
         const initialKeys = Array.from(snapshotUris.keys());
 
         const newCharms: WorkspaceCharm[] = [];
-        const uris = await findCharms();
+        const config = this.configManager.getLatest();
+        const uris = await findCharms(undefined, config.ignore);
         for (const u of uris) {
             const key = u.toString();
             if (snapshotUris.has(key)) {
@@ -126,7 +159,8 @@ export class Registry implements Disposable {
                 snapshotUris.delete(key);
                 continue;
             }
-            const charm = this._instantiateCharm(u);
+            const workspaceCharmConfig = getCharmSpecificConfig(config, u);
+            const charm = this._instantiateCharm(u, workspaceCharmConfig);
             this._set.add(charm);
             newCharms.push(charm);
         }
@@ -149,8 +183,8 @@ export class Registry implements Disposable {
         }
     }
 
-    private _instantiateCharm(home: Uri): WorkspaceCharm {
-        const charm = new WorkspaceCharm(home, this.output, this.diagnostics);
+    private _instantiateCharm(home: Uri, workspaceCharmConfig?: WorkspaceCharmConfig): WorkspaceCharm {
+        const charm = new WorkspaceCharm(home, this.output, this.diagnostics, workspaceCharmConfig);
         this._disposablesPerCharm.set(charm, [
             charm.onVirtualEnvChanged(() => this._onCharmVirtualEnvChanged.fire(charm)),
             charm.onConfigChanged(() => this._onCharmConfigChanged.fire(charm)),
@@ -162,10 +196,20 @@ export class Registry implements Disposable {
     }
 }
 
+function getCharmSpecificConfig(config: WorkspaceConfig, charmHome: Uri): WorkspaceCharmConfig {
+    const relativeHome = workspace.asRelativePath(charmHome);
+    const overrideKey = Object.keys(config?.override ?? {}).find(k => k === relativeHome || relativeHome.startsWith(k + '/'));
+    const override = overrideKey !== undefined ? config.override![overrideKey] : undefined;
+    return {
+        virtualEnvDirectory: override?.virtualEnvDirectory !== undefined ? override.virtualEnvDirectory
+            : config.defaultVirtualEnvDirectory !== undefined ? config.defaultVirtualEnvDirectory : undefined,
+    };
+}
+
 const GLOB_METADATA = `**/${CHARM_FILE_METADATA_YAML}}`;
 
-export async function findCharms(token?: CancellationToken): Promise<Uri[]> {
-    const matches = await workspace.findFiles(GLOB_METADATA, undefined, undefined, token);
+export async function findCharms(token?: CancellationToken, ignorePattern?: string): Promise<Uri[]> {
+    const matches = await workspace.findFiles(GLOB_METADATA, ignorePattern, undefined, token);
     const result: Uri[] = [];
     await Promise.allSettled(
         matches.map(async uri => {
