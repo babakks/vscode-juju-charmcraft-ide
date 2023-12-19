@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.0.7
+
+- Support configuration and charm-specific overrides.
+- Fix potential memory leaks.
+- Fix unset `OLDPWD` error when setting up virtual environments.
+
 ## 0.0.6
 
 - Add run/debug tests feature.
