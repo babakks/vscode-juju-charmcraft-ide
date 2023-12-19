@@ -23,5 +23,3 @@ do
     fullname=$(tox config -e "$e" | head -n1 | grep -P --only-matching '(?<=\[).*(?=\])')
     tox exec -e "$e" -x "$fullname.allowlist_externals=sh" -- sh -c echo "Dependencies installed: $e"
 done
-
-cd -

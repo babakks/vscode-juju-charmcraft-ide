@@ -36,15 +36,9 @@ import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMe
 import { tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
 
-const WATCH_GLOB_PATTERN = `{${[
-    CHARM_DIR_VENV,
-    CHARM_FILE_CONFIG_YAML,
-    CHARM_FILE_METADATA_YAML,
-    CHARM_FILE_ACTIONS_YAML,
-    CHARM_FILE_TOX_INI,
-    `${CHARM_DIR_SRC}/**/*.py`,
-    `${CHARM_DIR_TESTS}/**/*.py`,
-].join(',')}}`;
+export interface WorkspaceCharmConfig {
+    virtualEnvDirectory?: string;
+}
 
 export class WorkspaceCharm implements vscode.Disposable {
     private _disposables: Disposable[] = [];
@@ -127,6 +121,8 @@ export class WorkspaceCharm implements vscode.Disposable {
      */
     readonly onMetadataChanged = this._onMetadataChanged.event;
 
+    private readonly _virtualEnvDirectory: string;
+
     private _hasVirtualEnv: boolean = false;
     private readonly _onVirtualEnvChanged = new vscode.EventEmitter<void>();
     /**
@@ -159,8 +155,10 @@ export class WorkspaceCharm implements vscode.Disposable {
     constructor(
         readonly home: Uri,
         readonly output: vscode.OutputChannel,
-        readonly diagnostics: vscode.DiagnosticCollection
+        readonly diagnostics: vscode.DiagnosticCollection,
+        readonly config?: WorkspaceCharmConfig,
     ) {
+        this._virtualEnvDirectory = config?.virtualEnvDirectory ?? CHARM_DIR_VENV;
         this.model = new Charm();
         this.live = new Charm();
         this.actionsUri = Uri.joinPath(this.home, CHARM_FILE_ACTIONS_YAML);
@@ -171,10 +169,21 @@ export class WorkspaceCharm implements vscode.Disposable {
         this.sourceCodeUris = [this.srcUri, this.testsUri];
         this.libUri = Uri.joinPath(this.home, CHARM_DIR_LIB);
         this.configUri = Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
-        this.virtualEnvUri = Uri.joinPath(this.home, CHARM_DIR_VENV);
+        this.virtualEnvUri = Uri.joinPath(this.home, this._virtualEnvDirectory);
+
+        const watchGlobPattern = `{${[
+            this._virtualEnvDirectory,
+            CHARM_FILE_CONFIG_YAML,
+            CHARM_FILE_METADATA_YAML,
+            CHARM_FILE_ACTIONS_YAML,
+            CHARM_FILE_TOX_INI,
+            `${CHARM_DIR_SRC}/**/*.py`,
+            `${CHARM_DIR_TESTS}/**/*.py`,
+        ].join(',')}}`;
+
         this._disposables.push(
-            this.virtualEnv = new VirtualEnv(this.home, CHARM_DIR_VENV),
-            this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(home, WATCH_GLOB_PATTERN)),
+            this.virtualEnv = new VirtualEnv(this.home, this._virtualEnvDirectory),
+            this.watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(home, watchGlobPattern)),
             this.watcher.onDidChange(async e => await this._onFileSystemEvent('change', e)),
             this.watcher.onDidCreate(async e => await this._onFileSystemEvent('create', e)),
             this.watcher.onDidDelete(async e => await this._onFileSystemEvent('delete', e)),
@@ -183,6 +192,11 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     dispose() {
         this._disposables.forEach(x => x.dispose());
+        this._onConfigChanged.dispose();
+        this._onActionsChanged.dispose();
+        this._onMetadataChanged.dispose();
+        this._onVirtualEnvChanged.dispose();
+        this._onToxConfigChanged.dispose();
     }
 
     private _getRelativePath(uri: Uri, base?: Uri): string | undefined {

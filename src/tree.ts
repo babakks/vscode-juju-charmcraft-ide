@@ -84,6 +84,7 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
     dispose() {
         this._disposables.forEach(x => x.dispose());
+        this._onDidChangeTreeData.dispose();
     }
 
     triggerRefresh() {

@@ -21,6 +21,7 @@ import { integrateWithYAMLExtension } from './schema';
 import { CharmTestProvider } from './test';
 import { CharmcraftTreeDataProvider } from './tree';
 import { DocumentWatcher } from './watcher';
+import { ConfigManager } from './config';
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 
@@ -37,7 +38,10 @@ export async function activate(context: ExtensionContext) {
     const diagnostics = languages.createDiagnosticCollection('Charmcraft IDE');
     context.subscriptions.push(diagnostics);
 
-    const registry = new Registry(output, diagnostics);
+    const configManager = new ConfigManager();
+    context.subscriptions.push(configManager);
+
+    const registry = new Registry(configManager, output, diagnostics);
     context.subscriptions.push(registry);
     await registry.refresh();
 
