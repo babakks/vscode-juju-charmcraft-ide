@@ -277,6 +277,8 @@ export interface CharmToxConfig {
 
 export interface CharmToxConfigSection {
     name: string;
+    env: string;
+    parent: string;
 }
 
 export class SourceCodeFile {

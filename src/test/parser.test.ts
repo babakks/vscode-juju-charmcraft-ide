@@ -1873,6 +1873,8 @@ suite(parseToxINI.name, function () {
                 sections: {
                     section: {
                         name: 'section',
+                        env: 'section',
+                        parent: '',
                     },
                 },
             },
@@ -1886,6 +1888,24 @@ suite(parseToxINI.name, function () {
                 sections: {
                     section: {
                         name: 'section',
+                        env: 'section',
+                        parent: '',
+                    },
+                },
+            },
+        }, {
+            name: 'non-empty section with parent',
+            content: unindent(`
+                [parent:env]
+                key=value
+            `),
+            expected: {
+                sections: {
+                     // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'parent:env': {
+                        name: 'parent:env',
+                        env: 'env',
+                        parent: 'parent',
                     },
                 },
             },
@@ -1901,9 +1921,37 @@ suite(parseToxINI.name, function () {
                 sections: {
                     'a': {
                         name: 'a',
+                        env: 'a',
+                        parent: '',
                     },
                     'b': {
                         name: 'b',
+                        env: 'b',
+                        parent: '',
+                    },
+                },
+            },
+        },{
+            name: 'multiple non-empty sections',
+            content: unindent(`
+                [parent-a:a]
+                key=value
+                [parent-b:b]
+                key=value
+            `),
+            expected: {
+                sections: {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'parent-a:a': {
+                        name: 'parent-a:a',
+                        env: 'a',
+                        parent: 'parent-a',
+                    },
+                     // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'parent-b:b': {
+                        name: 'parent-b:b',
+                        env: 'b',
+                        parent: 'parent-b',
                     },
                 },
             },
