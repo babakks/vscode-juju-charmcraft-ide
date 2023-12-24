@@ -1,10 +1,105 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
-import { Linter, LinterMessage, LinterOutputParser, codespellOutputParser, flake8OutputParser, mypyOutputParser, pydocstyleOutputParser, pylintOutputParser, ruffOutputParser } from "../lint.parser";
+import { Linter, LinterMessage, LinterOutputParser, codespellOutputParser, flake8OutputParser, mypyOutputParser, parseGenericLinterOutput, pydocstyleOutputParser, pylintOutputParser, ruffOutputParser } from "../lint.parser";
 import { Range } from "../model/common";
 import { newRange, unindent } from "./util";
 
-suite.only(flake8OutputParser.name, function () {
+suite(parseGenericLinterOutput.name, function () {
+    type TestCase = {
+        name: string;
+        content: string;
+        expected: LinterMessage[];
+    };
+    const tests: TestCase[] = [
+        {
+            name: 'empty',
+            content: '',
+            expected: [],
+        }, {
+            name: 'whitespace',
+            content: ' ',
+            expected: [],
+        }, {
+            name: 'mixed whitespace and \\n',
+            content: ' \n  \n ',
+            expected: [],
+        }, {
+            name: 'possible cases',
+            content: unindent(`
+                /absolute/path:11:normal with no whitespace
+                /absolute/path:12: normal with whitespace before message
+                /absolute/path:13 no trailing colon after line number
+                /absolute/path:14:99: with col number
+                /absolute/path:15:99 with col number, without trailing colon
+                relative/path:21:normal with no whitespace
+                relative/path:22: normal with whitespace before message
+                relative/path:23 no trailing colon after line number
+                relative/path:24:99: with col number
+                relative/path:25:99 with col number, without trailing colon
+            `),
+            expected: [{
+                linter: undefined,
+                absolutePath: '/absolute/path',
+                range: newRange(10, 0, 11, 0),
+                message: 'normal with no whitespace',
+            }, {
+                linter: undefined,
+                absolutePath: '/absolute/path',
+                range: newRange(11, 0, 12, 0),
+                message: 'normal with whitespace before message',
+            }, {
+                linter: undefined,
+                absolutePath: '/absolute/path',
+                range: newRange(12, 0, 13, 0),
+                message: 'no trailing colon after line number',
+            }, {
+                linter: undefined,
+                absolutePath: '/absolute/path',
+                range: newRange(13, 99, 14, 0),
+                message: 'with col number',
+            }, {
+                linter: undefined,
+                absolutePath: '/absolute/path',
+                range: newRange(14, 99, 15, 0),
+                message: 'with col number, without trailing colon',
+            }, {
+                linter: undefined,
+                relativePath: 'relative/path',
+                range: newRange(20, 0, 21, 0),
+                message: 'normal with no whitespace',
+            }, {
+                linter: undefined,
+                relativePath: 'relative/path',
+                range: newRange(21, 0, 22, 0),
+                message: 'normal with whitespace before message',
+            }, {
+                linter: undefined,
+                relativePath: 'relative/path',
+                range: newRange(22, 0, 23, 0),
+                message: 'no trailing colon after line number',
+            }, {
+                linter: undefined,
+                relativePath: 'relative/path',
+                range: newRange(23, 99, 24, 0),
+                message: 'with col number',
+            }, {
+                linter: undefined,
+                relativePath: 'relative/path',
+                range: newRange(24, 99, 25, 0),
+                message: 'with col number, without trailing colon',
+            }],
+        },
+    ];
+
+    for (const t of tests) {
+        const tt = t;
+        test(tt.name, function () {
+            assert.deepStrictEqual(parseGenericLinterOutput(tt.content), tt.expected);
+        });
+    }
+});
+
+suite(flake8OutputParser.name, function () {
     type TestCase = {
         name: string;
         content: string;
@@ -68,7 +163,7 @@ suite.only(flake8OutputParser.name, function () {
     }
 });
 
-suite.only(pylintOutputParser.name, function () {
+suite(pylintOutputParser.name, function () {
     type TestCase = {
         name: string;
         content: string;
@@ -132,7 +227,7 @@ suite.only(pylintOutputParser.name, function () {
     }
 });
 
-suite.only(ruffOutputParser.name, function () {
+suite(ruffOutputParser.name, function () {
     type TestCase = {
         name: string;
         content: string;
@@ -196,7 +291,7 @@ suite.only(ruffOutputParser.name, function () {
     }
 });
 
-suite.only(mypyOutputParser.name, function () {
+suite(mypyOutputParser.name, function () {
     type TestCase = {
         name: string;
         content: string;
@@ -260,7 +355,7 @@ suite.only(mypyOutputParser.name, function () {
     }
 });
 
-suite.only(codespellOutputParser.name, function () {
+suite(codespellOutputParser.name, function () {
     type TestCase = {
         name: string;
         content: string;
@@ -325,7 +420,7 @@ suite.only(codespellOutputParser.name, function () {
 });
 
 
-suite.only(pydocstyleOutputParser.name, function () {
+suite(pydocstyleOutputParser.name, function () {
     type TestCase = {
         name: string;
         content: string;
