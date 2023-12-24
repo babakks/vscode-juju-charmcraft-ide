@@ -14,6 +14,7 @@ import {
     CharmConfig,
     CharmMetadata,
     CharmToxConfig,
+    CharmToxConfigSection,
     SourceCode,
     SourceCodeFile,
     SourceCodeTree,
@@ -30,14 +31,19 @@ import {
     CHARM_FILE_ACTIONS_YAML,
     CHARM_FILE_CONFIG_YAML,
     CHARM_FILE_METADATA_YAML,
-    CHARM_FILE_TOX_INI
+    CHARM_FILE_TOX_INI,
+    CHARM_TOX_LINT_SECTION
 } from './model/common';
 import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from './parser';
-import { tryReadWorkspaceFileAsText } from './util';
+import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
+import { LinterMessage, parseGenericLinterOutput, parseToxLinterOutput } from './lint.parser';
+import { BackgroundWorkerManager } from './worker';
+import { WorkspaceRunLintOnSaveConfig } from './config';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;
+    runLintOnSave?: WorkspaceRunLintOnSaveConfig;
 }
 
 export class WorkspaceCharm implements vscode.Disposable {
@@ -154,8 +160,10 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     constructor(
         readonly home: Uri,
+        readonly backgroundWorkerManager: BackgroundWorkerManager,
         readonly output: vscode.OutputChannel,
         readonly diagnostics: vscode.DiagnosticCollection,
+        readonly lintDiagnostics: vscode.DiagnosticCollection,
         readonly config?: WorkspaceCharmConfig,
     ) {
         this._virtualEnvDirectory = config?.virtualEnvDirectory ?? CHARM_DIR_VENV;
@@ -291,6 +299,18 @@ export class WorkspaceCharm implements vscode.Disposable {
         this.diagnostics.set(uri, entries);
     }
 
+    private _updateLintDiagnostics(map: Map<string, vscode.Diagnostic[]>) {
+        for (const [relativePath, diags] of map) {
+            const uri = Uri.joinPath(this.home, relativePath);
+            this._updateLintDiagnosticsByURI(uri, diags);
+        }
+    }
+
+    private _updateLintDiagnosticsByURI(uri: Uri, entries: vscode.Diagnostic[]) {
+        this.lintDiagnostics.delete(uri);
+        this.lintDiagnostics.set(uri, entries);
+    }
+
     async refresh() {
         await Promise.allSettled([
             this._refreshVirtualEnv(),
@@ -392,6 +412,73 @@ export class WorkspaceCharm implements vscode.Disposable {
 
         this.model.sourceCode.updateFile(relativePath, file);
         await this.updateLiveSourceCodeFile(uri);
+
+        // linting on-save.
+        await this._refreshCodeLinterDiagnostics();
+    }
+
+    private async _refreshCodeLinterDiagnostics() {
+        if (this.config?.runLintOnSave?.enabled === false) {
+            return;
+        }
+        this._updateLintDiagnostics(await this._getSourceCodeLinterDiagnostics());
+    }
+
+    private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
+        if (!this.hasVirtualEnv) {
+            return new Map();
+        }
+
+        const commands = this.config?.runLintOnSave?.commands ?? [];
+        const toxSections = this.config?.runLintOnSave?.tox ?? [CHARM_TOX_LINT_SECTION];
+        const correspondingToxSections = toxSections.map(s =>
+            s in this.model.toxConfig.sections
+                ? this.model.toxConfig.sections[s]
+                : Object.values(this.model.toxConfig.sections).find(v => v.env === s)
+        ).filter((s): s is CharmToxConfigSection => !!s);
+
+        if (!correspondingToxSections.length) {
+            return new Map();
+        }
+
+        const executions = [
+            ...correspondingToxSections.map(x =>
+                this.backgroundWorkerManager.execute(x.name, () =>
+                    this.virtualEnv.exec('tox', ['-e', x.env, '-x', `${x.name}.ignore_errors=True`])
+                )),
+            ...commands.map(x => this.virtualEnv.execInShell(x)),
+        ];
+
+        const results = await Promise.allSettled(executions);
+        const entries: LinterMessage[] = [];
+        for (const result of results) {
+            if (result.status === 'rejected') {
+                continue;
+            }
+            entries.push(
+                ...parseToxLinterOutput(result.value.stdout),
+                ...parseGenericLinterOutput(result.value.stderr),
+            );
+        }
+
+        const homePath = this.home.path + '/';
+        const map = new Map<string, vscode.Diagnostic[]>();
+        for (const x of entries) {
+            const path = x.relativePath ?? (x.absolutePath?.startsWith(homePath) && x.absolutePath.substring(homePath.length)) ?? undefined;
+            if (!path) {
+                continue;
+            }
+            if (!map.has(path)) {
+                map.set(path, []);
+            }
+            map.get(path)?.push(toDiagnostic(x));
+        }
+
+        return map;
+
+        function toDiagnostic(entry: LinterMessage): vscode.Diagnostic {
+            return new vscode.Diagnostic(rangeToVSCodeRange(entry.range), `(${entry.linter ?? 'generic'}:) ${entry.message}`);
+        }
     }
 
     private async _refreshSourceCodeTree() {
@@ -402,6 +489,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         this.model.updateSourceCode(new SourceCode(tree));
         this.live.updateSourceCode(new SourceCode(tree));
         this._updateDiagnostics(getAllSourceCodeDiagnostics(this.live));
+        await this._refreshCodeLinterDiagnostics();
     }
 
     async updateLiveFile(uri: Uri) {

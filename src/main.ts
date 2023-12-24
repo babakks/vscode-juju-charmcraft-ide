@@ -22,6 +22,7 @@ import { CharmTestProvider } from './test';
 import { CharmcraftTreeDataProvider } from './tree';
 import { DocumentWatcher } from './watcher';
 import { ConfigManager } from './config';
+import { BackgroundWorkerManager } from './worker';
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';
 
@@ -38,10 +39,18 @@ export async function activate(context: ExtensionContext) {
     const diagnostics = languages.createDiagnosticCollection('Charmcraft IDE');
     context.subscriptions.push(diagnostics);
 
+    const lintDiagnostics = languages.createDiagnosticCollection('Charmcraft IDE (Lint)');
+    context.subscriptions.push(lintDiagnostics);
+
     const configManager = new ConfigManager();
     context.subscriptions.push(configManager);
 
-    const registry = new Registry(configManager, output, diagnostics);
+    const backgroundWorkerStatusBarItem = window.createStatusBarItem('background-worker');
+    context.subscriptions.push(backgroundWorkerStatusBarItem);
+
+    const backgroundWorkerManager = new BackgroundWorkerManager(backgroundWorkerStatusBarItem, output);
+
+    const registry = new Registry(configManager, backgroundWorkerManager, output, diagnostics, lintDiagnostics);
     context.subscriptions.push(registry);
     await registry.refresh();
 
