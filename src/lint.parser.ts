@@ -1,3 +1,4 @@
+import path = require("path");
 import { Range } from "./model/common";
 
 export type Linter =
@@ -9,7 +10,7 @@ export type Linter =
     | 'pydocstyle';
 
 export interface LinterMessage {
-    linter: Linter;
+    linter: Linter | undefined;
     absolutePath?: string;
     relativePath?: string;
     range: Range;
@@ -31,7 +32,7 @@ const parsers = new Map<Linter, LinterOutputParser>([
 const commandHeadPattern = /^(?<env>.*): commands\[(?<cmdIndex>\d+)\]> (?<cmd>.*)$/;
 const commandExitPattern = /^(?<env>.*): exit \d+ \(.*?\) .*?> (?<cmd>.*?)(?: |$)/;
 const shellWrappedCommandPattern = /^(?:sh|bash|zsh|fish) +-c +['"]?(?<linter>.*?)(?: |$)/;
-export function parseToxLinterOutput(output: string, toxEnvironment: string): LinterMessage[] {
+export function parseToxLinterOutput(output: string): LinterMessage[] {
     const lines = output.split(/\r?\n/g);
     const detectedLinters: { name: string, start: number, end?: number }[] = [];
     for (let n = 0; n < lines.length; n++) {
@@ -39,7 +40,7 @@ export function parseToxLinterOutput(output: string, toxEnvironment: string): Li
 
         // Note that the "command exit" lines only appear when the corresponding command exits with a non-zero code.
         const matchEnd = line.match(commandExitPattern);
-        if (matchEnd && matchEnd.groups!['env'] === toxEnvironment) {
+        if (matchEnd) {
             const linter = getLinterFromCommand(matchEnd.groups!['cmd']);
             if (detectedLinters[-1 + detectedLinters.length]?.name === linter) {
                 detectedLinters[-1 + detectedLinters.length].end = n;
@@ -48,7 +49,7 @@ export function parseToxLinterOutput(output: string, toxEnvironment: string): Li
         }
 
         const match = line.match(commandHeadPattern);
-        if (!match || match.groups!['env'] !== toxEnvironment) {
+        if (!match) {
             continue;
         }
         const linter = getLinterFromCommand(match.groups!['cmd']);
@@ -74,6 +75,35 @@ export function parseToxLinterOutput(output: string, toxEnvironment: string): Li
         }
         return command.substring(0, command.indexOf(' '));
     }
+}
+
+const _GENERIC_PATTERN = /^(?<path>.*?):(?<line>\d+):?(?:(?<col>\d+):?)?(?<message>.*)$/;
+export function parseGenericLinterOutput(output: string): LinterMessage[] {
+    const lines = output.split(/\r?\n/g);
+    const result: LinterMessage[] = [];
+    for (const line of lines) {
+        const match = line.match(_GENERIC_PATTERN);
+        if (!match) {
+            continue;
+        }
+
+        const filePath = match.groups!['path']!;
+        const lineNumber = parseInt(match.groups!['line']!);
+        const colNumber = match.groups!['col'] !== undefined ? parseInt(match.groups!['col']) : undefined;
+        const range: Range = {
+            start: { line: -1 + lineNumber, character: colNumber ?? 0 },
+            end: { line: lineNumber, character: 0 },
+        };
+
+        const message = match.groups!['message'].trim();
+        result.push({
+            linter: undefined,
+            range,
+            message,
+            ...(path.isAbsolute(filePath) ? { absolutePath: filePath } : { relativePath: filePath }),
+        });
+    }
+    return result;
 }
 
 const _FLAKE8_PATTERN = /^(?<absolutePath>.*?):(?<line>\d+):(?<col>\d+): (?<message>.*)$/;
