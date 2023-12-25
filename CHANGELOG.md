@@ -2,7 +2,7 @@
 
 ## 0.0.8
 
-- Add "Run Lint on Save" feature.
+- Add *Run Lint on Save* feature.
 
 ## 0.0.7
 
