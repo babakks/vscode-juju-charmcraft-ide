@@ -3,6 +3,7 @@ import { suite, test } from "mocha";
 import { CharmActions, CharmConfig, CharmToxConfig, MapWithNode, Problem, SequenceWithNode, WithNode } from "../model/charm";
 import { Range } from "../model/common";
 import { YAMLParser, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from "../parser";
+import { newRange, unindent } from "./util";
 
 function cursorOverMap<T>(map: MapWithNode<T> | undefined) {
     let index = -1;
@@ -11,33 +12,6 @@ function cursorOverMap<T>(map: MapWithNode<T> | undefined) {
         next() { return entries[++index][1]; },
         get current() { return entries[index][1]; },
     };
-}
-
-function newRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
-    return {
-        start: { line: startLine, character: startCharacter },
-        end: { line: endLine, character: endCharacter },
-    };
-}
-
-function unindent(s: string): string {
-    const lines = s.split('\n');
-    if (lines[0] !== '') {
-        throw new Error('First line should be empty');
-    }
-    lines.splice(0, 1);
-
-    let indent = 0;
-    let index = 0;
-    const pattern = /^(\s+)/;
-    for (; index < lines.length; index++) {
-        const match = lines[index].match(pattern);
-        if (match) {
-            indent = match[1].length;
-            break;
-        }
-    }
-    return lines.map((x, i) => i >= index ? x.substring(indent) : x).join('\n').trimEnd();
 }
 
 suite(YAMLParser.name, function () {
@@ -1899,6 +1873,8 @@ suite(parseToxINI.name, function () {
                 sections: {
                     section: {
                         name: 'section',
+                        env: 'section',
+                        parent: '',
                     },
                 },
             },
@@ -1912,6 +1888,24 @@ suite(parseToxINI.name, function () {
                 sections: {
                     section: {
                         name: 'section',
+                        env: 'section',
+                        parent: '',
+                    },
+                },
+            },
+        }, {
+            name: 'non-empty section with parent',
+            content: unindent(`
+                [parent:env]
+                key=value
+            `),
+            expected: {
+                sections: {
+                     // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'parent:env': {
+                        name: 'parent:env',
+                        env: 'env',
+                        parent: 'parent',
                     },
                 },
             },
@@ -1927,9 +1921,37 @@ suite(parseToxINI.name, function () {
                 sections: {
                     'a': {
                         name: 'a',
+                        env: 'a',
+                        parent: '',
                     },
                     'b': {
                         name: 'b',
+                        env: 'b',
+                        parent: '',
+                    },
+                },
+            },
+        },{
+            name: 'multiple non-empty sections',
+            content: unindent(`
+                [parent-a:a]
+                key=value
+                [parent-b:b]
+                key=value
+            `),
+            expected: {
+                sections: {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'parent-a:a': {
+                        name: 'parent-a:a',
+                        env: 'a',
+                        parent: 'parent-a',
+                    },
+                     // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'parent-b:b': {
+                        name: 'parent-b:b',
+                        env: 'b',
+                        parent: 'parent-b',
                     },
                 },
             },

@@ -276,7 +276,20 @@ export interface CharmToxConfig {
 }
 
 export interface CharmToxConfigSection {
+    /**
+     * Section name, e.g., `testenv:lint`.
+     */
     name: string;
+
+    /**
+     * Environment name, e.g., `lint`.
+     */
+    env: string;
+
+    /**
+     * Environment parent name, e.g., `testenv`.
+     */
+    parent: string;
 }
 
 export class SourceCodeFile {

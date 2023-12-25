@@ -10,6 +10,8 @@ export const CHARM_FILE_CHARMCRAFT_YAML = 'charmcraft.yaml';
 export const CHARM_FILE_TOX_INI = 'tox.ini';
 export const CHARM_SOURCE_CODE_CHARM_BASE_CLASS = 'CharmBase';
 
+export const CHARM_TOX_LINT_SECTION = 'testenv:lint';
+
 export interface Position {
     /**
      * Zero-base line number.

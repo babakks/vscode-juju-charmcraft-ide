@@ -11,6 +11,7 @@ import {
 import { ConfigManager, WorkspaceConfig } from './config';
 import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
 import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
+import { BackgroundWorkerManager } from './worker';
 
 /**
  * Registry of discovered charms.
@@ -64,8 +65,10 @@ export class Registry implements Disposable {
 
     constructor(
         readonly configManager: ConfigManager,
+        readonly backgroundWorkerManager: BackgroundWorkerManager,
         readonly output: OutputChannel,
         readonly diagnostics: DiagnosticCollection,
+        readonly lintDiagnostics: DiagnosticCollection,
     ) {
         this._disposables.push(
             this.configManager.onChanged(async () => {
@@ -184,7 +187,7 @@ export class Registry implements Disposable {
     }
 
     private _instantiateCharm(home: Uri, workspaceCharmConfig?: WorkspaceCharmConfig): WorkspaceCharm {
-        const charm = new WorkspaceCharm(home, this.output, this.diagnostics, workspaceCharmConfig);
+        const charm = new WorkspaceCharm(home, this.backgroundWorkerManager, this.output, this.diagnostics, this.lintDiagnostics, workspaceCharmConfig);
         this._disposablesPerCharm.set(charm, [
             charm.onVirtualEnvChanged(() => this._onCharmVirtualEnvChanged.fire(charm)),
             charm.onConfigChanged(() => this._onCharmConfigChanged.fire(charm)),
@@ -200,10 +203,22 @@ function getCharmSpecificConfig(config: WorkspaceConfig, charmHome: Uri): Worksp
     const relativeHome = workspace.asRelativePath(charmHome);
     const overrideKey = Object.keys(config?.override ?? {}).find(k => k === relativeHome || relativeHome.startsWith(k + '/'));
     const override = overrideKey !== undefined ? config.override![overrideKey] : undefined;
-    return {
-        virtualEnvDirectory: override?.virtualEnvDirectory !== undefined ? override.virtualEnvDirectory
-            : config.defaultVirtualEnvDirectory !== undefined ? config.defaultVirtualEnvDirectory : undefined,
-    };
+
+    const result: WorkspaceCharmConfig = {};
+
+    const virtualEnvDirectory = override?.virtualEnvDirectory !== undefined ? override.virtualEnvDirectory
+        : config.defaultVirtualEnvDirectory !== undefined ? config.defaultVirtualEnvDirectory : undefined;
+    if (virtualEnvDirectory !== undefined) {
+        result.virtualEnvDirectory = virtualEnvDirectory;
+    }
+
+    const runLintOnSave = override?.runLintOnSave && config.runLintOnSave ? { ...config.runLintOnSave, ...override.runLintOnSave }
+        : (override?.runLintOnSave ?? config.runLintOnSave);
+    if (runLintOnSave !== undefined) {
+        result.runLintOnSave = runLintOnSave;
+    }
+
+    return result;
 }
 
 const GLOB_METADATA = `**/${CHARM_FILE_METADATA_YAML}}`;

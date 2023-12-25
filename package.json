@@ -2,7 +2,7 @@
     "name": "vscode-juju-charmcraft-ide",
     "displayName": "Charmcraft IDE",
     "description": "VS Code extension for Juju Charm development",
-    "version": "0.0.7",
+    "version": "0.0.8",
     "publisher": "babakks",
     "repository": {
         "type": "git",
@@ -135,13 +135,48 @@
             "properties": {
                 "charmcraft-ide.ignore": {
                     "type": "string",
-                    "default": "",
                     "markdownDescription": "Relative Glob pattern of path of charms to be ignored. For example, `tmp` or `tmp/charms/**`."
                 },
                 "charmcraft-ide.defaultVirtualEnvDirectory": {
                     "type": "string",
-                    "default": "venv",
-                    "markdownDescription": "Default directory name to setup/detect virtual environments. This value affects all charms in a workspace, so if you need to change it for some specific charm, use the `override` parameter."
+                    "markdownDescription": "Default directory name to setup/detect virtual environments (default is `venv`). This value affects all charms in a workspace, so if you need to change it for some specific charm, use the `override` parameter."
+                },
+                "charmcraft-ide.runLintOnSave": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean",
+                            "markdownDescription": "Enables/disables running linter on save. Default is `true`."
+                        },
+                        "tox": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "markdownDescription": "Linting-related Tox environment(s)/section(s) to run on save. Default is `[\"testenv:lint\"]`."
+                        },
+                        "commands": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "markdownDescription": "Linting-related commands to run on save. Default is empty."
+                        },
+                        "exclude": {
+                            "type": "array",
+                            "markdownDescription": "Array of linters to exclude their diagnostics; for example, `[\"flake8\"]`.",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "include": {
+                            "type": "array",
+                            "markdownDescription": "Array of linters to include their diagnostics and exclude other linters'; for example, `[\"flake8\"]`.",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
                 },
                 "charmcraft-ide.override": {
                     "type": "object",
@@ -154,6 +189,43 @@
                                     "type": "string",
                                     "default": "venv",
                                     "markdownDescription": "Directory name to setup/detect virtual environment for the associated charm."
+                                },
+                                "runLintOnSave": {
+                                    "type": "object",
+                                    "properties": {
+                                        "enabled": {
+                                            "type": "boolean",
+                                            "markdownDescription": "Enables/disables running linter on save. Default is `true`."
+                                        },
+                                        "tox": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "markdownDescription": "Linting-related Tox environment(s)/section(s) to run on save. Default is `[\"testenv:lint\"]`."
+                                        },
+                                        "commands": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "markdownDescription": "Linting-related commands to run on save. Default is empty."
+                                        },
+                                        "exclude": {
+                                            "type": "array",
+                                            "markdownDescription": "Array of linters to exclude their diagnostics; for example, `[\"flake8\"]`.",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "include": {
+                                            "type": "array",
+                                            "markdownDescription": "Array of linters to include their diagnostics and exclude other linters'; for example, `[\"flake8\"]`.",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

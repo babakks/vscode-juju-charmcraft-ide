@@ -794,6 +794,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
     }
 }
 
+const _TOX_SECTION_PATTERN = /(?<parent>.*):(?<env>[^:]+)$/
 export function parseToxINI(text: string): CharmToxConfig {
     let parsed = {};
     try {
@@ -815,8 +816,11 @@ export function parseToxINI(text: string): CharmToxConfig {
     return result;
 
     function parseSection(name: string, v: Object): CharmToxConfigSection | undefined {
+        const match = name.match(_TOX_SECTION_PATTERN);
         const result: CharmToxConfigSection = {
             name,
+            env: match?.groups!['env'] ?? name,
+            parent: match?.groups!['parent'] ?? '',
             /*
              * NOTE the `ini` package does not support multiline values which is common
              * for `description` or `commands` in `tox.ini` file. Therefore, we just

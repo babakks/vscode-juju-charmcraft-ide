@@ -1,4 +1,4 @@
-import { Disposable, EventEmitter, workspace } from 'vscode';
+import { Disposable, EventEmitter, WorkspaceConfiguration, workspace } from 'vscode';
 
 /**
  * Workspace/global-scoped configuration parameters.
@@ -14,6 +14,8 @@ export interface WorkspaceConfig {
      */
     defaultVirtualEnvDirectory?: string;
 
+    runLintOnSave?: WorkspaceRunLintOnSaveConfig;
+
     /**
      * Charm-specific overrides. Keys are relative paths of charm directories or
      * their parent directories.
@@ -25,15 +27,50 @@ export interface WorkspaceConfig {
     };
 }
 
+export interface WorkspaceRunLintOnSaveConfig {
+    enabled?: boolean
+
+    /**
+     * Array of linting-related Tox environments (sections, e.g.,
+     * `['testenv:lint']`) to run on save.
+     */
+    tox?: string[];
+
+    /**
+     * Array of linting-related commands to run on save.
+     */
+    commands?: string[];
+
+    /**
+     * Array of linters to exclude their diagnostics; for example, `['flake8']`.
+     */
+    exclude?: string[];
+
+    /**
+     * Array of linters to include their diagnostics and exclude other linters';
+     * for example, `['flake8']`.
+     */
+    include?: string[];
+}
+
 export interface WorkspaceOverrideConfig {
     virtualEnvDirectory?: string;
+    runLintOnSave?: WorkspaceRunLintOnSaveConfig;
 }
 
 const CONFIG_SECTION = 'charmcraft-ide';
 const CONFIG_KEY_IGNORE = 'ignore';
 const CONFIG_KEY_DEFAULT_VENV_DIR = 'defaultVirtualEnvDirectory';
+const CONFIG_KEY_RUN_LINT_ON_SAVE = 'runLintOnSave';
 const CONFIG_KEY_OVERRIDE = 'override';
 const CONFIG_KEY_OVERRIDE_VENV_DIR = 'virtualEnvDirectory';
+const CONFIG_KEY_OVERRIDE_RUN_LINT_ON_SAVE = 'runLintOnSave';
+
+const CONFIG_SUBKEY_RUN_LINT_ON_SAVE_ENABLED = 'enabled';
+const CONFIG_SUBKEY_RUN_LINT_ON_SAVE_TOX = 'tox';
+const CONFIG_SUBKEY_RUN_LINT_ON_SAVE_COMMANDS = 'commands';
+const CONFIG_SUBKEY_RUN_LINT_ON_SAVE_EXCLUDE = 'exclude';
+const CONFIG_SUBKEY_RUN_LINT_ON_SAVE_INCLUDE = 'include';
 
 export class ConfigManager implements Disposable {
     private readonly _disposables: Disposable[] = [];
@@ -69,22 +106,64 @@ export class ConfigManager implements Disposable {
      */
     getLatest(): WorkspaceConfig {
         const config = workspace.getConfiguration(CONFIG_SECTION);
-        return {
-            ignore: config.get<string>(CONFIG_KEY_IGNORE),
-            defaultVirtualEnvDirectory: config.get<string>(CONFIG_KEY_DEFAULT_VENV_DIR),
-            override: loadOverride(),
-        };
 
-        function loadOverride(): WorkspaceConfig['override'] {
-            const map = config.get<{ [key: string]: { [key: string]: any } }>(CONFIG_KEY_OVERRIDE);
-            if (!map) {
+        const result: WorkspaceConfig = {};
+
+        /*
+         * Note that here to avoid putting default values in more than one
+         * place (i.e., in configuration schema inside `package.json`), we need
+         * to read parameters with a custom function.
+         *
+         * Also note that `config.get` method returns empty/zero for parameters
+         * that don't have a pre-defined default value in configuration schema.
+         */
+
+        const ignore = optionalString(readParameterIgnoreDefault(CONFIG_KEY_IGNORE));
+        if (ignore !== undefined) {
+            result.ignore = ignore;
+        }
+
+        const defaultVirtualEnvDirectory = optionalString(readParameterIgnoreDefault(CONFIG_KEY_DEFAULT_VENV_DIR));
+        if (defaultVirtualEnvDirectory !== undefined) {
+            result.defaultVirtualEnvDirectory = defaultVirtualEnvDirectory;
+        }
+
+        const runLintOnSave = parseRunLintOnSave(readParameterIgnoreDefault(CONFIG_KEY_RUN_LINT_ON_SAVE));
+        if (runLintOnSave !== undefined) {
+            result.runLintOnSave = runLintOnSave;
+        }
+
+        const override = loadOverride(readParameterIgnoreDefault(CONFIG_KEY_OVERRIDE));
+        if (override !== undefined) {
+            result.override = override;
+        }
+
+        return result;
+
+        function loadOverride(raw: any): WorkspaceConfig['override'] {
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
                 return undefined;
             }
             const result: WorkspaceConfig['override'] = {};
-            for (const [k, v] of Object.entries(map)) {
-                result[sanitizeKey(k)] = {
-                    virtualEnvDirectory: v[CONFIG_KEY_OVERRIDE_VENV_DIR],
-                };
+            for (const k of Object.keys(raw)) {
+                const v = raw[k] as any;
+                if (!v || typeof v !== 'object' || Array.isArray(v)) {
+                    continue;
+                }
+
+                const entry: WorkspaceOverrideConfig = {};
+
+                const virtualEnvDirectory = optionalString(v[CONFIG_KEY_OVERRIDE_VENV_DIR]);
+                if (virtualEnvDirectory !== undefined) {
+                    entry.virtualEnvDirectory = virtualEnvDirectory;
+                }
+
+                const runLintOnSave = parseRunLintOnSave(v[CONFIG_KEY_OVERRIDE_RUN_LINT_ON_SAVE]);
+                if (runLintOnSave !== undefined) {
+                    entry.runLintOnSave = runLintOnSave;
+                }
+
+                result[sanitizeKey(k)] = entry;
             }
             return result;
 
@@ -101,5 +180,56 @@ export class ConfigManager implements Disposable {
                 return result;
             }
         };
+
+        function parseRunLintOnSave(raw: any): WorkspaceRunLintOnSaveConfig | undefined {
+            if (typeof raw !== 'object' || Array.isArray(raw)) {
+                return undefined;
+            }
+
+            const result: WorkspaceRunLintOnSaveConfig = {};
+
+            const enabled = optionalBoolean(raw[CONFIG_SUBKEY_RUN_LINT_ON_SAVE_ENABLED]);
+            if (enabled !== undefined) {
+                result.enabled = enabled;
+            }
+
+            const tox = optionalStringArray(raw[CONFIG_SUBKEY_RUN_LINT_ON_SAVE_TOX]);
+            if (tox !== undefined) {
+                result.tox = tox;
+            }
+
+            const commands = optionalStringArray(raw[CONFIG_SUBKEY_RUN_LINT_ON_SAVE_COMMANDS]);
+            if (commands !== undefined) {
+                result.commands = commands;
+            }
+
+            const include = optionalStringArray(raw[CONFIG_SUBKEY_RUN_LINT_ON_SAVE_INCLUDE]);
+            if (include !== undefined) {
+                result.include = include;
+            }
+
+            const exclude = optionalStringArray(raw[CONFIG_SUBKEY_RUN_LINT_ON_SAVE_EXCLUDE]);
+            if (exclude !== undefined) {
+                result.exclude = exclude;
+            }
+            return result;
+        };
+
+        function optionalBoolean(v: any): boolean | undefined {
+            return typeof v === 'boolean' ? v : undefined;
+        }
+
+        function optionalString(v: any): string | undefined {
+            return typeof v === 'string' ? v : undefined;
+        }
+
+        function optionalStringArray(v: any): string[] | undefined {
+            return typeof v === 'object' && Array.isArray(v) ? v : undefined;
+        }
+
+        function readParameterIgnoreDefault(key: string): any {
+            const i = config.inspect(key);
+            return i?.workspaceValue ?? i?.globalValue;
+        }
     }
 }

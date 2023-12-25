@@ -103,6 +103,14 @@ export class VirtualEnv implements vscode.Disposable {
         return await this._exec(cwd?.fsPath ?? this.charmHome.path, command, args, env);
     }
 
+    /**
+     * Executes given command within a shell in the virtual environment, in the charm home directory.
+     * This is useful to run whole statements that include both command and arguments.
+     */
+    async execInShell(command: string, cwd?: vscode.Uri, env?: ExecutionEnv): Promise<ExecutionResult> {
+        return await this._exec(cwd?.fsPath ?? this.charmHome.path, command, undefined, env, undefined, true);
+    }
+
     execInTerminal(group: string, command: string, cwd?: vscode.Uri, env?: ExecutionEnv, terminalName?: string): vscode.Terminal {
         const terminal = this._getOrCreateTerminal(group, cwd, env, terminalName);
         const modifiedCommand = this._prependActivateCommand(command);
@@ -135,6 +143,7 @@ export class VirtualEnv implements vscode.Disposable {
         args?: string[],
         env?: ExecutionEnv,
         notActivate?: boolean,
+        runInShell?: boolean,
     ): Promise<ExecutionResult> {
         let modifiedCommand: string;
         let modifiedArgs: string[] | undefined;
@@ -153,7 +162,7 @@ export class VirtualEnv implements vscode.Disposable {
         }
 
         return await new Promise<ExecutionResult>(resolve => {
-            const cp = spawn(modifiedCommand, modifiedArgs, { cwd, env });
+            const cp = spawn(modifiedCommand, modifiedArgs, { cwd, env, shell: runInShell });
             const result: ExecutionResult = {
                 code: 0,
                 stdout: '',
