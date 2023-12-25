@@ -10,7 +10,7 @@ export type Linter =
     | 'pydocstyle';
 
 export interface LinterMessage {
-    linter: Linter | undefined;
+    linter: Linter | 'generic';
     absolutePath?: string;
     relativePath?: string;
     range: Range;
@@ -78,6 +78,7 @@ export function parseToxLinterOutput(output: string): LinterMessage[] {
 }
 
 const _GENERIC_PATTERN = /^(?<path>.*?):(?<line>\d+):?(?:(?<col>\d+):?)?(?<message>.*)$/;
+const _GENERIC_LINTER = 'generic';
 export function parseGenericLinterOutput(output: string): LinterMessage[] {
     const lines = output.split(/\r?\n/g);
     const result: LinterMessage[] = [];
@@ -97,7 +98,7 @@ export function parseGenericLinterOutput(output: string): LinterMessage[] {
 
         const message = match.groups!['message'].trim();
         result.push({
-            linter: undefined,
+            linter: _GENERIC_LINTER,
             range,
             message,
             ...(path.isAbsolute(filePath) ? { absolutePath: filePath } : { relativePath: filePath }),
