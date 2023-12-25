@@ -1,6 +1,7 @@
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
-import { Disposable, Uri } from 'vscode';
+import { Uri } from 'vscode';
+import { WorkspaceRunLintOnSaveConfig } from './config';
 import {
     getActionsDiagnostics,
     getAllSourceCodeDiagnostics,
@@ -8,6 +9,8 @@ import {
     getMetadataDiagnostics,
     getSourceCodeDiagnostics
 } from './diagnostic';
+import { DiagnosticCollectionManager } from './diagnostic.collection';
+import { LinterMessage, parseGenericLinterOutput, parseToxLinterOutput } from './lint.parser';
 import {
     Charm,
     CharmActions,
@@ -34,12 +37,16 @@ import {
     CHARM_FILE_TOX_INI,
     CHARM_TOX_LINT_SECTION
 } from './model/common';
-import { getPythonAST, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from './parser';
+import {
+    getPythonAST,
+    parseCharmActionsYAML,
+    parseCharmConfigYAML,
+    parseCharmMetadataYAML,
+    parseToxINI
+} from './parser';
 import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
-import { LinterMessage, parseGenericLinterOutput, parseToxLinterOutput } from './lint.parser';
 import { BackgroundWorkerManager } from './worker';
-import { WorkspaceRunLintOnSaveConfig } from './config';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;
@@ -47,8 +54,11 @@ export interface WorkspaceCharmConfig {
 }
 
 export class WorkspaceCharm implements vscode.Disposable {
-    private _disposables: Disposable[] = [];
+    private _disposables: vscode.Disposable[] = [];
     private readonly watcher: vscode.FileSystemWatcher;
+
+    private readonly _diagnostics: DiagnosticCollectionManager;
+    private readonly _lintDiagnostics: DiagnosticCollectionManager;
 
     /**
      * URI of the charm's `src` directory. This property is always assigned with
@@ -162,8 +172,8 @@ export class WorkspaceCharm implements vscode.Disposable {
         readonly home: Uri,
         readonly backgroundWorkerManager: BackgroundWorkerManager,
         readonly output: vscode.OutputChannel,
-        readonly diagnostics: vscode.DiagnosticCollection,
-        readonly lintDiagnostics: vscode.DiagnosticCollection,
+        diagnostics: vscode.DiagnosticCollection,
+        lintDiagnostics: vscode.DiagnosticCollection,
         readonly config?: WorkspaceCharmConfig,
     ) {
         this._virtualEnvDirectory = config?.virtualEnvDirectory ?? CHARM_DIR_VENV;
@@ -178,6 +188,9 @@ export class WorkspaceCharm implements vscode.Disposable {
         this.libUri = Uri.joinPath(this.home, CHARM_DIR_LIB);
         this.configUri = Uri.joinPath(this.home, CHARM_FILE_CONFIG_YAML);
         this.virtualEnvUri = Uri.joinPath(this.home, this._virtualEnvDirectory);
+
+        this._diagnostics = new DiagnosticCollectionManager(this.home, diagnostics);
+        this._lintDiagnostics = new DiagnosticCollectionManager(this.home, lintDiagnostics);
 
         const watchGlobPattern = `{${[
             this._virtualEnvDirectory,
@@ -200,6 +213,8 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     dispose() {
         this._disposables.forEach(x => x.dispose());
+        this._diagnostics.dispose();
+        this._lintDiagnostics.dispose();
         this._onConfigChanged.dispose();
         this._onActionsChanged.dispose();
         this._onMetadataChanged.dispose();
@@ -285,18 +300,6 @@ export class WorkspaceCharm implements vscode.Disposable {
                 }
             }
         }
-    }
-
-    private _updateDiagnostics(collection: vscode.DiagnosticCollection, map: Map<string, vscode.Diagnostic[]>) {
-        for (const [relativePath, diags] of map) {
-            const uri = Uri.joinPath(this.home, relativePath);
-            this._updateDiagnosticsByURI(collection, uri, diags);
-        }
-    }
-
-    private _updateDiagnosticsByURI(collection: vscode.DiagnosticCollection, uri: Uri, entries: vscode.Diagnostic[]) {
-        collection.delete(uri);
-        collection.set(uri, entries);
     }
 
     async refresh() {
@@ -409,7 +412,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         if (this.config?.runLintOnSave?.enabled === false) {
             return;
         }
-        this._updateDiagnostics(this.lintDiagnostics, await this._getSourceCodeLinterDiagnostics());
+        this._lintDiagnostics.update(await this._getSourceCodeLinterDiagnostics());
     }
 
     private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
@@ -476,7 +479,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
         this.model.updateSourceCode(new SourceCode(tree));
         this.live.updateSourceCode(new SourceCode(tree));
-        this._updateDiagnostics(this.diagnostics, getAllSourceCodeDiagnostics(this.live));
+        this._diagnostics.update(getAllSourceCodeDiagnostics(this.live));
         await this._refreshCodeLinterDiagnostics();
     }
 
@@ -514,39 +517,39 @@ export class WorkspaceCharm implements vscode.Disposable {
         const content = this._getDirtyDocumentContent(this.configUri);
         if (content === undefined) {
             this.live.updateConfig(this.model.config);
-            this._updateDiagnosticsByURI(this.diagnostics, this.configUri, getConfigDiagnostics(this.live.config));
+            this._diagnostics.updateByURI(this.configUri, getConfigDiagnostics(this.live.config));
             return;
         }
 
         this._log('config refreshed');
         this.live.updateConfig(parseCharmConfigYAML(content));
-        this._updateDiagnosticsByURI(this.diagnostics, this.configUri, getConfigDiagnostics(this.live.config));
+        this._diagnostics.updateByURI(this.configUri, getConfigDiagnostics(this.live.config));
     }
 
     async updateLiveActionsFile() {
         const content = this._getDirtyDocumentContent(this.actionsUri);
         if (content === undefined) {
             this.live.updateActions(this.model.actions);
-            this._updateDiagnosticsByURI(this.diagnostics, this.actionsUri, getActionsDiagnostics(this.live.actions));
+            this._diagnostics.updateByURI(this.actionsUri, getActionsDiagnostics(this.live.actions));
             return;
         }
 
         this._log('actions refreshed');
         this.live.updateActions(parseCharmActionsYAML(content));
-        this._updateDiagnosticsByURI(this.diagnostics, this.actionsUri, getActionsDiagnostics(this.live.actions));
+        this._diagnostics.updateByURI(this.actionsUri, getActionsDiagnostics(this.live.actions));
     }
 
     async updateLiveMetadataFile() {
         const content = this._getDirtyDocumentContent(this.metadataUri);
         if (content === undefined) {
             this.live.updateMetadata(this.model.metadata);
-            this._updateDiagnosticsByURI(this.diagnostics, this.metadataUri, getMetadataDiagnostics(this.live.metadata));
+            this._diagnostics.updateByURI(this.metadataUri, getMetadataDiagnostics(this.live.metadata));
             return;
         }
 
         this._log('metadata refreshed');
         this.live.updateMetadata(parseCharmMetadataYAML(content));
-        this._updateDiagnosticsByURI(this.diagnostics, this.metadataUri, getMetadataDiagnostics(this.live.metadata));
+        this._diagnostics.updateByURI(this.metadataUri, getMetadataDiagnostics(this.live.metadata));
     }
 
     async updateLiveToxConfigFile() {
@@ -571,7 +574,7 @@ export class WorkspaceCharm implements vscode.Disposable {
             const file = this.model.sourceCode.getFile(relativePath);
             if (file) {
                 this.live.sourceCode.updateFile(relativePath, file);
-                this._updateDiagnosticsByURI(this.diagnostics, uri, getSourceCodeDiagnostics(this.live, relativePath));
+                this._diagnostics.updateByURI(uri, getSourceCodeDiagnostics(this.live, relativePath));
             }
             return;
         }
@@ -596,7 +599,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
 
         this.live.sourceCode.updateFile(relativePath, file);
-        this._updateDiagnosticsByURI(this.diagnostics, uri, getSourceCodeDiagnostics(this.live, relativePath));
+        this._diagnostics.updateByURI(uri, getSourceCodeDiagnostics(this.live, relativePath));
     }
 
     private _log(s: string) {
