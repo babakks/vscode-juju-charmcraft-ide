@@ -452,11 +452,17 @@ export class WorkspaceCharm implements vscode.Disposable {
             );
         }
 
+        const include = this.config?.runLintOnSave?.include?.length ? new Set(this.config.runLintOnSave.include) : undefined;
+        const exclude = this.config?.runLintOnSave?.exclude?.length ? new Set(this.config.runLintOnSave.exclude) : undefined;
+
         const homePath = this.home.path + '/';
         const map = new Map<string, vscode.Diagnostic[]>();
         for (const x of entries) {
             const path = x.relativePath ?? (x.absolutePath?.startsWith(homePath) && x.absolutePath.substring(homePath.length)) ?? undefined;
             if (!path) {
+                continue;
+            }
+            if (include && !include.has(x.linter) || exclude && exclude.has(x.linter)) {
                 continue;
             }
             if (!map.has(path)) {
