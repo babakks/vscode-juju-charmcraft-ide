@@ -38,52 +38,52 @@ suite(parseGenericLinterOutput.name, function () {
                 relative/path:25:99 with col number, without trailing colon
             `),
             expected: [{
-                linter: undefined,
+                linter: 'generic',
                 absolutePath: '/absolute/path',
                 range: newRange(10, 0, 11, 0),
                 message: 'normal with no whitespace',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 absolutePath: '/absolute/path',
                 range: newRange(11, 0, 12, 0),
                 message: 'normal with whitespace before message',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 absolutePath: '/absolute/path',
                 range: newRange(12, 0, 13, 0),
                 message: 'no trailing colon after line number',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 absolutePath: '/absolute/path',
                 range: newRange(13, 99, 14, 0),
                 message: 'with col number',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 absolutePath: '/absolute/path',
                 range: newRange(14, 99, 15, 0),
                 message: 'with col number, without trailing colon',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 relativePath: 'relative/path',
                 range: newRange(20, 0, 21, 0),
                 message: 'normal with no whitespace',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 relativePath: 'relative/path',
                 range: newRange(21, 0, 22, 0),
                 message: 'normal with whitespace before message',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 relativePath: 'relative/path',
                 range: newRange(22, 0, 23, 0),
                 message: 'no trailing colon after line number',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 relativePath: 'relative/path',
                 range: newRange(23, 99, 24, 0),
                 message: 'with col number',
             }, {
-                linter: undefined,
+                linter: 'generic',
                 relativePath: 'relative/path',
                 range: newRange(24, 99, 25, 0),
                 message: 'with col number, without trailing colon',
