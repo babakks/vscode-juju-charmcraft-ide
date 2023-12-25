@@ -287,28 +287,16 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
     }
 
-    private _updateDiagnostics(map: Map<string, vscode.Diagnostic[]>) {
+    private _updateDiagnostics(collection: vscode.DiagnosticCollection, map: Map<string, vscode.Diagnostic[]>) {
         for (const [relativePath, diags] of map) {
             const uri = Uri.joinPath(this.home, relativePath);
-            this._updateDiagnosticsByURI(uri, diags);
+            this._updateDiagnosticsByURI(collection, uri, diags);
         }
     }
 
-    private _updateDiagnosticsByURI(uri: Uri, entries: vscode.Diagnostic[]) {
-        this.diagnostics.delete(uri);
-        this.diagnostics.set(uri, entries);
-    }
-
-    private _updateLintDiagnostics(map: Map<string, vscode.Diagnostic[]>) {
-        for (const [relativePath, diags] of map) {
-            const uri = Uri.joinPath(this.home, relativePath);
-            this._updateLintDiagnosticsByURI(uri, diags);
-        }
-    }
-
-    private _updateLintDiagnosticsByURI(uri: Uri, entries: vscode.Diagnostic[]) {
-        this.lintDiagnostics.delete(uri);
-        this.lintDiagnostics.set(uri, entries);
+    private _updateDiagnosticsByURI(collection: vscode.DiagnosticCollection, uri: Uri, entries: vscode.Diagnostic[]) {
+        collection.delete(uri);
+        collection.set(uri, entries);
     }
 
     async refresh() {
@@ -421,7 +409,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         if (this.config?.runLintOnSave?.enabled === false) {
             return;
         }
-        this._updateLintDiagnostics(await this._getSourceCodeLinterDiagnostics());
+        this._updateDiagnostics(this.lintDiagnostics, await this._getSourceCodeLinterDiagnostics());
     }
 
     private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
@@ -488,7 +476,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
         this.model.updateSourceCode(new SourceCode(tree));
         this.live.updateSourceCode(new SourceCode(tree));
-        this._updateDiagnostics(getAllSourceCodeDiagnostics(this.live));
+        this._updateDiagnostics(this.diagnostics, getAllSourceCodeDiagnostics(this.live));
         await this._refreshCodeLinterDiagnostics();
     }
 
@@ -526,39 +514,39 @@ export class WorkspaceCharm implements vscode.Disposable {
         const content = this._getDirtyDocumentContent(this.configUri);
         if (content === undefined) {
             this.live.updateConfig(this.model.config);
-            this._updateDiagnosticsByURI(this.configUri, getConfigDiagnostics(this.live.config));
+            this._updateDiagnosticsByURI(this.diagnostics, this.configUri, getConfigDiagnostics(this.live.config));
             return;
         }
 
         this._log('config refreshed');
         this.live.updateConfig(parseCharmConfigYAML(content));
-        this._updateDiagnosticsByURI(this.configUri, getConfigDiagnostics(this.live.config));
+        this._updateDiagnosticsByURI(this.diagnostics, this.configUri, getConfigDiagnostics(this.live.config));
     }
 
     async updateLiveActionsFile() {
         const content = this._getDirtyDocumentContent(this.actionsUri);
         if (content === undefined) {
             this.live.updateActions(this.model.actions);
-            this._updateDiagnosticsByURI(this.actionsUri, getActionsDiagnostics(this.live.actions));
+            this._updateDiagnosticsByURI(this.diagnostics, this.actionsUri, getActionsDiagnostics(this.live.actions));
             return;
         }
 
         this._log('actions refreshed');
         this.live.updateActions(parseCharmActionsYAML(content));
-        this._updateDiagnosticsByURI(this.actionsUri, getActionsDiagnostics(this.live.actions));
+        this._updateDiagnosticsByURI(this.diagnostics, this.actionsUri, getActionsDiagnostics(this.live.actions));
     }
 
     async updateLiveMetadataFile() {
         const content = this._getDirtyDocumentContent(this.metadataUri);
         if (content === undefined) {
             this.live.updateMetadata(this.model.metadata);
-            this._updateDiagnosticsByURI(this.metadataUri, getMetadataDiagnostics(this.live.metadata));
+            this._updateDiagnosticsByURI(this.diagnostics, this.metadataUri, getMetadataDiagnostics(this.live.metadata));
             return;
         }
 
         this._log('metadata refreshed');
         this.live.updateMetadata(parseCharmMetadataYAML(content));
-        this._updateDiagnosticsByURI(this.metadataUri, getMetadataDiagnostics(this.live.metadata));
+        this._updateDiagnosticsByURI(this.diagnostics, this.metadataUri, getMetadataDiagnostics(this.live.metadata));
     }
 
     async updateLiveToxConfigFile() {
@@ -583,7 +571,7 @@ export class WorkspaceCharm implements vscode.Disposable {
             const file = this.model.sourceCode.getFile(relativePath);
             if (file) {
                 this.live.sourceCode.updateFile(relativePath, file);
-                this._updateDiagnosticsByURI(uri, getSourceCodeDiagnostics(this.live, relativePath));
+                this._updateDiagnosticsByURI(this.diagnostics, uri, getSourceCodeDiagnostics(this.live, relativePath));
             }
             return;
         }
@@ -608,7 +596,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         }
 
         this.live.sourceCode.updateFile(relativePath, file);
-        this._updateDiagnosticsByURI(uri, getSourceCodeDiagnostics(this.live, relativePath));
+        this._updateDiagnosticsByURI(this.diagnostics, uri, getSourceCodeDiagnostics(this.live, relativePath));
     }
 
     private _log(s: string) {
