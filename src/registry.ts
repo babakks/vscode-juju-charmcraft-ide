@@ -1,3 +1,4 @@
+import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     CancellationToken,
     DiagnosticCollection,
@@ -10,8 +11,8 @@ import {
 } from 'vscode';
 import { ConfigManager, WorkspaceConfig } from './config';
 import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
-import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
 import { BackgroundWorkerManager } from './worker';
+import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
 
 /**
  * Registry of discovered charms.
@@ -67,6 +68,7 @@ export class Registry implements Disposable {
         readonly configManager: ConfigManager,
         readonly backgroundWorkerManager: BackgroundWorkerManager,
         readonly output: OutputChannel,
+        readonly reporter: TelemetryReporter,
         readonly diagnostics: DiagnosticCollection,
         readonly lintDiagnostics: DiagnosticCollection,
     ) {
@@ -187,7 +189,7 @@ export class Registry implements Disposable {
     }
 
     private _instantiateCharm(home: Uri, workspaceCharmConfig?: WorkspaceCharmConfig): WorkspaceCharm {
-        const charm = new WorkspaceCharm(home, this.backgroundWorkerManager, this.output, this.diagnostics, this.lintDiagnostics, workspaceCharmConfig);
+        const charm = new WorkspaceCharm(home, this.backgroundWorkerManager, this.output, this.reporter, this.diagnostics, this.lintDiagnostics, workspaceCharmConfig);
         this._disposablesPerCharm.set(charm, [
             charm.onVirtualEnvChanged(() => this._onCharmVirtualEnvChanged.fire(charm)),
             charm.onConfigChanged(() => this._onCharmConfigChanged.fire(charm)),
