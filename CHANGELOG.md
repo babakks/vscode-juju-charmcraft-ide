@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.10
+
+- Fix bug with diagnostics' negative line numbers.
+
 ## 0.0.9
 
 - Add telemetry to measure *Run Lint on Save* performance.
