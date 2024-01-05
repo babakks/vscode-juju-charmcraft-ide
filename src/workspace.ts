@@ -47,6 +47,7 @@ import {
 import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
 import { BackgroundWorkerManager } from './worker';
+import TelemetryReporter from '@vscode/extension-telemetry';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;
@@ -54,6 +55,9 @@ export interface WorkspaceCharmConfig {
 }
 
 export class WorkspaceCharm implements vscode.Disposable {
+    private static readonly _telemetryEventLintOnSave = 'v0.workspace.lintOnSave';
+    private static readonly _telemetryEventLintOnSaveDuration = 'duration';
+
     private _disposables: vscode.Disposable[] = [];
     private readonly watcher: vscode.FileSystemWatcher;
 
@@ -172,6 +176,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         readonly home: Uri,
         readonly backgroundWorkerManager: BackgroundWorkerManager,
         readonly output: vscode.OutputChannel,
+        readonly reporter: TelemetryReporter,
         diagnostics: vscode.DiagnosticCollection,
         lintDiagnostics: vscode.DiagnosticCollection,
         readonly config?: WorkspaceCharmConfig,
@@ -440,7 +445,10 @@ export class WorkspaceCharm implements vscode.Disposable {
             ...commands.map(x => this.virtualEnv.execInShell(x)),
         ];
 
+        const t0 = new Date();
         const results = await Promise.allSettled(executions);
+        const duration = new Date().getTime() - t0.getTime();
+
         const entries: LinterMessage[] = [];
         for (const result of results) {
             if (result.status === 'rejected') {
@@ -470,6 +478,10 @@ export class WorkspaceCharm implements vscode.Disposable {
             }
             map.get(path)?.push(toDiagnostic(x));
         }
+
+        this.reporter.sendTelemetryEvent(WorkspaceCharm._telemetryEventLintOnSave, undefined, {
+            [WorkspaceCharm._telemetryEventLintOnSaveDuration]: duration,
+        });
 
         return map;
 

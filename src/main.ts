@@ -50,7 +50,14 @@ export async function activate(context: ExtensionContext) {
 
     const backgroundWorkerManager = new BackgroundWorkerManager(backgroundWorkerStatusBarItem, output);
 
-    const registry = new Registry(configManager, backgroundWorkerManager, output, diagnostics, lintDiagnostics);
+    const registry = new Registry(
+        configManager,
+        backgroundWorkerManager,
+        output,
+        reporter,
+        diagnostics,
+        lintDiagnostics,
+    );
     context.subscriptions.push(registry);
     await registry.refresh();
 
