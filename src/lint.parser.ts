@@ -92,7 +92,7 @@ export function parseGenericLinterOutput(output: string): LinterMessage[] {
         const lineNumber = parseInt(match.groups!['line']!);
         const colNumber = match.groups!['col'] !== undefined ? parseInt(match.groups!['col']) : undefined;
         const range: Range = {
-            start: { line: -1 + lineNumber, character: colNumber ?? 0 },
+            start: { line: ensureNonNegative(-1 + lineNumber), character: colNumber ?? 0 },
             end: { line: lineNumber, character: 0 },
         };
 
@@ -121,7 +121,7 @@ export function flake8OutputParser(lines: string[]): LinterMessage[] {
         const lineNumber = parseInt(match.groups!['line']!);
         const colNumber = parseInt(match.groups!['col']!);
         const range: Range = {
-            start: { line: -1 + lineNumber, character: -1 + colNumber },
+            start: { line: ensureNonNegative(-1 + lineNumber), character: ensureNonNegative(-1 + colNumber) },
             end: { line: lineNumber, character: 0 },
         };
 
@@ -145,7 +145,7 @@ export function pylintOutputParser(lines: string[]): LinterMessage[] {
         const lineNumber = parseInt(match.groups!['line']!);
         const colNumber = parseInt(match.groups!['col']!);
         const range: Range = {
-            start: { line: -1 + lineNumber, character: colNumber },
+            start: { line: ensureNonNegative(-1 + lineNumber), character: colNumber },
             end: { line: lineNumber, character: 0 },
         };
 
@@ -169,7 +169,7 @@ export function ruffOutputParser(lines: string[]): LinterMessage[] {
         const lineNumber = parseInt(match.groups!['line']!);
         const colNumber = parseInt(match.groups!['col']!);
         const range: Range = {
-            start: { line: -1 + lineNumber, character: -1 + colNumber },
+            start: { line: ensureNonNegative(-1 + lineNumber), character: ensureNonNegative(-1 + colNumber) },
             end: { line: lineNumber, character: 0 },
         };
 
@@ -192,7 +192,7 @@ export function mypyOutputParser(lines: string[]): LinterMessage[] {
         const relativePath = match.groups!['relativePath']!;
         const lineNumber = parseInt(match.groups!['line']!);
         const range: Range = {
-            start: { line: -1 + lineNumber, character: 0 },
+            start: { line: ensureNonNegative(-1 + lineNumber), character: 0 },
             end: { line: lineNumber, character: 0 },
         };
 
@@ -215,7 +215,7 @@ export function codespellOutputParser(lines: string[]): LinterMessage[] {
         const absolutePath = match.groups!['absolutePath']!;
         const lineNumber = parseInt(match.groups!['line']!);
         const range: Range = {
-            start: { line: -1 + lineNumber, character: 0 },
+            start: { line: ensureNonNegative(-1 + lineNumber), character: 0 },
             end: { line: lineNumber, character: 0 },
         };
 
@@ -243,11 +243,18 @@ export function pydocstyleOutputParser(lines: string[]): LinterMessage[] {
         const lineNumber = parseInt(match.groups!['line']!);
         const message = match.groups!['location'];
         const range: Range = {
-            start: { line: -1 + lineNumber, character: 0 },
+            start: { line: ensureNonNegative(-1 + lineNumber), character: 0 },
             end: { line: lineNumber, character: 0 },
         };
 
         result.push({ linter: _PYDOCSTYLE_LINTER, absolutePath, range, message });
     }
     return result;
+}
+
+/**
+ * Returns zero if the given number was negative; otherwise returns the argument.
+ */
+function ensureNonNegative(n: number): number {
+    return n >= 0 ? n : 0;
 }
