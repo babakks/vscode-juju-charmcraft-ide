@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.9
+
+- Add telemetry to measure *Run Lint on Save* performance.
+
 ## 0.0.8
 
 - Add *Run Lint on Save* feature.
