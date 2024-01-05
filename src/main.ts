@@ -14,6 +14,7 @@ import {
     CharmConfigParametersCompletionProvider,
     CharmEventCompletionProvider
 } from './completion';
+import { ConfigManager } from './config';
 import { CharmConfigDefinitionProvider, CharmEventDefinitionProvider } from './definition';
 import { CharmConfigHoverProvider, CharmEventHoverProvider } from './hover';
 import { Registry } from './registry';
@@ -21,7 +22,6 @@ import { integrateWithYAMLExtension } from './schema';
 import { CharmTestProvider } from './test';
 import { CharmcraftTreeDataProvider } from './tree';
 import { DocumentWatcher } from './watcher';
-import { ConfigManager } from './config';
 import { BackgroundWorkerManager } from './worker';
 
 const TELEMETRY_INSTRUMENTATION_KEY = 'e9934c53-e6be-4d6d-897c-bcc96cbb3f75';

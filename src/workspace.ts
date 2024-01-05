@@ -1,3 +1,4 @@
+import TelemetryReporter from '@vscode/extension-telemetry';
 import { TextDecoder } from 'util';
 import * as vscode from 'vscode';
 import { Uri } from 'vscode';
@@ -47,7 +48,6 @@ import {
 import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
 import { BackgroundWorkerManager } from './worker';
-import TelemetryReporter from '@vscode/extension-telemetry';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;

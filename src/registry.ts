@@ -1,3 +1,4 @@
+import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     CancellationToken,
     DiagnosticCollection,
@@ -10,9 +11,8 @@ import {
 } from 'vscode';
 import { ConfigManager, WorkspaceConfig } from './config';
 import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
-import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
 import { BackgroundWorkerManager } from './worker';
-import TelemetryReporter from '@vscode/extension-telemetry';
+import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
 
 /**
  * Registry of discovered charms.
