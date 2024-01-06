@@ -57,6 +57,7 @@ export interface WorkspaceCharmConfig {
 export class WorkspaceCharm implements vscode.Disposable {
     private static readonly _telemetryEventLintOnSave = 'v0.workspace.lintOnSave';
     private static readonly _telemetryEventLintOnSaveDuration = 'duration';
+    private static readonly _telemetryEventLintOnSaveDiagnosticsLength = 'diagnosticsLength';
 
     private _disposables: vscode.Disposable[] = [];
     private readonly watcher: vscode.FileSystemWatcher;
@@ -479,8 +480,10 @@ export class WorkspaceCharm implements vscode.Disposable {
             map.get(path)?.push(toDiagnostic(x));
         }
 
+        const diagnosticsLength = Array.from(map.values()).reduce((counter, x) => counter + x.length, 0);
         this.reporter.sendTelemetryEvent(WorkspaceCharm._telemetryEventLintOnSave, undefined, {
             [WorkspaceCharm._telemetryEventLintOnSaveDuration]: duration,
+            [WorkspaceCharm._telemetryEventLintOnSaveDiagnosticsLength]: diagnosticsLength,
         });
 
         return map;
