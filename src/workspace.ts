@@ -48,6 +48,7 @@ import {
 import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
 import { BackgroundWorkerManager } from './worker';
+import { NonStackableEvent } from './event';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;
@@ -64,6 +65,8 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     private readonly _diagnostics: DiagnosticCollectionManager;
     private readonly _lintDiagnostics: DiagnosticCollectionManager;
+
+    private readonly _onLintOnSave: NonStackableEvent;
 
     /**
      * URI of the charm's `src` directory. This property is always assigned with
@@ -215,6 +218,10 @@ export class WorkspaceCharm implements vscode.Disposable {
             this.watcher.onDidCreate(async e => await this._onFileSystemEvent('create', e)),
             this.watcher.onDidDelete(async e => await this._onFileSystemEvent('delete', e)),
         );
+
+        this._onLintOnSave = new NonStackableEvent(async () => {
+            this._lintDiagnostics.update(await this._getSourceCodeLinterDiagnostics());
+        });
     }
 
     dispose() {
@@ -418,7 +425,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         if (this.config?.runLintOnSave?.enabled === false) {
             return;
         }
-        this._lintDiagnostics.update(await this._getSourceCodeLinterDiagnostics());
+        this._onLintOnSave.fire();
     }
 
     private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
