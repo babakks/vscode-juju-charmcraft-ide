@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.0.11
+
+- Avoid parallel triggering of *Run Lint on Save*.
+- Improve *Run Lint on Save* telemetry measurements.
+
 ## 0.0.10
 
 - Fix bug with diagnostics' negative line numbers.

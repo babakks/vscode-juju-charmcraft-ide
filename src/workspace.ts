@@ -48,6 +48,7 @@ import {
 import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
 import { BackgroundWorkerManager } from './worker';
+import { NonStackableEvent } from './event';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;
@@ -57,12 +58,15 @@ export interface WorkspaceCharmConfig {
 export class WorkspaceCharm implements vscode.Disposable {
     private static readonly _telemetryEventLintOnSave = 'v0.workspace.lintOnSave';
     private static readonly _telemetryEventLintOnSaveDuration = 'duration';
+    private static readonly _telemetryEventLintOnSaveDiagnosticsLength = 'diagnosticsLength';
 
     private _disposables: vscode.Disposable[] = [];
     private readonly watcher: vscode.FileSystemWatcher;
 
     private readonly _diagnostics: DiagnosticCollectionManager;
     private readonly _lintDiagnostics: DiagnosticCollectionManager;
+
+    private readonly _onLintOnSave: NonStackableEvent;
 
     /**
      * URI of the charm's `src` directory. This property is always assigned with
@@ -214,6 +218,10 @@ export class WorkspaceCharm implements vscode.Disposable {
             this.watcher.onDidCreate(async e => await this._onFileSystemEvent('create', e)),
             this.watcher.onDidDelete(async e => await this._onFileSystemEvent('delete', e)),
         );
+
+        this._onLintOnSave = new NonStackableEvent(async () => {
+            this._lintDiagnostics.update(await this._getSourceCodeLinterDiagnostics());
+        });
     }
 
     dispose() {
@@ -417,7 +425,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         if (this.config?.runLintOnSave?.enabled === false) {
             return;
         }
-        this._lintDiagnostics.update(await this._getSourceCodeLinterDiagnostics());
+        this._onLintOnSave.fire();
     }
 
     private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
@@ -479,8 +487,10 @@ export class WorkspaceCharm implements vscode.Disposable {
             map.get(path)?.push(toDiagnostic(x));
         }
 
+        const diagnosticsLength = Array.from(map.values()).reduce((counter, x) => counter + x.length, 0);
         this.reporter.sendTelemetryEvent(WorkspaceCharm._telemetryEventLintOnSave, undefined, {
             [WorkspaceCharm._telemetryEventLintOnSaveDuration]: duration,
+            [WorkspaceCharm._telemetryEventLintOnSaveDiagnosticsLength]: diagnosticsLength,
         });
 
         return map;
