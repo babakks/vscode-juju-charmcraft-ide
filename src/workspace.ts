@@ -441,10 +441,6 @@ export class WorkspaceCharm implements vscode.Disposable {
                 : Object.values(this.model.toxConfig.sections).find(v => v.env === s)
         ).filter((s): s is CharmToxConfigSection => !!s);
 
-        if (!correspondingToxSections.length) {
-            return new Map();
-        }
-
         const executions = [
             ...correspondingToxSections.map(x =>
                 this.backgroundWorkerManager.execute(x.name, () =>
