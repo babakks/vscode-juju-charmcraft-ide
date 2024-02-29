@@ -34,7 +34,7 @@ This is a VS Code extension to provide tools for Juju Charms development. To lea
 
 ## Linting on save
 
-If you have a virtual environment set up in your charm's directory, then the *Run Lint on Save* option is already enabled. With this option, when you save a Python file (either source code or test) the designated Tox environment `lint` (which is defined under the `[testenv:lint]` section in `tox.ini` file) will be triggered, and the output will be interpreted and displayed in the editor as diagnostics (i.e., red squiggly lines). You can customize the extension to invoke different Tox environments. It's also possible to run arbitrary shell commands when saving a file. You can check the [Configuration](#configuration) section for more details.
+If you have Tox installed (either via a virtual environment set up in your charm's directory, or as a globally installed package) then the *Run Lint on Save* option is already enabled. With this option, when you save a Python file (either source code or test) the designated Tox environment `lint` (which is defined under the `[testenv:lint]` section in `tox.ini` file) will be triggered, and the output will be interpreted and displayed in the editor as diagnostics (i.e., red squiggly lines). You can customize the extension to invoke different Tox environments. It's also possible to run arbitrary shell commands when saving a file. You can check the [Configuration](#configuration) section for more details.
 
 Currently, diagnostics are interpreted for these linters:
 
