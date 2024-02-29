@@ -429,11 +429,7 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
-        if (!this.hasVirtualEnv) {
-            return new Map();
-        }
-
-        const commands = this.config?.runLintOnSave?.commands ?? [];
+        const commands = this.hasVirtualEnv && this.config?.runLintOnSave?.commands || [];
         const toxSections = this.config?.runLintOnSave?.tox ?? [CHARM_TOX_LINT_SECTION];
         const correspondingToxSections = toxSections.map(s =>
             s in this.model.toxConfig.sections
@@ -444,8 +440,11 @@ export class WorkspaceCharm implements vscode.Disposable {
         const executions = [
             ...correspondingToxSections.map(x =>
                 this.backgroundWorkerManager.execute(x.name, () =>
-                    this.virtualEnv.exec('tox', ['-e', x.env, '-x', `${x.name}.ignore_errors=True`])
-                )),
+                    this.virtualEnv.exec({
+                        command: 'tox',
+                        args: ['-e', x.env, '-x', `${x.name}.ignore_errors=True`],
+                        notActivate: !this.hasVirtualEnv, // To activate the virtual env, if there's one.
+                    }))),
             ...commands.map(x => this.virtualEnv.execInShell(x)),
         ];
 
