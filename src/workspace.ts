@@ -446,6 +446,22 @@ export class WorkspaceCharm implements vscode.Disposable {
                 : Object.values(this.model.toxConfig.sections).find(v => v.env === s)
         ).filter((s): s is CharmToxConfigSection => !!s);
 
+        if (correspondingToxSections.length && !(await this._checkToxAvailable())) {
+            if (this.hasVirtualEnv) {
+                vscode.window.showErrorMessage(
+                    "There is a virtual environment but Tox is not installed in it. " +
+                    "Please install Tox in the virtual environment or try setting up the virtual environment again. " +
+                    `(Charm at ${this.home.path})`
+                );
+            } else {
+                vscode.window.showErrorMessage(
+                    "Tox is not installed. Please either install it globally or setup a virtual environment. "+
+                    `(Charm at ${this.home.path})`
+                );
+            }
+            correspondingToxSections.splice(0);
+        }
+
         const executions = [
             ...correspondingToxSections.map(x =>
                 this.backgroundWorkerManager.execute(x.name, () =>
