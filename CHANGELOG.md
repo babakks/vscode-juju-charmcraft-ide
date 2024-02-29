@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.12
+
+- Trigger *Run Lint on Save* if Tox is available (either via virtual environment or as a globally installed package).
+
 ## 0.0.11
 
 - Avoid parallel triggering of *Run Lint on Save*.
