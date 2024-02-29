@@ -473,6 +473,10 @@ export class WorkspaceCharm implements vscode.Disposable {
             ...commands.map(x => this.virtualEnv.execInShell(x)),
         ];
 
+        if (!executions.length) {
+            return new Map();
+        }
+
         const t0 = new Date();
         const results = await Promise.allSettled(executions);
         const duration = new Date().getTime() - t0.getTime();
