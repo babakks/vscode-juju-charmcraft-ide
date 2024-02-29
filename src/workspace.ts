@@ -428,12 +428,17 @@ export class WorkspaceCharm implements vscode.Disposable {
         this._onLintOnSave.fire();
     }
 
-    private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
-        if (!this.hasVirtualEnv) {
-            return new Map();
-        }
+    private async _checkToxAvailable(): Promise<boolean> {
+        const result = await this.virtualEnv.exec({
+            command: 'python3',
+            args: ['-c', 'import tox'],
+            notActivate: !this.hasVirtualEnv, // To activate the virtual env, if there's one.
+        });
+        return result.code === 0;
+    }
 
-        const commands = this.config?.runLintOnSave?.commands ?? [];
+    private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
+        const commands = this.hasVirtualEnv && this.config?.runLintOnSave?.commands || [];
         const toxSections = this.config?.runLintOnSave?.tox ?? [CHARM_TOX_LINT_SECTION];
         const correspondingToxSections = toxSections.map(s =>
             s in this.model.toxConfig.sections
@@ -441,17 +446,36 @@ export class WorkspaceCharm implements vscode.Disposable {
                 : Object.values(this.model.toxConfig.sections).find(v => v.env === s)
         ).filter((s): s is CharmToxConfigSection => !!s);
 
-        if (!correspondingToxSections.length) {
-            return new Map();
+        if (correspondingToxSections.length && !(await this._checkToxAvailable())) {
+            if (this.hasVirtualEnv) {
+                vscode.window.showErrorMessage(
+                    "There is a virtual environment but Tox is not installed in it. " +
+                    "Please install Tox in the virtual environment or try setting up the virtual environment again. " +
+                    `(Charm at ${this.home.path})`
+                );
+            } else {
+                vscode.window.showErrorMessage(
+                    "Tox is not installed. Please either install it globally or setup a virtual environment. "+
+                    `(Charm at ${this.home.path})`
+                );
+            }
+            correspondingToxSections.splice(0);
         }
 
         const executions = [
             ...correspondingToxSections.map(x =>
                 this.backgroundWorkerManager.execute(x.name, () =>
-                    this.virtualEnv.exec('tox', ['-e', x.env, '-x', `${x.name}.ignore_errors=True`])
-                )),
+                    this.virtualEnv.exec({
+                        command: 'python3',
+                        args: ['-m', 'tox', '-e', x.env, '-x', `${x.name}.ignore_errors=True`],
+                        notActivate: !this.hasVirtualEnv, // To activate the virtual env, if there's one.
+                    }))),
             ...commands.map(x => this.virtualEnv.execInShell(x)),
         ];
+
+        if (!executions.length) {
+            return new Map();
+        }
 
         const t0 = new Date();
         const results = await Promise.allSettled(executions);

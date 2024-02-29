@@ -13,6 +13,35 @@ export type ExecutionEnv = {
     [key: string]: string | undefined;
 };
 
+export interface ExecOptions {
+    /**
+     * Command to execute.
+     */
+
+    command: string;
+
+    /**
+     * Arguments to pass to the command.
+     */
+    args?: string[];
+
+    /**
+     * Working directory to run the command in. Default is charm's home directory.
+     */
+    cwd?: vscode.Uri;
+
+    /**
+     * Environment variables to populate when running the command.
+     */
+    env?: ExecutionEnv;
+
+    /**
+     * Disables activation of virtual environment, if any, prior to executing
+     * the command.
+     */
+    notActivate?: boolean;
+}
+
 /**
  * Environment variables which are set/reset when activating/deactivating a
  * virtual env.
@@ -96,11 +125,16 @@ export class VirtualEnv implements vscode.Disposable {
     }
 
     /**
-     * Executes given command within the virtual environment, in the charm home
-     * directory.
+     * Executes given command.
      */
-    async exec(command: string, args?: string[], cwd?: vscode.Uri, env?: ExecutionEnv): Promise<ExecutionResult> {
-        return await this._exec(cwd?.fsPath ?? this.charmHome.path, command, args, env);
+    async exec(options: ExecOptions): Promise<ExecutionResult> {
+        return await this._exec(
+            options.cwd?.fsPath ?? this.charmHome.path,
+            options.command,
+            options.args,
+            options.env,
+            options.notActivate,
+        );
     }
 
     /**
