@@ -428,6 +428,15 @@ export class WorkspaceCharm implements vscode.Disposable {
         this._onLintOnSave.fire();
     }
 
+    private async _checkToxAvailable(): Promise<boolean> {
+        const result = await this.virtualEnv.exec({
+            command: 'python3',
+            args: ['-c', 'import tox'],
+            notActivate: !this.hasVirtualEnv, // To activate the virtual env, if there's one.
+        });
+        return result.code === 0;
+    }
+
     private async _getSourceCodeLinterDiagnostics(): Promise<Map<string, vscode.Diagnostic[]>> {
         const commands = this.hasVirtualEnv && this.config?.runLintOnSave?.commands || [];
         const toxSections = this.config?.runLintOnSave?.tox ?? [CHARM_TOX_LINT_SECTION];
