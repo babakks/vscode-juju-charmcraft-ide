@@ -466,8 +466,8 @@ export class WorkspaceCharm implements vscode.Disposable {
             ...correspondingToxSections.map(x =>
                 this.backgroundWorkerManager.execute(x.name, () =>
                     this.virtualEnv.exec({
-                        command: 'tox',
-                        args: ['-e', x.env, '-x', `${x.name}.ignore_errors=True`],
+                        command: 'python3',
+                        args: ['-m', 'tox', '-e', x.env, '-x', `${x.name}.ignore_errors=True`],
                         notActivate: !this.hasVirtualEnv, // To activate the virtual env, if there's one.
                     }))),
             ...commands.map(x => this.virtualEnv.execInShell(x)),
