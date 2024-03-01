@@ -102,9 +102,6 @@ export interface YAMLNode {
 }
 
 type AttachedNode = {
-    /**
-     * If the field/value was not found, this will be missing/`undefined`.
-     */
     node: YAMLNode;
 };
 

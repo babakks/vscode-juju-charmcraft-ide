@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.13
+
+- Show individual configuration parameters and actions in the sidebar tree.
+
 ## 0.0.12
 
 - Trigger *Run Lint on Save* if Tox is available (either via virtual environment or as a globally installed package).
