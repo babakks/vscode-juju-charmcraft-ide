@@ -618,6 +618,8 @@ export class CharmTestProvider implements Disposable {
             return;
         }
 
+        const customDebugLaunchConfig = this.configManager.getLatest().test.customDebugLaunchConfig ?? {};
+
         const pythonBinaryPath = await workspaceCharm.virtualEnv.getPythonExecutablePath();
 
         const { pytestArgs, cwd } = this._getPytestCommand(data, workspaceCharm.home, relativePath);
@@ -659,6 +661,7 @@ export class CharmTestProvider implements Disposable {
                 env,
                 args: pytestArgs,
                 console: "internalConsole",
+                ...customDebugLaunchConfig,
             },
         );
 
