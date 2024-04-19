@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.14
+
+- Allow for custom launch configuration fields when debugging tests.
+
 ## 0.0.13
 
 - Show individual configuration parameters and actions in the sidebar tree.
