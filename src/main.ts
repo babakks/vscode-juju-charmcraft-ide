@@ -77,7 +77,7 @@ export async function activate(context: ExtensionContext) {
         ...registerCompletionProviders(registry, reporter),
         ...registerHoverProviders(registry, reporter),
         ...registerDefinitionProviders(registry, reporter),
-        ...registerTestProvider(registry, ic, reporter, output, testOutput, context.logUri),
+        ...registerTestProvider(configManager, registry, ic, reporter, output, testOutput, context.logUri),
     );
 
     // Note that we shouldn't `await` on this call, because it could ask for user decision (e.g., to install the YAML
@@ -143,8 +143,8 @@ function registerDefinitionProviders(registry: Registry, reporter: TelemetryRepo
     ];
 }
 
-function registerTestProvider(registry: Registry, ic: InternalCommands, reporter: TelemetryReporter, output: OutputChannel, testOutput: OutputChannel, logUri: Uri): Disposable[] {
+function registerTestProvider(configManager: ConfigManager, registry: Registry, ic: InternalCommands, reporter: TelemetryReporter, output: OutputChannel, testOutput: OutputChannel, logUri: Uri): Disposable[] {
     const controller = tests.createTestController('charmcraft-ide', 'Charmcraft IDE');
-    const provider = new CharmTestProvider(registry, ic, reporter, controller, output, testOutput, logUri);
+    const provider = new CharmTestProvider(configManager, registry, ic, reporter, controller, output, testOutput, logUri);
     return [controller, provider];
 }

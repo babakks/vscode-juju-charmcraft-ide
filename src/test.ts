@@ -31,6 +31,7 @@ import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import { COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT } from './command.const';
 import { InternalCommands } from './command';
+import type { ConfigManager } from './config';
 
 type TestData = CharmTestData | DirectoryTestData | FileTestData | FunctionTestData | ClassTestData | MethodTestData;
 
@@ -92,6 +93,7 @@ export class CharmTestProvider implements Disposable {
     readonly onUpdate = this._onUpdate.event;
 
     constructor(
+        readonly configManager: ConfigManager,
         readonly registry: Registry,
         readonly ic: InternalCommands,
         readonly reporter: TelemetryReporter,
