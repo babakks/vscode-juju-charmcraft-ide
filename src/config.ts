@@ -1,4 +1,4 @@
-import { Disposable, EventEmitter, WorkspaceConfiguration, workspace } from 'vscode';
+import { Disposable, EventEmitter, workspace } from 'vscode';
 
 /**
  * Workspace/global-scoped configuration parameters.
