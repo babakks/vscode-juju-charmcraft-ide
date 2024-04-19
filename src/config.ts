@@ -1,4 +1,4 @@
-import { Disposable, EventEmitter, WorkspaceConfiguration, workspace } from 'vscode';
+import { Disposable, EventEmitter, workspace, type WorkspaceConfiguration } from 'vscode';
 
 /**
  * Workspace/global-scoped configuration parameters.
@@ -17,6 +17,11 @@ export interface WorkspaceConfig {
     runLintOnSave?: WorkspaceRunLintOnSaveConfig;
 
     /**
+     * Configurations specific to charm testing features.
+     */
+    test: WorkspaceTestConfig;
+
+    /**
      * Charm-specific overrides. Keys are relative paths of charm directories or
      * their parent directories.
      * 
@@ -25,6 +30,16 @@ export interface WorkspaceConfig {
     override?: {
         [key: string]: WorkspaceOverrideConfig;
     };
+}
+
+/**
+ * Configurations related to charm testing features.
+ */
+export interface WorkspaceTestConfig {
+    /**
+     * Custom fields to include in launch configuration when debugging tests.
+     */
+    customDebugLaunchConfig?: { [key: string]: any }
 }
 
 export interface WorkspaceRunLintOnSaveConfig {
@@ -66,6 +81,9 @@ const CONFIG_KEY_OVERRIDE = 'override';
 const CONFIG_KEY_OVERRIDE_VENV_DIR = 'virtualEnvDirectory';
 const CONFIG_KEY_OVERRIDE_RUN_LINT_ON_SAVE = 'runLintOnSave';
 
+const CONFIG_SECTION_TEST = 'charmcraft-ide.test';
+const CONFIG_KEY_TEST_DEBUG_CUSTOM_LAUNCH_CONFIG = 'customDebugLaunchConfig';
+
 const CONFIG_SUBKEY_RUN_LINT_ON_SAVE_ENABLED = 'enabled';
 const CONFIG_SUBKEY_RUN_LINT_ON_SAVE_TOX = 'tox';
 const CONFIG_SUBKEY_RUN_LINT_ON_SAVE_COMMANDS = 'commands';
@@ -106,8 +124,11 @@ export class ConfigManager implements Disposable {
      */
     getLatest(): WorkspaceConfig {
         const config = workspace.getConfiguration(CONFIG_SECTION);
+        const testConfig = workspace.getConfiguration(CONFIG_SECTION_TEST);
 
-        const result: WorkspaceConfig = {};
+        const result: WorkspaceConfig = {
+            test: {},
+        };
 
         /*
          * Note that here to avoid putting default values in more than one
@@ -131,6 +152,14 @@ export class ConfigManager implements Disposable {
         const runLintOnSave = parseRunLintOnSave(readParameterIgnoreDefault(CONFIG_KEY_RUN_LINT_ON_SAVE));
         if (runLintOnSave !== undefined) {
             result.runLintOnSave = runLintOnSave;
+        }
+
+        const customDebugLaunchConfig = optionalStringMap(readParameterIgnoreDefault(
+            CONFIG_KEY_TEST_DEBUG_CUSTOM_LAUNCH_CONFIG,
+            testConfig,
+        ));
+        if (customDebugLaunchConfig !== undefined) {
+            result.test.customDebugLaunchConfig = customDebugLaunchConfig;
         }
 
         const override = loadOverride(readParameterIgnoreDefault(CONFIG_KEY_OVERRIDE));
@@ -227,8 +256,12 @@ export class ConfigManager implements Disposable {
             return typeof v === 'object' && Array.isArray(v) ? v : undefined;
         }
 
-        function readParameterIgnoreDefault(key: string): any {
-            const i = config.inspect(key);
+        function optionalStringMap(v: any): { [key: string]: any } | undefined {
+            return typeof v === 'object' && !Array.isArray(v) ? v : undefined;
+        }
+
+        function readParameterIgnoreDefault(key: string, c?: WorkspaceConfiguration): any {
+            const i = (c ?? config).inspect(key);
             return i?.workspaceValue ?? i?.globalValue;
         }
     }

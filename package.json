@@ -2,7 +2,7 @@
     "name": "vscode-juju-charmcraft-ide",
     "displayName": "Charmcraft IDE",
     "description": "VS Code extension for Juju Charm development",
-    "version": "0.0.13",
+    "version": "0.0.14",
     "publisher": "babakks",
     "repository": {
         "type": "git",
@@ -140,6 +140,10 @@
                 "charmcraft-ide.defaultVirtualEnvDirectory": {
                     "type": "string",
                     "markdownDescription": "Default directory name to setup/detect virtual environments (default is `venv`). This value affects all charms in a workspace, so if you need to change it for some specific charm, use the `override` parameter."
+                },
+                "charmcraft-ide.test.customDebugLaunchConfig": {
+                    "type": "object",
+                    "markdownDescription": "Custom fields to include in launch configuration; for example, setting `justMyCode` to `false` to debug external libraries."
                 },
                 "charmcraft-ide.runLintOnSave": {
                     "type": "object",

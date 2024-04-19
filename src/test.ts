@@ -1,4 +1,6 @@
 import TelemetryReporter from '@vscode/extension-telemetry';
+import { spawn } from 'child_process';
+import { randomUUID } from 'crypto';
 import {
     CancellationToken,
     DebugAdapterTracker,
@@ -21,16 +23,15 @@ import {
     window,
     workspace
 } from 'vscode';
+import { InternalCommands } from './command';
+import { COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT } from './command.const';
+import type { ConfigManager } from './config';
+import { CHARM_DIR_TESTS } from './model/common';
 import { Registry } from './registry';
 import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
+import { WorkspaceCharm } from './workspace';
 import assert = require('assert');
 import path = require('path');
-import { WorkspaceCharm } from './workspace';
-import { CHARM_DIR_TESTS } from './model/common';
-import { spawn } from 'child_process';
-import { randomUUID } from 'crypto';
-import { COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT } from './command.const';
-import { InternalCommands } from './command';
 
 type TestData = CharmTestData | DirectoryTestData | FileTestData | FunctionTestData | ClassTestData | MethodTestData;
 
@@ -92,6 +93,7 @@ export class CharmTestProvider implements Disposable {
     readonly onUpdate = this._onUpdate.event;
 
     constructor(
+        readonly configManager: ConfigManager,
         readonly registry: Registry,
         readonly ic: InternalCommands,
         readonly reporter: TelemetryReporter,
@@ -616,6 +618,8 @@ export class CharmTestProvider implements Disposable {
             return;
         }
 
+        const customDebugLaunchConfig = this.configManager.getLatest().test.customDebugLaunchConfig ?? {};
+
         const pythonBinaryPath = await workspaceCharm.virtualEnv.getPythonExecutablePath();
 
         const { pytestArgs, cwd } = this._getPytestCommand(data, workspaceCharm.home, relativePath);
@@ -657,6 +661,7 @@ export class CharmTestProvider implements Disposable {
                 env,
                 args: pytestArgs,
                 console: "internalConsole",
+                ...customDebugLaunchConfig,
             },
         );
 

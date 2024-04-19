@@ -794,7 +794,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
     }
 }
 
-const _TOX_SECTION_PATTERN = /(?<parent>.*):(?<env>[^:]+)$/
+const _TOX_SECTION_PATTERN = /(?<parent>.*):(?<env>[^:]+)$/;
 export function parseToxINI(text: string): CharmToxConfig {
     let parsed = {};
     try {

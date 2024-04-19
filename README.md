@@ -47,21 +47,34 @@ Currently, diagnostics are interpreted for these linters:
 
 ℹ️ To disable the *Run Lint on Save* option, set `charmcraft-ide.runLintOnSave` configuration's `enabled` parameter to `false`.
 
+## Debugging external libraries
+
+To be able to step into external library code when debugging tests, you can use custom launch configuration fields to set the `justMyCode` to `false`. To do this, add the line below to your `.vscode/settings.json` file:
+
+```json
+{
+    "charmcraft-ide.test.customDebugLaunchConfig": {
+        "justMyCode": false
+    }
+}
+```
+
 ## Configuration
 
 These are some configuration parameters that you can set in `.vscode/settings.json` file of your workspace:
 
-| Parameter                                   | Type       | Default            | Description                                                                                          |
-| ------------------------------------------- | ---------- | ------------------ | ---------------------------------------------------------------------------------------------------- |
-| `charmcraft-ide.ignore`                     | `string`   | (empty)            | Relative path Glob pattern of charm directories to ignore.                                           |
-| `charmcraft-ide.defaultVirtualEnvDirectory` | `string`   | `"venv"`           | Name of directory to setup/detect Python virtual environments.                                       |
-| `charmcraft-ide.runLintOnSave`              | `object`   | `{}`               | Options to configure *Run Lint on Save* feature.                                                     |
-| `charmcraft-ide.runLintOnSave.enabled`      | `boolean`  | `true`             | Enables/disables *Run Lint on Save* feature.                                                         |
-| `charmcraft-ide.runLintOnSave.tox`          | `string[]` | `["testenv:lint"]` | Linting-related Tox environment(s)/section(s) to run.                                                |
-| `charmcraft-ide.runLintOnSave.commands`     | `string[]` | `[]`               | Linting-related commands to run.                                                                     |
-| `charmcraft-ide.runLintOnSave.exclude`      | `string[]` | `[]`               | Array of linters to exclude their diagnostics; for example, `["flake8"]`.                            |
-| `charmcraft-ide.runLintOnSave.include`      | `string[]` | `[]`               | Array of linters to include their diagnostics and exclude other linters'; for example, `["flake8"]`. |
-| `charmcraft-ide.override`                   | `object`   | `{}`               | Charm-specific overrides (See [Charm-specific overrides](#charm-specific-overrides)).                |
+| Parameter                                     | Type       | Default            | Description                                                                                                   |
+| --------------------------------------------- | ---------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `charmcraft-ide.ignore`                       | `string`   | (empty)            | Relative path Glob pattern of charm directories to ignore.                                                    |
+| `charmcraft-ide.defaultVirtualEnvDirectory`   | `string`   | `"venv"`           | Name of directory to setup/detect Python virtual environments.                                                |
+| `charmcraft-ide.test.customDebugLaunchConfig` | `object`   | `{}`               | Custom fields to include in launch configuration when debugging tests; for example `{ "justMyCode": false }`. |
+| `charmcraft-ide.runLintOnSave`                | `object`   | `{}`               | Options to configure *Run Lint on Save* feature.                                                              |
+| `charmcraft-ide.runLintOnSave.enabled`        | `boolean`  | `true`             | Enables/disables *Run Lint on Save* feature.                                                                  |
+| `charmcraft-ide.runLintOnSave.tox`            | `string[]` | `["testenv:lint"]` | Linting-related Tox environment(s)/section(s) to run.                                                         |
+| `charmcraft-ide.runLintOnSave.commands`       | `string[]` | `[]`               | Linting-related commands to run.                                                                              |
+| `charmcraft-ide.runLintOnSave.exclude`        | `string[]` | `[]`               | Array of linters to exclude their diagnostics; for example, `["flake8"]`.                                     |
+| `charmcraft-ide.runLintOnSave.include`        | `string[]` | `[]`               | Array of linters to include their diagnostics and exclude other linters'; for example, `["flake8"]`.          |
+| `charmcraft-ide.override`                     | `object`   | `{}`               | Charm-specific overrides (See [Charm-specific overrides](#charm-specific-overrides)).                         |
 
 ## Charm-specific overrides
 
