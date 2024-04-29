@@ -992,6 +992,25 @@
                 ]
             },
             "markdownDescription": "{{{include 'bases'}}}"
+        },
+        "charmhub": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "api-url": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'charmhub-api-url'}}}"
+                },
+                "storage-url": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'charmhub-storage-url'}}}"
+                },
+                "registry-url": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'charmhub-registry-url'}}}"
+                }
+            },
+            "markdownDescription": "{{{include 'charmhub'}}}"
         }
     },
     "required": [
