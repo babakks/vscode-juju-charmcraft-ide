@@ -876,6 +876,34 @@
                 }
             ],
             "markdownDescription": "{{{include 'actions'}}}"
+        },
+        "analysis": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "ignore": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "attributes": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "markdownDescription": "{{{include 'analysis-ignore-attributes'}}}"
+                        },
+                        "linters": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "markdownDescription": "{{{include 'analysis-ignore-linters'}}}"
+                        }
+                    },
+                    "markdownDescription": "{{{include 'analysis-ignore'}}}"
+                }
+            },
+            "markdownDescription": "{{{include 'analysis'}}}"
         }
     },
     "required": [
