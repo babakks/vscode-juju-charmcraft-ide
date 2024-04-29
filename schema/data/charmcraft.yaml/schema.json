@@ -1196,7 +1196,6 @@
     "required": [
         "name",
         "display-name",
-        "description",
         "summary"
     ],
     "additionalProperties": true
