@@ -109,6 +109,60 @@
                     }
                 }
             ]
+        },
+        "bases-entry": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'bases-entry-name'}}}"
+                },
+                "channel": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'bases-entry-channel'}}}"
+                },
+                "architectures": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "examples": [
+                            "amd64",
+                            "arm64",
+                            "riscv64",
+                            "s390x",
+                            "ppc64el",
+                            "armhf"
+                        ]
+                    },
+                    "markdownDescription": "{{{include 'bases-entry-architectures'}}}"
+                }
+            },
+            "required": [
+                "name",
+                "channel"
+            ],
+            "defaultSnippets": [
+                {
+                    "label": "Insert base",
+                    "markdownDescription": "Inserts a base entry",
+                    "body": {
+                        "name": "${1:name}",
+                        "channel": "${2:channel}"
+                    }
+                },
+                {
+                    "label": "Insert base (with architectures)",
+                    "markdownDescription": "Inserts a base entry (with architectures)",
+                    "body": {
+                        "name": "${1:name}",
+                        "channel": "${2:channel}",
+                        "architectures": [
+                            "${3|amd64,arm64,riscv64,s390x,ppc64el,armhf|}"
+                        ]
+                    }
+                }
+            ]
         }
     },
     "properties": {
@@ -904,6 +958,40 @@
                 }
             },
             "markdownDescription": "{{{include 'analysis'}}}"
+        },
+        "bases": {
+            "type": "array",
+            "items": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "build-on": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/$defs/bases-entry"
+                                },
+                                "markdownDescription": "{{{include 'bases-entry-build-on'}}}"
+                            },
+                            "run-on": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/$defs/bases-entry"
+                                },
+                                "markdownDescription": "{{{include 'bases-entry-run-on'}}}"
+                            }
+                        },
+                        "required": [
+                            "build-on"
+                        ]
+                    },
+                    {
+                        "$ref": "#/$defs/bases-entry"
+                    }
+                ]
+            },
+            "markdownDescription": "{{{include 'bases'}}}"
         }
     },
     "required": [
