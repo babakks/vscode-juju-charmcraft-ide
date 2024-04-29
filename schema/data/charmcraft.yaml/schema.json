@@ -1,0 +1,795 @@
+{
+    "$schema": "http://json-schema.org/schema",
+    "$id": "charmcraft://schema/charmcraft.json",
+    "$defs": {
+        "assumes-entry": {
+            "type": "string",
+            "pattern": "k8s-api|juju (<|<=|>=|>) \\d+(\\.\\d+)?",
+            "examples": [
+                "k8s-api",
+                "juju >= #.#",
+                "juju < #.#"
+            ]
+        },
+        "string-or-array-of-strings": {
+            "oneOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            ]
+        },
+        "string-array": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "endpoint": {
+            "type": "object",
+            "properties": {
+                "interface": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'endpoint-interface'}}}"
+                },
+                "limit": {
+                    "type": "integer",
+                    "markdownDescription": "{{{include 'endpoint-limit'}}}"
+                },
+                "optional": {
+                    "type": "boolean",
+                    "markdownDescription": "{{{include 'endpoint-optional'}}}"
+                },
+                "scope": {
+                    "enum": [
+                        "global",
+                        "container"
+                    ],
+                    "default": "global",
+                    "markdownDescription": "{{{include 'endpoint-scope'}}}"
+                }
+            },
+            "required": [
+                "interface"
+            ],
+            "additionalProperties": false,
+            "defaultSnippets": [
+                {
+                    "label": "Insert endpoint (interface only)",
+                    "markdownDescription": "Inserts an endpoint (interface only)",
+                    "body": {
+                        "interface": "${1:endpoint-interface}"
+                    }
+                },
+                {
+                    "label": "Insert endpoint",
+                    "markdownDescription": "Inserts an endpoint",
+                    "body": {
+                        "interface": "${1:endpoint-interface}",
+                        "limit": "${2:1}",
+                        "optional": "${3|true,false|}",
+                        "scope": "${4|global,container|}"
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'endpoint'}}}"
+        },
+        "endpoint-map": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "$ref": "#/$defs/endpoint"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert endpoint (interface only)",
+                    "markdownDescription": "Inserts an endpoint (interface only)",
+                    "body": {
+                        "${1:endpoint}": {
+                            "interface": "${2:endpoint-interface}"
+                        }
+                    }
+                },
+                {
+                    "label": "Insert endpoint",
+                    "markdownDescription": "Inserts an endpoint",
+                    "body": {
+                        "${1:endpoint}": {
+                            "interface": "${2:endpoint-interface}",
+                            "limit": "${3:1}",
+                            "optional": "${4|true,false|}",
+                            "scope": "${5|global,container|}"
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "properties": {
+        "name": {
+            "type": "string",
+            "markdownDescription": "{{{include 'name'}}}"
+        },
+        "display-name": {
+            "type": "string",
+            "markdownDescription": "{{{include 'display-name'}}}"
+        },
+        "description": {
+            "type": "string",
+            "markdownDescription": "{{{include 'description'}}}"
+        },
+        "summary": {
+            "type": "string",
+            "markdownDescription": "{{{include 'summary'}}}"
+        },
+        "source": {
+            "$ref": "#/$defs/string-or-array-of-strings",
+            "markdownDescription": "{{{include 'source'}}}"
+        },
+        "issues": {
+            "$ref": "#/$defs/string-or-array-of-strings",
+            "markdownDescription": "{{{include 'issues'}}}"
+        },
+        "website": {
+            "$ref": "#/$defs/string-or-array-of-strings",
+            "markdownDescription": "{{{include 'website'}}}"
+        },
+        "maintainers": {
+            "$ref": "#/$defs/string-array",
+            "markdownDescription": "{{{include 'maintainers'}}}"
+        },
+        "terms": {
+            "$ref": "#/$defs/string-array",
+            "markdownDescription": "{{{include 'terms'}}}"
+        },
+        "docs": {
+            "type": "string",
+            "markdownDescription": "{{{include 'docs'}}}"
+        },
+        "subordinate": {
+            "type": "boolean",
+            "markdownDescription": "{{{include 'subordinate'}}}"
+        },
+        "requires": {
+            "$ref": "#/$defs/endpoint-map",
+            "markdownDescription": "{{{include 'requires'}}}"
+        },
+        "provides": {
+            "$ref": "#/$defs/endpoint-map",
+            "markdownDescription": "{{{include 'provides'}}}"
+        },
+        "peers": {
+            "$ref": "#/$defs/endpoint-map",
+            "markdownDescription": "{{{include 'peers'}}}"
+        },
+        "resources": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "enum": [
+                                "oci-image",
+                                "file"
+                            ],
+                            "markdownDescription": "{{{include 'resource-entry-type'}}}"
+                        },
+                        "description": {
+                            "type": "string",
+                            "markdownDescription": "{{{include 'resource-entry-description'}}}"
+                        },
+                        "filename": {
+                            "type": "string",
+                            "markdownDescription": "{{{include 'resource-entry-filename'}}}"
+                        }
+                    },
+                    "required": [
+                        "type"
+                    ],
+                    "allOf": [
+                        {
+                            "if": {
+                                "properties": {
+                                    "type": {
+                                        "const": "file"
+                                    }
+                                }
+                            },
+                            "then": {
+                                "required": [
+                                    "filename"
+                                ]
+                            }
+                        },
+                        {
+                            "if": {
+                                "not": {
+                                    "properties": {
+                                        "type": {
+                                            "const": "file"
+                                        }
+                                    }
+                                }
+                            },
+                            "then": {
+                                "not": {
+                                    "required": [
+                                        "filename"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "if": {
+                                "allOf": [
+                                    {
+                                        "not": {
+                                            "properties": {
+                                                "type": {
+                                                    "const": "file"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "required": [
+                                            "filename"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "then": {
+                                "type": "null",
+                                "errorMessage": "`filename` key should only be provided when `type:file`."
+                            }
+                        }
+                    ],
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert resource (file)",
+                            "markdownDescription": "Inserts a resource (file)",
+                            "body": {
+                                "type": "file",
+                                "description": "${1:A resource}",
+                                "filename": "${2:filename}"
+                            }
+                        },
+                        {
+                            "label": "Insert resource (oci-image)",
+                            "markdownDescription": "Inserts a resource (oci-image)",
+                            "body": {
+                                "type": "oci-image",
+                                "description": "${1:A resource}"
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'resource-entry'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert resource (file)",
+                    "markdownDescription": "Inserts a resource (file)",
+                    "body": {
+                        "${1:resource}": {
+                            "type": "file",
+                            "description": "${2:A resource}",
+                            "filename": "${3:filename}"
+                        }
+                    }
+                },
+                {
+                    "label": "Insert resource (oci-image)",
+                    "markdownDescription": "Inserts a resource (oci-image)",
+                    "body": {
+                        "${1:resource}": {
+                            "type": "oci-image",
+                            "description": "${2:A resource}"
+                        }
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'resources'}}}"
+        },
+        "devices": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "enum": [
+                                "gpu",
+                                "nvidia.com/gpu",
+                                "amd.com/gpu"
+                            ],
+                            "markdownDescription": "{{{include 'device-entry-type'}}}"
+                        },
+                        "description": {
+                            "type": "string",
+                            "markdownDescription": "{{{include 'device-entry-description'}}}"
+                        },
+                        "countmin": {
+                            "type": "integer",
+                            "markdownDescription": "{{{include 'device-entry-countmin'}}}"
+                        },
+                        "countmax": {
+                            "type": "integer",
+                            "markdownDescription": "{{{include 'device-entry-countmax'}}}"
+                        }
+                    },
+                    "required": [
+                        "type"
+                    ],
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert device",
+                            "markdownDescription": "Inserts a device",
+                            "body": {
+                                "type": "${1|gpu,nvidia.com/gpu,amd.com/gpu|}",
+                                "description": "${2:A device}"
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'device-entry'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert device",
+                    "markdownDescription": "Inserts a device",
+                    "body": {
+                        "${1:device}": {
+                            "type": "${2|gpu,nvidia.com/gpu,amd.com/gpu|}",
+                            "description": "${3:A device}"
+                        }
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'devices'}}}"
+        },
+        "storage": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "enum": [
+                                "filesystem",
+                                "block"
+                            ],
+                            "markdownDescription": "{{{include 'storage-entry-type'}}}"
+                        },
+                        "description": {
+                            "type": "string",
+                            "markdownDescription": "{{{include 'storage-entry-description'}}}"
+                        },
+                        "location": {
+                            "type": "string",
+                            "markdownDescription": "{{{include 'storage-entry-location'}}}"
+                        },
+                        "shared": {
+                            "type": "boolean",
+                            "markdownDescription": "{{{include 'storage-entry-shared'}}}"
+                        },
+                        "read-only": {
+                            "type": "boolean",
+                            "markdownDescription": "{{{include 'storage-entry-read-only'}}}"
+                        },
+                        "multiple": {
+                            "oneOf": [
+                                {
+                                    "type": "string",
+                                    "pattern": "^(\\d+(\\+|-)?|\\d+-\\d+)$"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'storage-entry-multiple'}}}"
+                        },
+                        "minimum-size": {
+                            "oneOf": [
+                                {
+                                    "type": "string",
+                                    "pattern": "^\\d+[MGTPEZY]?$"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'storage-entry-minimum-size'}}}"
+                        },
+                        "properties": {
+                            "type": "array",
+                            "items": {
+                                "enum": [
+                                    "transient"
+                                ]
+                            },
+                            "markdownDescription": "{{{include 'storage-entry-properties'}}}"
+                        }
+                    },
+                    "required": [
+                        "type"
+                    ],
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert storage",
+                            "markdownDescription": "Inserts a storage",
+                            "body": {
+                                "type": "${1|filesystem,block|}",
+                                "description": "${2:A storage}"
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'storage-entry'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert storage",
+                    "markdownDescription": "Inserts a storage",
+                    "body": {
+                        "${1:storage}": {
+                            "type": "${2|filesystem,block|}",
+                            "description": "${3:A storage}"
+                        }
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'storage'}}}"
+        },
+        "extra-bindings": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "null",
+                    "markdownDescription": "{{{include 'extra-binding-entry'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert extra-binding",
+                    "markdownDescription": "Inserts an extra-binding",
+                    "body": {
+                        "${1:binding}": {}
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'extra-bindings'}}}"
+        },
+        "containers": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "object",
+                    "properties": {
+                        "resource": {
+                            "type": "string",
+                            "markdownDescription": "{{{include 'container-entry-resource'}}}"
+                        },
+                        "bases": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "markdownDescription": "{{{include 'container-entry-base-name'}}}"
+                                    },
+                                    "channel": {
+                                        "type": "string",
+                                        "markdownDescription": "{{{include 'container-entry-base-channel'}}}"
+                                    },
+                                    "architectures": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "markdownDescription": "{{{include 'container-entry-base-architectures'}}}"
+                                    }
+                                },
+                                "required": [
+                                    "name",
+                                    "channel",
+                                    "architectures"
+                                ],
+                                "defaultSnippets": [
+                                    {
+                                        "label": "Insert base",
+                                        "markdownDescription": "Inserts a base",
+                                        "body": {
+                                            "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
+                                            "channel": "${2:channel}",
+                                            "architectures": [
+                                                "${3:amd64}"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "defaultSnippets": [
+                                {
+                                    "label": "Insert base",
+                                    "markdownDescription": "Inserts a base",
+                                    "body": {
+                                        "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
+                                        "channel": "${2:channel}",
+                                        "architectures": [
+                                            "${3:amd64}"
+                                        ]
+                                    }
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'container-entry-bases'}}}"
+                        },
+                        "mounts": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "storage": {
+                                        "type": "string",
+                                        "markdownDescription": "{{{include 'container-entry-mount-storage'}}}"
+                                    },
+                                    "location": {
+                                        "type": "string",
+                                        "markdownDescription": "{{{include 'container-entry-mount-location'}}}"
+                                    }
+                                },
+                                "required": [
+                                    "storage"
+                                ],
+                                "defaultSnippets": [
+                                    {
+                                        "label": "Insert mount",
+                                        "markdownDescription": "Inserts a mount entry",
+                                        "body": {
+                                            "storage": "${1:storage}",
+                                            "location": "${2:/path}"
+                                        }
+                                    }
+                                ]
+                            },
+                            "defaultSnippets": [
+                                {
+                                    "label": "Insert mount",
+                                    "markdownDescription": "Inserts a mount entry",
+                                    "body": [
+                                        {
+                                            "storage": "${1:storage}",
+                                            "location": "${2:/path}"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'container-entry-mounts'}}}"
+                        }
+                    },
+                    "allOf": [
+                        {
+                            "if": {
+                                "required": [
+                                    "resource",
+                                    "bases"
+                                ]
+                            },
+                            "then": {
+                                "type": "null",
+                                "errorMessage": "Only one of `bases` or `resource` have to be assigned."
+                            }
+                        },
+                        {
+                            "if": {
+                                "allOf": [
+                                    {
+                                        "not": {
+                                            "required": [
+                                                "resource"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "not": {
+                                            "required": [
+                                                "bases"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "then": {
+                                "type": "null",
+                                "errorMessage": "Either one of `bases` or `resource` must be assigned."
+                            }
+                        },
+                        {
+                            "if": {
+                                "required": [
+                                    "resource"
+                                ]
+                            },
+                            "then": {
+                                "not": {
+                                    "required": [
+                                        "bases"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "if": {
+                                "required": [
+                                    "bases"
+                                ]
+                            },
+                            "then": {
+                                "not": {
+                                    "required": [
+                                        "resource"
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert container (with resource)",
+                            "markdownDescription": "Inserts a container (with resource)",
+                            "body": {
+                                "resource": "${1:resource}",
+                                "mounts": [
+                                    {
+                                        "storage": "${2:storage}",
+                                        "location": "${3:/path}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "label": "Insert container (with bases)",
+                            "markdownDescription": "Inserts a container (with bases)",
+                            "body": {
+                                "bases": [
+                                    {
+                                        "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
+                                        "channel": "${2:channel}",
+                                        "architectures": [
+                                            "${3:amd64}"
+                                        ]
+                                    }
+                                ],
+                                "mounts": [
+                                    {
+                                        "storage": "${4:storage}",
+                                        "location": "${5:/path}"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'container-entry'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert container (with resource)",
+                    "markdownDescription": "Inserts a container (with resource)",
+                    "body": {
+                        "${1:container}": {
+                            "resource": "${2:resource}",
+                            "mounts": [
+                                {
+                                    "storage": "${3:storage}",
+                                    "location": "${4:/path}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "label": "Insert container (with bases)",
+                    "markdownDescription": "Inserts a container (with bases)",
+                    "body": {
+                        "${1:container}": {
+                            "bases": [
+                                {
+                                    "name": "${2|ubuntu,centos,windows,osx,opensuse|}",
+                                    "channel": "${3:channel}",
+                                    "architectures": [
+                                        "${4:amd64}"
+                                    ]
+                                }
+                            ],
+                            "mounts": [
+                                {
+                                    "storage": "${5:storage}",
+                                    "location": "${6:/path}"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'containers'}}}"
+        },
+        "assumes": {
+            "$id": "assumes",
+            "type": "array",
+            "items": {
+                "oneOf": [
+                    {
+                        "$id": "assumes/value",
+                        "$ref": "#/$defs/assumes-entry"
+                    },
+                    {
+                        "$id": "assumes/any-of",
+                        "type": "object",
+                        "properties": {
+                            "any-of": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "$ref": "#/$defs/assumes-entry"
+                                }
+                            }
+                        },
+                        "required": [
+                            "any-of"
+                        ],
+                        "examples": [
+                            {
+                                "$id": "asdfasd",
+                                "any-of": [
+                                    "k8s-api",
+                                    "juju >= 2.9"
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "$id": "assumes/all-of",
+                        "type": "object",
+                        "properties": {
+                            "all-of": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "$ref": "#/$defs/assumes-entry"
+                                }
+                            }
+                        },
+                        "required": [
+                            "all-of"
+                        ],
+                        "examples": [
+                            {
+                                "all-of": [
+                                    "k8s-api",
+                                    "juju >= 2.9"
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "markdownDescription": "{{{include 'assumes'}}}"
+        }
+    },
+    "required": [
+        "name",
+        "display-name",
+        "description",
+        "summary"
+    ],
+    "additionalProperties": true
+}
