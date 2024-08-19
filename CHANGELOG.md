@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.15
+
+- Improve charm directory detection criteria.
+
 ## 0.0.14
 
 - Allow for custom launch configuration fields when debugging tests.
