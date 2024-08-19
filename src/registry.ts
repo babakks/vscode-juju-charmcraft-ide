@@ -10,7 +10,7 @@ import {
     workspace,
 } from 'vscode';
 import { ConfigManager, WorkspaceConfig } from './config';
-import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
+import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML, CHARM_FILE_TOX_INI } from './model/common';
 import { BackgroundWorkerManager } from './worker';
 import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
 
@@ -239,9 +239,26 @@ export async function findCharms(token?: CancellationToken, ignorePattern?: stri
     return result;
 }
 
+/**
+ * Determines whether a given URI is charm directory. A directory is considered
+ * to be a charm directory if at least one of the following is true:
+ *
+ *   - Contains `charmcraft.yaml`.
+ *   - Contains both `metadata.yaml` and `tox.ini`.
+ *
+ */
 async function isCharmDirectory(uri: Uri): Promise<boolean> {
-    return (await Promise.allSettled([
-        workspace.fs.stat(Uri.joinPath(uri, CHARM_FILE_CHARMCRAFT_YAML)),
-        workspace.fs.stat(Uri.joinPath(uri, CHARM_FILE_METADATA_YAML)),
-    ])).every(x => x.status === 'fulfilled' && x.value.type === FileType.File);
+    const files = {
+        [CHARM_FILE_CHARMCRAFT_YAML]: false,
+        [CHARM_FILE_METADATA_YAML]: false,
+        [CHARM_FILE_TOX_INI]: false,
+    };
+
+    const checkFile = async (filename: keyof typeof files) => {
+        const stat = await workspace.fs.stat(Uri.joinPath(uri, filename));
+        files[filename] = stat.type === FileType.File;
+    };
+
+    await Promise.allSettled((Object.keys(files) as (keyof typeof files)[]).map(x => checkFile(x)));
+    return files[CHARM_FILE_CHARMCRAFT_YAML] || files[CHARM_FILE_METADATA_YAML] && files[CHARM_FILE_TOX_INI];
 }
