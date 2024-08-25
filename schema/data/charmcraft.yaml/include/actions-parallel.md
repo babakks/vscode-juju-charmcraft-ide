@@ -1,14 +1,10 @@
-***`parallel`***
+<a href="#heading--actions-action-parallel"><h2 id="heading--actions-action-parallel">`actions.<action>.parallel`</h2></a>
+
 
 **Status:** Optional, defaults to false.
 
-**Purpose:** To set whether to allow tasks created by this action to execute in parallel. 
+**Purpose:** Sets whether to allow tasks created by this action to execute in parallel.
 
-**Structure:** *Type:* Boolean.
+**Value:** Boolean.
 
-See more:
-- https://juju.is/docs/sdk/charmcraft-yaml#heading--actions-action-parallel
-- https://juju.is/docs/sdk/actions-yaml
-- https://juju.is/docs/juju/juju-run
-- https://juju.is/docs/juju/task
-- https://juju.is/docs/juju/juju-exec
+> See more: [Juju | `juju run`](https://juju.is/docs/juju/juju-run), [Juju | Task](https://juju.is/docs/juju/task)

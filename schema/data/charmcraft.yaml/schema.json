@@ -166,6 +166,89 @@
         }
     },
     "properties": {
+        "actions": {
+            "type": "object",
+            "additionalProperties": false,
+            "patternProperties": {
+                "^[a-zA-Z_-][a-zA-Z0-9_-]*$": {
+                    "allOf":[
+                        {
+                            "$schema": "https://json-schema.org/draft/2020-12/schema"
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "description": {
+                                    "type": "string",
+                                    "markdownDescription": "{{{include 'actions-description'}}}"
+                                },
+                                "execution-group": {
+                                    "type": "string",
+                                    "default": "",
+                                    "markdownDescription": "{{{include 'actions-execution-group'}}}"
+                                },
+                                "parallel": {
+                                    "type": "boolean",
+                                    "default": false,
+                                    "markdownDescription": "{{{include 'actions-parallel'}}}"
+                                },
+                                "params": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "patternProperties": {
+                                        "^.+$": {
+                                            "$ref": "",
+                                            "markdownDescription": "{{{include 'actions-params-param'}}}"
+                                        }
+                                    },
+                                    "defaultSnippets": [
+                                        {
+                                            "label": "Insert parameter",
+                                            "markdownDescription": "Inserts a parameter",
+                                            "body": {
+                                                "${1:parameter}": {
+                                                    "type": "${2|string,boolean,number,integer,object,array,null|}",
+                                                    "description": "${3:A parameter}"
+                                                }
+                                            }
+                                        }
+                                    ],
+                                    "markdownDescription": "{{{include 'actions-params'}}}"
+                                }
+                            },
+                            "markdownDescription": "{{{include 'actions'}}}"
+                        }
+                    ]
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert action (without parameters)",
+                    "markdownDescription": "Inserts an action (without parameters)",
+                    "body": {
+                        "${1:action}": {
+                            "description": "${2:An action}"
+                        }
+                    }
+                },
+                {
+                    "label": "Insert action",
+                    "markdownDescription": "Inserts an action",
+                    "body": {
+                        "${1:action}": {
+                            "description": "${2:An action}",
+                            "params": {
+                                "param": {
+                                    "type": "${3|string,boolean,number,integer,object,array,null|}",
+                                    "description": "${4:A parameter}"
+                                }
+                            }
+                        }
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'actions'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
@@ -837,99 +920,6 @@
                 ]
             },
             "markdownDescription": "{{{include 'assumes'}}}"
-        },
-        "actions": {
-            "type": "object",
-            "additionalProperties": false,
-            "patternProperties": {
-                "^[a-zA-Z_-][a-zA-Z0-9_-]*$": {
-                    "type": "object",
-                    "properties": {
-                        "description": {
-                            "type": "string",
-                            "markdownDescription": "{{{include 'actions-description'}}}"
-                        },
-                        "parallel": {
-                            "type": "boolean",
-                            "default": false,
-                            "markdownDescription": "{{{include 'actions-parallel'}}}"
-                        },
-                        "execution-group": {
-                            "type": "string",
-                            "default": "",
-                            "markdownDescription": "{{{include 'actions-execution-group'}}}"
-                        },
-                        "params": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "patternProperties": {
-                                "^.+$": {
-                                    "type": "object",
-                                    "properties": {
-                                        "type": {
-                                            "enum": [
-                                                "string",
-                                                "boolean",
-                                                "number",
-                                                "integer",
-                                                "object",
-                                                "array",
-                                                "null"
-                                            ]
-                                        },
-                                        "description": {
-                                            "type": "string"
-                                        },
-                                        "default": {}
-                                    },
-                                    "markdownDescription": "{{{include 'actions-params-param'}}}"
-                                }
-                            },
-                            "defaultSnippets": [
-                                {
-                                    "label": "Insert parameter",
-                                    "markdownDescription": "Inserts a parameter",
-                                    "body": {
-                                        "${1:parameter}": {
-                                            "type": "${2|string,boolean,number,integer,object,array,null|}",
-                                            "description": "${3:A parameter}"
-                                        }
-                                    }
-                                }
-                            ],
-                            "markdownDescription": "{{{include 'actions-params'}}}"
-                        }
-                    },
-                    "markdownDescription": "{{{include 'actions-action'}}}"
-                }
-            },
-            "defaultSnippets": [
-                {
-                    "label": "Insert action (without parameters)",
-                    "markdownDescription": "Inserts an action (without parameters)",
-                    "body": {
-                        "${1:action}": {
-                            "description": "${2:An action}"
-                        }
-                    }
-                },
-                {
-                    "label": "Insert action",
-                    "markdownDescription": "Inserts an action",
-                    "body": {
-                        "${1:action}": {
-                            "description": "${2:An action}",
-                            "params": {
-                                "param": {
-                                    "type": "${3|string,boolean,number,integer,object,array,null|}",
-                                    "description": "${4:A parameter}"
-                                }
-                            }
-                        }
-                    }
-                }
-            ],
-            "markdownDescription": "{{{include 'actions'}}}"
         },
         "analysis": {
             "type": "object",

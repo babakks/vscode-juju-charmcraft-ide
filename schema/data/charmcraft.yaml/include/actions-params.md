@@ -1,11 +1,9 @@
-***`params`***
+<a href="#heading--actions-action-params"><h2 id="heading--actions-action-params">`actions.<action>.params`</h2></a>
 
 **Status:** Optional.
 
-**Purpose:** To define the fixed parameters for the action. Fixed parameters are those with a name given by a fixed string.
+**Purpose:** Holds action parameters.
 
-**Structure:** *Type:* Map. *Value:* One or more key-value pairs where each key is a parameter name and each value is the YAML equivalent of a valid JSON Schema. The entire map of `<action>.params` is inserted into the action schema object as a “properties” validation keyword. The Juju CLI may read the “description” annotation keyword of each parameter to present to the user when describing the action.
+**Value:** Mapping. Keys are parameter names.
 
-See more:
-- https://juju.is/docs/sdk/charmcraft-yaml#heading--actions-action-params
-- https://juju.is/docs/sdk/actions-yaml
+ The entire map of `actions.<action>.params` is inserted into the action schema object as a “properties” validation keyword. The Juju CLI may read the “description” annotation keyword of each parameter to present to the user when describing the action.

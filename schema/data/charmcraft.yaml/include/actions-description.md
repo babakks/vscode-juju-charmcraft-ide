@@ -1,11 +1,7 @@
-***`description`***
+<a href="#heading--actions-action-description"><h2 id="heading--actions-action-description">`actions.<action>.description`</h2></a>
 
-**Status:** Optional but recommended.
+**Status:** Optional.
 
-**Purpose:** To describe the action.
+**Purpose:** Describes the action.
 
-**Structure:** *Type:* String.
-
-See more:
-- https://juju.is/docs/sdk/charmcraft-yaml#heading--actions-action-description
-- https://juju.is/docs/sdk/actions-yaml
+**Value:** String = the action description.

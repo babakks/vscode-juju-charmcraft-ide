@@ -1,4 +1,4 @@
-***[Parameter]***
+<a href="#heading--actions-action-params-param"><h2 id="heading--actions-action-params-param">`actions.<action>.params.<param>`</h2></a>
 
 **Status:** Optional.
 
@@ -8,7 +8,4 @@
 
 **Value:** Mapping = the YAML equivalent of a JSON Schema object.
 
-See more:
-- [JSON Schema Docs](https://www.learnjsonschema.com/2020-12/)
-- https://juju.is/docs/sdk/charmcraft-yaml#heading--actions-action-params
-- https://juju.is/docs/sdk/actions-yaml
+> See more: [JSON Schema Docs](https://www.learnjsonschema.com/2020-12/)
