@@ -174,11 +174,19 @@
             "properties": {
                 "name": {
                     "type": "string",
-                    "markdownDescription": "{{{include 'bases-entry-name'}}}"
+                    "examples": [
+                        "ubuntu"
+                    ],
+                    "markdownDescription": "{{{include 'bases'}}}"
                 },
                 "channel": {
                     "type": "string",
-                    "markdownDescription": "{{{include 'bases-entry-channel'}}}"
+                    "examples": [
+                        "24.04",
+                        "22.04",
+                        "20.04"
+                    ],
+                    "markdownDescription": "{{{include 'bases'}}}"
                 },
                 "architectures": {
                     "type": "array",
@@ -193,7 +201,7 @@
                             "armhf"
                         ]
                     },
-                    "markdownDescription": "{{{include 'bases-entry-architectures'}}}"
+                    "markdownDescription": "{{{include 'bases'}}}"
                 }
             },
             "required": [
@@ -205,22 +213,23 @@
                     "label": "Insert base",
                     "markdownDescription": "Inserts a base entry",
                     "body": {
-                        "name": "${1:name}",
-                        "channel": "${2:channel}"
+                        "name": "${1|ubuntu|}",
+                        "channel": "${2|'24.04','22.04','20.04'|}"
                     }
                 },
                 {
                     "label": "Insert base (with architectures)",
                     "markdownDescription": "Inserts a base entry (with architectures)",
                     "body": {
-                        "name": "${1:name}",
-                        "channel": "${2:channel}",
+                        "name": "${1|ubuntu|}",
+                        "channel": "${2|'24.04','22.04','20.04'|}",
                         "architectures": [
                             "${3|amd64,arm64,riscv64,s390x,ppc64el,armhf|}"
                         ]
                     }
                 }
-            ]
+            ],
+            "markdownDescription": "{{{include 'bases'}}}"
         }
     },
     "properties": {
@@ -341,6 +350,34 @@
                 "$ref": "#/$defs/assumes-entry"
             },
             "markdownDescription": "{{{include 'assumes'}}}"
+        },
+        "bases": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "build-on": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/$defs/bases-entry"
+                        },
+                        "markdownDescription": "{{{include 'bases'}}}"
+                    },
+                    "run-on": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/$defs/bases-entry"
+                        },
+                        "markdownDescription": "{{{include 'bases'}}}"
+                    }
+                },
+                "required": [
+                    "build-on"
+                ],
+                "markdownDescription": "{{{include 'bases'}}}"
+            },
+            "markdownDescription": "{{{include 'bases'}}}"
         },
         "name": {
             "type": "string",
@@ -951,40 +988,6 @@
                 }
             ],
             "markdownDescription": "{{{include 'containers'}}}"
-        },
-        "bases": {
-            "type": "array",
-            "items": {
-                "oneOf": [
-                    {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                            "build-on": {
-                                "type": "array",
-                                "items": {
-                                    "$ref": "#/$defs/bases-entry"
-                                },
-                                "markdownDescription": "{{{include 'bases-entry-build-on'}}}"
-                            },
-                            "run-on": {
-                                "type": "array",
-                                "items": {
-                                    "$ref": "#/$defs/bases-entry"
-                                },
-                                "markdownDescription": "{{{include 'bases-entry-run-on'}}}"
-                            }
-                        },
-                        "required": [
-                            "build-on"
-                        ]
-                    },
-                    {
-                        "$ref": "#/$defs/bases-entry"
-                    }
-                ]
-            },
-            "markdownDescription": "{{{include 'bases'}}}"
         },
         "charmhub": {
             "type": "object",
