@@ -513,6 +513,207 @@
             },
             "markdownDescription": "{{{include 'charmhub'}}}"
         },
+        "config": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "options": {
+                    "type": "object",
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert parameter (with default value)",
+                            "markdownDescription": "Inserts a parameter with default value",
+                            "body": {
+                                "${1:parameter}": {
+                                    "type": "${2|string,int,float,boolean|}",
+                                    "description": "${3:A parameter}",
+                                    "default": "${4|\"\",0,0.0,false|}"
+                                }
+                            }
+                        },
+                        {
+                            "label": "Insert parameter",
+                            "markdownDescription": "Inserts a parameter",
+                            "body": {
+                                "${1:parameter}": {
+                                    "type": "${2|string,int,float,boolean|}",
+                                    "description": "${3:A parameter}"
+                                }
+                            }
+                        },
+                        {
+                            "label": "Insert secret parameter",
+                            "markdownDescription": "Inserts a secret parameter",
+                            "body": {
+                                "${1:parameter}": {
+                                    "type": "secret",
+                                    "description": "${2:A secret}"
+                                }
+                            }
+                        }
+                    ],
+                    "patternProperties": {
+                        "^.+$": {
+                            "type": "object",
+                            "defaultSnippets": [
+                                {
+                                    "label": "Insert parameter (with default value)",
+                                    "markdownDescription": "Inserts a parameter",
+                                    "body": {
+                                        "type": "${1|string,int,float,boolean|}",
+                                        "description": "${2:A parameter}",
+                                        "default": "${3:\"\",0,0.0,false}"
+                                    }
+                                },
+                                {
+                                    "label": "Insert parameter",
+                                    "markdownDescription": "Inserts a parameter",
+                                    "body": {
+                                        "type": "${1|string,int,float,boolean|}",
+                                        "description": "${2:A parameter}"
+                                    }
+                                },
+                                {
+                                    "label": "Insert secret parameter",
+                                    "markdownDescription": "Inserts a secret parameter",
+                                    "body": {
+                                        "type": "secret",
+                                        "description": "${1:A secret}"
+                                    }
+                                }
+                            ],
+                            "properties": {
+                                "type": {
+                                    "enum": [
+                                        "string",
+                                        "int",
+                                        "float",
+                                        "boolean",
+                                        "secret"
+                                    ],
+                                    "markdownDescription": "{{{include 'config'}}}"
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "markdownDescription": "{{{include 'config'}}}"
+                                },
+                                "default": {
+                                    "markdownDescription": "{{{include 'config'}}}"
+                                }
+                            },
+                            "required": [
+                                "type"
+                            ],
+                            "oneOf": [
+                                {
+                                    "not": {
+                                        "required": [
+                                            "default"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "required": [
+                                        "default",
+                                        "type"
+                                    ],
+                                    "allOf": [
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "type": {
+                                                        "const": "string"
+                                                    }
+                                                }
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "default": {
+                                                        "errorMessage": "Should be a string value to match the given type",
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "type": {
+                                                        "const": "int"
+                                                    }
+                                                }
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "default": {
+                                                        "errorMessage": "Should be an integer value to match the given type",
+                                                        "type": "integer"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "type": {
+                                                        "const": "float"
+                                                    }
+                                                }
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "default": {
+                                                        "errorMessage": "Should be a float value to match the given type",
+                                                        "type": "number"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "type": {
+                                                        "const": "boolean"
+                                                    }
+                                                }
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "default": {
+                                                        "errorMessage": "Should be a boolean value to match the given type",
+                                                        "type": "boolean"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "type": {
+                                                        "const": "secret"
+                                                    }
+                                                }
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "default": {
+                                                        "errorMessage": "Should be a string value to match the given type",
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'config'}}}"
+                        }
+                    },
+                    "markdownDescription": "{{{include 'config'}}}"
+                }
+            },
+            "markdownDescription": "{{{include 'config'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
@@ -1122,186 +1323,6 @@
                 }
             ],
             "markdownDescription": "{{{include 'containers'}}}"
-        },
-        "config": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "options": {
-                    "$id": "options",
-                    "markdownDescription": "{{{include 'config-options'}}}",
-                    "type": "object",
-                    "defaultSnippets": [
-                        {
-                            "label": "Insert parameter (with default value)",
-                            "markdownDescription": "Inserts a parameter with default value",
-                            "body": {
-                                "${1:parameter}": {
-                                    "type": "${2|string,int,float,boolean,secret|}",
-                                    "description": "${3:A parameter}",
-                                    "default": "${4:\"\"}"
-                                }
-                            }
-                        },
-                        {
-                            "label": "Insert parameter",
-                            "markdownDescription": "Inserts a parameter",
-                            "body": {
-                                "${1:parameter}": {
-                                    "type": "${2|string,int,float,boolean,secret|}",
-                                    "description": "${3:A parameter}"
-                                }
-                            }
-                        },
-                        {
-                            "label": "Insert secret",
-                            "markdownDescription": "Inserts a secret",
-                            "body": {
-                                "${1:secret-URI}": {
-                                    "type": "secret",
-                                    "description": "${2:A secret}"
-                                }
-                            }
-                        }
-                    ],
-                    "patternProperties": {
-                        "^.+$": {
-                            "type": "object",
-                            "defaultSnippets": [
-                                {
-                                    "label": "Insert parameter (with default value)",
-                                    "markdownDescription": "Inserts a parameter",
-                                    "body": {
-                                        "type": "${1|string,int,float,boolean,secret|}",
-                                        "description": "${2:A parameter}",
-                                        "default": "${3:\"\"}"
-                                    }
-                                },
-                                {
-                                    "label": "Insert parameter",
-                                    "markdownDescription": "Inserts a parameter",
-                                    "body": {
-                                        "type": "${1|string,int,float,boolean,secret|}",
-                                        "description": "${2:A parameter}"
-                                    }
-                                }
-                            ],
-                            "markdownDescription": "{{{include 'config-option-entry'}}}",
-                            "properties": {
-                                "type": {
-                                    "$id": "options/element/type",
-                                    "enum": [
-                                        "string",
-                                        "int",
-                                        "float",
-                                        "boolean",
-                                        "secret"
-                                    ],
-                                    "markdownDescription": "{{{include 'config-option-entry-type'}}}"
-                                },
-                                "description": {
-                                    "$id": "options/element/description",
-                                    "type": "string",
-                                    "markdownDescription": "{{{include 'config-option-entry-description'}}}"
-                                },
-                                "default": {
-                                    "$id": "options/element/default",
-                                    "markdownDescription": "{{{include 'config-option-entry-default'}}}"
-                                }
-                            },
-                            "required": [
-                                "type"
-                            ],
-                            "oneOf": [
-                                {
-                                    "not": {
-                                        "required": [
-                                            "default"
-                                        ]
-                                    }
-                                },
-                                {
-                                    "required": [
-                                        "default",
-                                        "type"
-                                    ],
-                                    "allOf": [
-                                        {
-                                            "if": {
-                                                "properties": {
-                                                    "type": {
-                                                        "const": "string"
-                                                    }
-                                                }
-                                            },
-                                            "then": {
-                                                "properties": {
-                                                    "default": {
-                                                        "errorMessage": "Should be a string value to match the given type",
-                                                        "type": "string"
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        {
-                                            "if": {
-                                                "properties": {
-                                                    "type": {
-                                                        "const": "int"
-                                                    }
-                                                }
-                                            },
-                                            "then": {
-                                                "properties": {
-                                                    "default": {
-                                                        "errorMessage": "Should be an integer value to match the given type",
-                                                        "type": "integer"
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        {
-                                            "if": {
-                                                "properties": {
-                                                    "type": {
-                                                        "const": "float"
-                                                    }
-                                                }
-                                            },
-                                            "then": {
-                                                "properties": {
-                                                    "default": {
-                                                        "errorMessage": "Should be a float value to match the given type",
-                                                        "type": "number"
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        {
-                                            "if": {
-                                                "properties": {
-                                                    "type": {
-                                                        "const": "boolean"
-                                                    }
-                                                }
-                                            },
-                                            "then": {
-                                                "properties": {
-                                                    "default": {
-                                                        "errorMessage": "Should be a boolean value to match the given type",
-                                                        "type": "boolean"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "markdownDescription": "{{{include 'config'}}}"
         }
     },
     "required": [

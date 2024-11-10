@@ -1,4 +1,6 @@
-***`config`***
+<a href="#heading--config"><h2 id="heading--config">`config`</h2></a>
+
+> See first: [Juju | Application configuration](https://juju.is/docs/juju/configuration)
 
 **Status:** Optional.
 
@@ -18,20 +20,16 @@ config:
       description: <description string>
 ```
 
-For the case where the `type` is `secret`, the `<option-name>` is a string that needs to correspond to the secret URI.
+For the case where the `type` is `secret`: This is a string that needs to correspond to the secret URI.
 
 **Example:**
 
-```yaml
+```text
 config:
   options:
     name:
       default: Wiki
       description: The name, or Title of the Wiki
-      type: string
-    skin:
-      default: vector
-      description: skin for the Wiki
       type: string
     logo:
       description: URL to fetch logo from
@@ -43,9 +41,15 @@ config:
       default: false
       type: boolean
       description: turn on debugging features of mediawiki
+    port:
+      default: 80
+      type: int
+      description: port on which to serve the wiki
+    timeout:
+      default: 60.0
+      type: float
+      description: maximum time before rendering a page will fail
+    certificate:
+      type: secret
+      description: TLS certificate to use for securing connections
 ```
-
-See more:
-- [Juju | Application configuration](https://juju.is/docs/juju/configuration)
-- https://juju.is/docs/sdk/charmcraft-yaml#heading--config
-- https://juju.is/docs/sdk/config-yaml
