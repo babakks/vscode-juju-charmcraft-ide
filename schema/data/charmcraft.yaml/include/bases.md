@@ -3,34 +3,6 @@
 > ***Warning:** Changes starting with Charmcraft 3*
 >
 > `bases` is replaced by `base` , `build-base`, and `platforms`.
->
-> ```text
-> # The run time base, the base format is <os-name>@<os-release>,
-> # accepted bases are:
-> # - ubuntu@24.04
-> base: <base>
-> # The build time base, if not defined the base is also the build time
-> # base, in addition to valid bases, the build-base can be "devel"
-> # which would use the latest in development Ubuntu Series.
-> build-base: <base>
->
-> platforms:
->     # The supported platforms, may omit build-for if platform-name
->     # is a valid arch, valid architectures follow the Debian architecture names,
->     # accepted architectures are:
->     # - amd64
->     # - arm64
->     # - armhf
->     # - ppc64el
->     # - riscv64
->     # - s390x
->     <platform-name>:
->         # The build time architecture
->         build-on: <list-of-arch> | <arch>
->         # The run time architecture
->         build-for: <list-of-arch> | <arch>
->
-> ```
 
 **Status:** If the [`type`](#heading--type) key is set to `charm`, required. (If the `type` key is set to `bundle`, leads to an error.)
 
