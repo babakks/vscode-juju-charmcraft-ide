@@ -470,6 +470,30 @@
             },
             "markdownDescription": "{{{include 'platforms'}}}"
         },
+        "charm-libs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "lib": {
+                        "type": "string",
+                        "minLength": 1,
+                        "markdownDescription": "{{{include 'charm-libs'}}}"
+                    },
+                    "version": {
+                        "type": "string",
+                        "minLength": 1,
+                        "markdownDescription": "{{{include 'charm-libs'}}}"
+                    }
+                },
+                "required": [
+                    "lib",
+                    "version"
+                ],
+                "markdownDescription": "{{{include 'charm-libs'}}}"
+            },
+            "markdownDescription": "{{{include 'charm-libs'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
