@@ -230,6 +230,39 @@
                 }
             ],
             "markdownDescription": "{{{include 'bases'}}}"
+        },
+        "platforms-architectures": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "examples": [
+                        "amd64",
+                        "arm64",
+                        "armhf",
+                        "ppc64el",
+                        "riscv64",
+                        "s390x"
+                    ],
+                    "minLength": 1
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "examples": [
+                            "amd64",
+                            "arm64",
+                            "armhf",
+                            "ppc64el",
+                            "riscv64",
+                            "s390x"
+                        ],
+                        "minLength": 1
+                    },
+                    "uniqueItems": true,
+                    "minItems": 1
+                }
+            ]
         }
     },
     "properties": {
@@ -378,6 +411,64 @@
                 "markdownDescription": "{{{include 'bases'}}}"
             },
             "markdownDescription": "{{{include 'bases'}}}"
+        },
+        "base": {
+            "type": "string",
+            "pattern": ".+@.+",
+            "examples": [
+                "ubuntu@24.04"
+            ],
+            "markdownDescription": "{{{include 'base'}}}"
+        },
+        "build-base": {
+            "type": "string",
+            "pattern": ".+@.+|devel",
+            "examples": [
+                "ubuntu@24.04",
+                "devel"
+            ],
+            "markdownDescription": "{{{include 'build-base'}}}"
+        },
+        "platforms": {
+            "type": "object",
+            "patternProperties": {
+                "^(amd64|arm64|armhf|ppc64el|riscv64|s390x)$": {
+                    "type": "object",
+                    "properties": {
+                        "build-on": {
+                            "$ref": "#/$defs/platforms-architectures",
+                            "markdownDescription": "{{{include 'platforms'}}}"
+                        },
+                        "build-for": {
+                            "$ref": "#/$defs/platforms-architectures",
+                            "markdownDescription": "{{{include 'platforms'}}}"
+                        }
+                    },
+                    "required": [
+                        "build-on"
+                    ],
+                    "markdownDescription": "{{{include 'platforms'}}}"
+                }
+            },
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "build-on": {
+                        "$ref": "#/$defs/platforms-architectures",
+                        "markdownDescription": "{{{include 'platforms'}}}"
+                    },
+                    "build-for": {
+                        "$ref": "#/$defs/platforms-architectures",
+                        "markdownDescription": "{{{include 'platforms'}}}"
+                    }
+                },
+                "required": [
+                    "build-on",
+                    "build-for"
+                ],
+                "markdownDescription": "{{{include 'platforms'}}}"
+            },
+            "markdownDescription": "{{{include 'platforms'}}}"
         },
         "name": {
             "type": "string",
