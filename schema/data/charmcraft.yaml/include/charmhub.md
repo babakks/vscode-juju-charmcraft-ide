@@ -1,12 +1,15 @@
-***`charmhub`***
+<a href="#heading--charmhub"><h2 id="heading--charmhub">`charmhub`</h2></a>
+
+
+> **Warning:** In Charmcraft 3.0 and up, these keys will no longer be valid in `charmcraft.yaml`. Use the environment variables `CHARMCRAFT_STORE_API_URL`, `CHARMCRAFT_UPLOAD_URL` and `CHARMCRAFT_REGISTRY_URL` instead.
 
 **Status:** Optional.
 
-**Purpose:** Configures Charmcraft's interaction with store servers.
+**Purpose:** Configures Charmcraft's interaction with store servers. 
 
 **Structure:** This key allows for the configuration of two values---the base URL for the Charmhub API and the base URL to push binaries to Charmhub. These keys are also optional.
 
-```yaml
+```
 charmhub:
   api-url: <api url>
   storage-url: <storage url>
@@ -17,11 +20,8 @@ The key is used mostly in the context of "private" charm stores, defaulting to t
 
 **Example:**
 
-```yaml
+```text
 charmhub:
   api-url: https://api.staging.charmhub.io
   storage-url: https://storage.staging.snapcraftcontent.com
 ```
-
-See more:
-- https://juju.is/docs/sdk/charmcraft-yaml#heading--charmhub

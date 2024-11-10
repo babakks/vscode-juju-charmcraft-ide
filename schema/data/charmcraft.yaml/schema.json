@@ -494,6 +494,25 @@
             },
             "markdownDescription": "{{{include 'charm-libs'}}}"
         },
+        "charmhub": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "api-url": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'charmhub'}}}"
+                },
+                "storage-url": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'charmhub'}}}"
+                },
+                "registry-url": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'charmhub'}}}"
+                }
+            },
+            "markdownDescription": "{{{include 'charmhub'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
@@ -1103,25 +1122,6 @@
                 }
             ],
             "markdownDescription": "{{{include 'containers'}}}"
-        },
-        "charmhub": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "api-url": {
-                    "type": "string",
-                    "markdownDescription": "{{{include 'charmhub-api-url'}}}"
-                },
-                "storage-url": {
-                    "type": "string",
-                    "markdownDescription": "{{{include 'charmhub-storage-url'}}}"
-                },
-                "registry-url": {
-                    "type": "string",
-                    "markdownDescription": "{{{include 'charmhub-registry-url'}}}"
-                }
-            },
-            "markdownDescription": "{{{include 'charmhub'}}}"
         },
         "config": {
             "type": "object",
