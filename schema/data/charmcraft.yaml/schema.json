@@ -1215,29 +1215,9 @@
             "type": "string",
             "markdownDescription": "{{{include 'summary'}}}"
         },
-        "source": {
-            "$ref": "#/$defs/string-or-array-of-strings",
-            "markdownDescription": "{{{include 'source'}}}"
-        },
-        "issues": {
-            "$ref": "#/$defs/string-or-array-of-strings",
-            "markdownDescription": "{{{include 'issues'}}}"
-        },
-        "website": {
-            "$ref": "#/$defs/string-or-array-of-strings",
-            "markdownDescription": "{{{include 'website'}}}"
-        },
-        "maintainers": {
-            "$ref": "#/$defs/string-array",
-            "markdownDescription": "{{{include 'maintainers'}}}"
-        },
         "terms": {
             "$ref": "#/$defs/string-array",
             "markdownDescription": "{{{include 'terms'}}}"
-        },
-        "docs": {
-            "type": "string",
-            "markdownDescription": "{{{include 'docs'}}}"
         },
         "subordinate": {
             "type": "boolean",
