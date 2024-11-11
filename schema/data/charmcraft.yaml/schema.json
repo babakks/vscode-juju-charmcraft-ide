@@ -1165,6 +1165,44 @@
             ],
             "markdownDescription": "{{{include 'extra-bindings'}}}"
         },
+        "links": {
+            "type": "object",
+            "properties": {
+                "contact": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'links'}}}"
+                },
+                "documentation": {
+                    "type": "string",
+                    "markdownDescription": "{{{include 'links'}}}"
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "markdownDescription": "{{{include 'links'}}}"
+                    },
+                    "markdownDescription": "{{{include 'links'}}}"
+                },
+                "source": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "markdownDescription": "{{{include 'links'}}}"
+                    },
+                    "markdownDescription": "{{{include 'links'}}}"
+                },
+                "website": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "markdownDescription": "{{{include 'links'}}}"
+                    },
+                    "markdownDescription": "{{{include 'links'}}}"
+                }
+            },
+            "markdownDescription": "{{{include 'links'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
