@@ -1205,6 +1205,7 @@
         },
         "name": {
             "type": "string",
+            "minLength": 1,
             "markdownDescription": "{{{include 'name'}}}"
         },
         "display-name": {
@@ -1460,7 +1461,6 @@
         }
     },
     "required": [
-        "name",
         "display-name",
         "summary"
     ],
