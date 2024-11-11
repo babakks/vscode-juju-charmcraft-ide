@@ -2,12 +2,19 @@
 
 **Status:** Optional.
 
-**Purpose:** A list of terms that any charm user must agree with.
+**Purpose:** Lists the terms that any charm user agree to when they're using the charm.
 
-**Structure:**
+**Structure:** The list of terms:
 
 ```yaml
 terms:
- - <term>
+    - <term>
 ```
 
+**Example:**
+
+```text
+terms:
+- Butterscotch is regal
+- Cara is adorable
+```

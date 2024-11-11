@@ -1212,10 +1212,6 @@
             "type": "string",
             "markdownDescription": "{{{include 'summary'}}}"
         },
-        "terms": {
-            "$ref": "#/$defs/string-array",
-            "markdownDescription": "{{{include 'terms'}}}"
-        },
         "subordinate": {
             "type": "boolean",
             "markdownDescription": "{{{include 'subordinate'}}}"
@@ -1454,6 +1450,13 @@
                 }
             ],
             "markdownDescription": "{{{include 'storage'}}}"
+        },
+        "terms": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "markdownDescription": "{{{include 'terms'}}}"
         },
         "title":{
             "type": "string",
