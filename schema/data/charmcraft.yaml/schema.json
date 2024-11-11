@@ -1208,10 +1208,6 @@
             "minLength": 1,
             "markdownDescription": "{{{include 'name'}}}"
         },
-        "display-name": {
-            "type": "string",
-            "markdownDescription": "{{{include 'display-name'}}}"
-        },
         "summary": {
             "type": "string",
             "markdownDescription": "{{{include 'summary'}}}"
@@ -1461,7 +1457,6 @@
         }
     },
     "required": [
-        "display-name",
         "summary"
     ],
     "additionalProperties": true
