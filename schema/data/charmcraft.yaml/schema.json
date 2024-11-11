@@ -1146,6 +1146,25 @@
             ],
             "markdownDescription": "{{{include 'devices'}}}"
         },
+        "extra-bindings": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "null",
+                    "markdownDescription": "{{{include 'extra-bindings'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert extra-binding",
+                    "markdownDescription": "Inserts an extra-binding",
+                    "body": {
+                        "${1:binding}": {}
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'extra-bindings'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
@@ -1420,25 +1439,6 @@
                 }
             ],
             "markdownDescription": "{{{include 'storage'}}}"
-        },
-        "extra-bindings": {
-            "type": "object",
-            "patternProperties": {
-                "^.+$": {
-                    "type": "null",
-                    "markdownDescription": "{{{include 'extra-binding-entry'}}}"
-                }
-            },
-            "defaultSnippets": [
-                {
-                    "label": "Insert extra-binding",
-                    "markdownDescription": "Inserts an extra-binding",
-                    "body": {
-                        "${1:binding}": {}
-                    }
-                }
-            ],
-            "markdownDescription": "{{{include 'extra-bindings'}}}"
         }
     },
     "required": [

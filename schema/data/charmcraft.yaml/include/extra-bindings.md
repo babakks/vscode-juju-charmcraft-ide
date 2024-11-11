@@ -2,13 +2,18 @@
 
 **Status:** Optional.
 
-**Purpose:** Extra bindings for the charm. For example binding extra network
-interfaces. Key only map, value must be blank. Key represents the name..
+**Purpose:** Extra bindings for the charm. For example binding extra network interfaces.
 
-**Structure:**
+**Structure:**  A key-only map; key represents the name of the binding:
 
-```yaml
+```text
 extra-bindings:
- # Key only map; key represents the name of the binding
- <binding name>: {}
+    <binding name>:
+```
+
+**Example:**
+
+```text
+extra-bindings:
+  Ring of Power: null
 ```
