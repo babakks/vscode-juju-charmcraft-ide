@@ -2,10 +2,16 @@
 
 **Status:** Optional.
 
-**Purpose:**  True if the charm is meant to be deployed as a subordinate to a principal charm.
+**Purpose:** Configures whether the charm is meant to be deployed as a subordinate to a principal charm.
 
 **Structure:**
 
 ```yaml
 subordinate: true | false
+```
+
+**Example:**
+
+```text
+subordinate: false
 ```

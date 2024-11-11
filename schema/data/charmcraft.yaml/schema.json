@@ -1208,10 +1208,6 @@
             "minLength": 1,
             "markdownDescription": "{{{include 'name'}}}"
         },
-        "subordinate": {
-            "type": "boolean",
-            "markdownDescription": "{{{include 'subordinate'}}}"
-        },
         "requires": {
             "$ref": "#/$defs/endpoint-map",
             "markdownDescription": "{{{include 'requires'}}}"
@@ -1446,6 +1442,11 @@
                 }
             ],
             "markdownDescription": "{{{include 'storage'}}}"
+        },
+        "subordinate": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "{{{include 'subordinate'}}}"
         },
         "summary": {
             "type": "string",
