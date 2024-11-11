@@ -1083,6 +1083,10 @@
             ],
             "markdownDescription": "{{{include 'containers'}}}"
         },
+        "description": {
+            "type": "string",
+            "markdownDescription": "{{{include 'description'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
@@ -1090,10 +1094,6 @@
         "display-name": {
             "type": "string",
             "markdownDescription": "{{{include 'display-name'}}}"
-        },
-        "description": {
-            "type": "string",
-            "markdownDescription": "{{{include 'description'}}}"
         },
         "summary": {
             "type": "string",
