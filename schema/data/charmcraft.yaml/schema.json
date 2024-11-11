@@ -1455,6 +1455,11 @@
             ],
             "markdownDescription": "{{{include 'storage'}}}"
         },
+        "title":{
+            "type": "string",
+            "minLength": 1,
+            "markdownDescription": "{{{include 'title'}}}"
+        },
         "type": {
             "type": "string",
             "enum": [
