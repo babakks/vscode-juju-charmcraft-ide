@@ -1087,6 +1087,65 @@
             "type": "string",
             "markdownDescription": "{{{include 'description'}}}"
         },
+        "devices": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "enum": [
+                                "gpu",
+                                "nvidia.com/gpu",
+                                "amd.com/gpu"
+                            ],
+                            "markdownDescription": "{{{include 'devices'}}}"
+                        },
+                        "description": {
+                            "type": "string",
+                            "markdownDescription": "{{{include 'devices'}}}"
+                        },
+                        "countmin": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "markdownDescription": "{{{include 'devices'}}}"
+                        },
+                        "countmax": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "markdownDescription": "{{{include 'devices'}}}"
+                        }
+                    },
+                    "required": [
+                        "type"
+                    ],
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert device",
+                            "markdownDescription": "Inserts a device",
+                            "body": {
+                                "type": "${1|gpu,nvidia.com/gpu,amd.com/gpu|}",
+                                "description": "${2:A device}"
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'devices'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert device",
+                    "markdownDescription": "Inserts a device",
+                    "body": {
+                        "${1:device}": {
+                            "type": "${2|gpu,nvidia.com/gpu,amd.com/gpu|}",
+                            "description": "${3:A device}"
+                        }
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'devices'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
@@ -1268,63 +1327,6 @@
                 }
             ],
             "markdownDescription": "{{{include 'resources'}}}"
-        },
-        "devices": {
-            "type": "object",
-            "patternProperties": {
-                "^.+$": {
-                    "type": "object",
-                    "properties": {
-                        "type": {
-                            "enum": [
-                                "gpu",
-                                "nvidia.com/gpu",
-                                "amd.com/gpu"
-                            ],
-                            "markdownDescription": "{{{include 'device-entry-type'}}}"
-                        },
-                        "description": {
-                            "type": "string",
-                            "markdownDescription": "{{{include 'device-entry-description'}}}"
-                        },
-                        "countmin": {
-                            "type": "integer",
-                            "markdownDescription": "{{{include 'device-entry-countmin'}}}"
-                        },
-                        "countmax": {
-                            "type": "integer",
-                            "markdownDescription": "{{{include 'device-entry-countmax'}}}"
-                        }
-                    },
-                    "required": [
-                        "type"
-                    ],
-                    "defaultSnippets": [
-                        {
-                            "label": "Insert device",
-                            "markdownDescription": "Inserts a device",
-                            "body": {
-                                "type": "${1|gpu,nvidia.com/gpu,amd.com/gpu|}",
-                                "description": "${2:A device}"
-                            }
-                        }
-                    ],
-                    "markdownDescription": "{{{include 'device-entry'}}}"
-                }
-            },
-            "defaultSnippets": [
-                {
-                    "label": "Insert device",
-                    "markdownDescription": "Inserts a device",
-                    "body": {
-                        "${1:device}": {
-                            "type": "${2|gpu,nvidia.com/gpu,amd.com/gpu|}",
-                            "description": "${3:A device}"
-                        }
-                    }
-                }
-            ],
-            "markdownDescription": "{{{include 'devices'}}}"
         },
         "storage": {
             "type": "object",
