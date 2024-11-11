@@ -1454,10 +1454,42 @@
                 }
             ],
             "markdownDescription": "{{{include 'storage'}}}"
+        },
+        "type": {
+            "type": "string",
+            "enum": [
+                "bundle",
+                "charm"
+            ],
+            "markdownDescription": "{{{include 'type'}}}"
         }
     },
     "required": [
-        "summary"
+        "type"
+    ],
+    "allOf": [
+        {
+            "if": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "const": "charm"
+                    }
+                },
+                "required": [
+                    "type"
+                ]
+            },
+            "then": {
+                "required": [
+                    "bases",
+                    "description",
+                    "name",
+                    "summary",
+                    "type"
+                ]
+            }
+        }
     ],
     "additionalProperties": true
 }
