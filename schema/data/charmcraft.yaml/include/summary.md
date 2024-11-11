@@ -1,11 +1,12 @@
 <a href="#heading--summary"><h2 id="heading--summary">`summary`</h2></a>
 
-**Status:** Required.
+**Status:** If the `type` key is set to `charm`, required.
 
-**Purpose:** A short, one-line description of the charm.
+**Structure:** A short, one-line description of the charm.
 
-**Structure:**
+**Example:**
 
-```yaml
-summary: <summary>
+```text
+summary: |
+  A Juju charm to run a Traefik-powered ingress controller on Kubernetes.
 ```

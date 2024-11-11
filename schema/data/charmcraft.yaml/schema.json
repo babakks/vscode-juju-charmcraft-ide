@@ -1208,10 +1208,6 @@
             "minLength": 1,
             "markdownDescription": "{{{include 'name'}}}"
         },
-        "summary": {
-            "type": "string",
-            "markdownDescription": "{{{include 'summary'}}}"
-        },
         "subordinate": {
             "type": "boolean",
             "markdownDescription": "{{{include 'subordinate'}}}"
@@ -1450,6 +1446,11 @@
                 }
             ],
             "markdownDescription": "{{{include 'storage'}}}"
+        },
+        "summary": {
+            "type": "string",
+            "minLength": 1,
+            "markdownDescription": "{{{include 'summary'}}}"
         },
         "terms": {
             "type": "array",
