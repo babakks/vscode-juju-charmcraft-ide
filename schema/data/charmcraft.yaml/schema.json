@@ -714,6 +714,375 @@
             },
             "markdownDescription": "{{{include 'config'}}}"
         },
+        "containers": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "object",
+                    "properties": {
+                        "resource": {
+                            "type": "string",
+                            "minLength": 1,
+                            "markdownDescription": "{{{include 'containers'}}}"
+                        },
+                        "bases": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "examples": [
+                                            "ubuntu",
+                                            "centos",
+                                            "windows",
+                                            "osx",
+                                            "opensuse"
+                                        ],
+                                        "markdownDescription": "{{{include 'containers'}}}"
+                                    },
+                                    "channel": {
+                                        "type": "string",
+                                        "pattern": "^[^/]+(\\/[^/]+(\\/[^/]+)?)?$",
+                                        "examples": [
+                                            "20.04/stable",
+                                            "18.04/stable/fips"
+                                        ],
+                                        "markdownDescription": "{{{include 'containers'}}}"
+                                    },
+                                    "architectures": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "examples": [
+                                                "amd64",
+                                                "arm64",
+                                                "armhf",
+                                                "ppc64el",
+                                                "riscv64",
+                                                "s390x"
+                                            ],
+                                            "markdownDescription": "{{{include 'containers'}}}"
+                                        },
+                                        "markdownDescription": "{{{include 'containers'}}}"
+                                    }
+                                },
+                                "required": [
+                                    "name",
+                                    "channel",
+                                    "architectures"
+                                ],
+                                "defaultSnippets": [
+                                    {
+                                        "label": "Insert base",
+                                        "markdownDescription": "Inserts a base",
+                                        "body": {
+                                            "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
+                                            "channel": "${2|24.04/stable,22.04/stable,20.04/stable|}",
+                                            "architectures": [
+                                                "${3|amd64,arm64,armhf,ppc64el,riscv64,s390|}"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "defaultSnippets": [
+                                {
+                                    "label": "Insert base",
+                                    "markdownDescription": "Inserts a base",
+                                    "body": [
+                                        {
+                                            "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
+                                            "channel": "${2|24.04/stable,22.04/stable,20.04/stable|}",
+                                            "architectures": [
+                                                "${3|amd64,arm64,armhf,ppc64el,riscv64,s390|}"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'containers'}}}"
+                        },
+                        "mounts": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "storage": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "markdownDescription": "{{{include 'containers'}}}"
+                                    },
+                                    "location": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "markdownDescription": "{{{include 'containers'}}}"
+                                    }
+                                },
+                                "required": [
+                                    "storage"
+                                ],
+                                "defaultSnippets": [
+                                    {
+                                        "label": "Insert mount",
+                                        "markdownDescription": "Inserts a mount entry",
+                                        "body": {
+                                            "storage": "${1:storage}",
+                                            "location": "${2:/path}"
+                                        }
+                                    }
+                                ]
+                            },
+                            "defaultSnippets": [
+                                {
+                                    "label": "Insert mount",
+                                    "markdownDescription": "Inserts a mount entry",
+                                    "body": [
+                                        {
+                                            "storage": "${1:storage}",
+                                            "location": "${2:/path}"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'containers'}}}"
+                        },
+                        "uid": {
+                            "type": "integer",
+                            "default": 0,
+                            "minimum": 0,
+                            "allOf": [
+                                {
+                                    "if": {
+                                        "type": "integer",
+                                        "minimum": 1000,
+                                        "maximum": 9999
+                                    },
+                                    "then": {
+                                        "type": "null",
+                                        "errorMessage": "Value cannot be in range [1000, 9999]"
+                                    }
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'containers'}}}"
+                        },
+                        "gid": {
+                            "type": "integer",
+                            "default": 0,
+                            "minimum": 0,
+                            "allOf": [
+                                {
+                                    "if": {
+                                        "type": "integer",
+                                        "minimum": 1000,
+                                        "maximum": 9999
+                                    },
+                                    "then": {
+                                        "type": "null",
+                                        "errorMessage": "Value cannot be in range [1000, 9999]"
+                                    }
+                                }
+                            ],
+                            "markdownDescription": "{{{include 'containers'}}}"
+                        }
+                    },
+                    "allOf": [
+                        {
+                            "if": {
+                                "required": [
+                                    "resource",
+                                    "bases"
+                                ]
+                            },
+                            "then": {
+                                "type": "null",
+                                "errorMessage": "Only one of `bases` or `resource` has to be assigned."
+                            }
+                        },
+                        {
+                            "if": {
+                                "allOf": [
+                                    {
+                                        "not": {
+                                            "required": [
+                                                "resource"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "not": {
+                                            "required": [
+                                                "bases"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "then": {
+                                "type": "null",
+                                "errorMessage": "Either `bases` or `resource` must be assigned."
+                            }
+                        },
+                        {
+                            "if": {
+                                "required": [
+                                    "resource"
+                                ]
+                            },
+                            "then": {
+                                "not": {
+                                    "required": [
+                                        "bases"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "if": {
+                                "required": [
+                                    "bases"
+                                ]
+                            },
+                            "then": {
+                                "not": {
+                                    "required": [
+                                        "resource"
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert container (with resource)",
+                            "markdownDescription": "Inserts a container (with resource)",
+                            "body": {
+                                "resource": "${1:resource}"
+                            }
+                        },
+                        {
+                            "label": "Insert container (with bases)",
+                            "markdownDescription": "Inserts a container (with bases)",
+                            "body": {
+                                "bases": [
+                                    {
+                                        "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
+                                        "channel": "${2|24.04/stable,22.04/stable,20.04/stable|}",
+                                        "architectures": [
+                                            "${3|amd64,arm64,armhf,ppc64el,riscv64,s390|}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "label": "Insert container (with resource and mounts)",
+                            "markdownDescription": "Inserts a container (with resource and mounts)",
+                            "body": {
+                                "resource": "${1:resource}",
+                                "mounts": [
+                                    {
+                                        "storage": "${2:storage}",
+                                        "location": "${3:/path}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "label": "Insert container (with bases and mounts)",
+                            "markdownDescription": "Inserts a container (with bases and mounts)",
+                            "body": {
+                                "bases": [
+                                    {
+                                        "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
+                                        "channel": "${2|24.04/stable,22.04/stable,20.04/stable|}",
+                                        "architectures": [
+                                            "${3|amd64,arm64,armhf,ppc64el,riscv64,s390|}"
+                                        ]
+                                    }
+                                ],
+                                "mounts": [
+                                    {
+                                        "storage": "${4:storage}",
+                                        "location": "${5:/path}"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'containers'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert container (with resource)",
+                    "markdownDescription": "Inserts a container (with resource)",
+                    "body": {
+                        "${1:container}": {
+                            "resource": "${2:resource}"
+                        }
+                    }
+                },
+                {
+                    "label": "Insert container (with bases)",
+                    "markdownDescription": "Inserts a container (with bases)",
+                    "body": {
+                        "${1:container}": {
+                            "bases": [
+                                {
+                                    "name": "${2|ubuntu,centos,windows,osx,opensuse|}",
+                                    "channel": "${3|24.04/stable,22.04/stable,20.04/stable|}",
+                                    "architectures": [
+                                        "${4|amd64,arm64,armhf,ppc64el,riscv64,s390|}"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "label": "Insert container (with resource and mounts)",
+                    "markdownDescription": "Inserts a container (with resource and mounts)",
+                    "body": {
+                        "${1:container}": {
+                            "resource": "${2:resource}",
+                            "mounts": [
+                                {
+                                    "storage": "${3:storage}",
+                                    "location": "${4:/path}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "label": "Insert container (with bases and mounts)",
+                    "markdownDescription": "Inserts a container (with bases and mounts)",
+                    "body": {
+                        "${1:container}": {
+                            "bases": [
+                                {
+                                    "name": "${2|ubuntu,centos,windows,osx,opensuse|}",
+                                    "channel": "${3|24.04/stable,22.04/stable,20.04/stable|}",
+                                    "architectures": [
+                                        "${4|amd64,arm64,armhf,ppc64el,riscv64,s390|}"
+                                    ]
+                                }
+                            ],
+                            "mounts": [
+                                {
+                                    "storage": "${5:storage}",
+                                    "location": "${6:/path}"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'containers'}}}"
+        },
         "name": {
             "type": "string",
             "markdownDescription": "{{{include 'name'}}}"
@@ -1068,261 +1437,6 @@
                 }
             ],
             "markdownDescription": "{{{include 'extra-bindings'}}}"
-        },
-        "containers": {
-            "type": "object",
-            "patternProperties": {
-                "^.+$": {
-                    "type": "object",
-                    "properties": {
-                        "resource": {
-                            "type": "string",
-                            "markdownDescription": "{{{include 'container-entry-resource'}}}"
-                        },
-                        "bases": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "name": {
-                                        "type": "string",
-                                        "markdownDescription": "{{{include 'container-entry-base-name'}}}"
-                                    },
-                                    "channel": {
-                                        "type": "string",
-                                        "markdownDescription": "{{{include 'container-entry-base-channel'}}}"
-                                    },
-                                    "architectures": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "markdownDescription": "{{{include 'container-entry-base-architectures'}}}"
-                                    }
-                                },
-                                "required": [
-                                    "name",
-                                    "channel",
-                                    "architectures"
-                                ],
-                                "defaultSnippets": [
-                                    {
-                                        "label": "Insert base",
-                                        "markdownDescription": "Inserts a base",
-                                        "body": {
-                                            "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
-                                            "channel": "${2:channel}",
-                                            "architectures": [
-                                                "${3:amd64}"
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                            "defaultSnippets": [
-                                {
-                                    "label": "Insert base",
-                                    "markdownDescription": "Inserts a base",
-                                    "body": {
-                                        "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
-                                        "channel": "${2:channel}",
-                                        "architectures": [
-                                            "${3:amd64}"
-                                        ]
-                                    }
-                                }
-                            ],
-                            "markdownDescription": "{{{include 'container-entry-bases'}}}"
-                        },
-                        "mounts": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "storage": {
-                                        "type": "string",
-                                        "markdownDescription": "{{{include 'container-entry-mount-storage'}}}"
-                                    },
-                                    "location": {
-                                        "type": "string",
-                                        "markdownDescription": "{{{include 'container-entry-mount-location'}}}"
-                                    }
-                                },
-                                "required": [
-                                    "storage"
-                                ],
-                                "defaultSnippets": [
-                                    {
-                                        "label": "Insert mount",
-                                        "markdownDescription": "Inserts a mount entry",
-                                        "body": {
-                                            "storage": "${1:storage}",
-                                            "location": "${2:/path}"
-                                        }
-                                    }
-                                ]
-                            },
-                            "defaultSnippets": [
-                                {
-                                    "label": "Insert mount",
-                                    "markdownDescription": "Inserts a mount entry",
-                                    "body": [
-                                        {
-                                            "storage": "${1:storage}",
-                                            "location": "${2:/path}"
-                                        }
-                                    ]
-                                }
-                            ],
-                            "markdownDescription": "{{{include 'container-entry-mounts'}}}"
-                        }
-                    },
-                    "allOf": [
-                        {
-                            "if": {
-                                "required": [
-                                    "resource",
-                                    "bases"
-                                ]
-                            },
-                            "then": {
-                                "type": "null",
-                                "errorMessage": "Only one of `bases` or `resource` have to be assigned."
-                            }
-                        },
-                        {
-                            "if": {
-                                "allOf": [
-                                    {
-                                        "not": {
-                                            "required": [
-                                                "resource"
-                                            ]
-                                        }
-                                    },
-                                    {
-                                        "not": {
-                                            "required": [
-                                                "bases"
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                            "then": {
-                                "type": "null",
-                                "errorMessage": "Either one of `bases` or `resource` must be assigned."
-                            }
-                        },
-                        {
-                            "if": {
-                                "required": [
-                                    "resource"
-                                ]
-                            },
-                            "then": {
-                                "not": {
-                                    "required": [
-                                        "bases"
-                                    ]
-                                }
-                            }
-                        },
-                        {
-                            "if": {
-                                "required": [
-                                    "bases"
-                                ]
-                            },
-                            "then": {
-                                "not": {
-                                    "required": [
-                                        "resource"
-                                    ]
-                                }
-                            }
-                        }
-                    ],
-                    "defaultSnippets": [
-                        {
-                            "label": "Insert container (with resource)",
-                            "markdownDescription": "Inserts a container (with resource)",
-                            "body": {
-                                "resource": "${1:resource}",
-                                "mounts": [
-                                    {
-                                        "storage": "${2:storage}",
-                                        "location": "${3:/path}"
-                                    }
-                                ]
-                            }
-                        },
-                        {
-                            "label": "Insert container (with bases)",
-                            "markdownDescription": "Inserts a container (with bases)",
-                            "body": {
-                                "bases": [
-                                    {
-                                        "name": "${1|ubuntu,centos,windows,osx,opensuse|}",
-                                        "channel": "${2:channel}",
-                                        "architectures": [
-                                            "${3:amd64}"
-                                        ]
-                                    }
-                                ],
-                                "mounts": [
-                                    {
-                                        "storage": "${4:storage}",
-                                        "location": "${5:/path}"
-                                    }
-                                ]
-                            }
-                        }
-                    ],
-                    "markdownDescription": "{{{include 'container-entry'}}}"
-                }
-            },
-            "defaultSnippets": [
-                {
-                    "label": "Insert container (with resource)",
-                    "markdownDescription": "Inserts a container (with resource)",
-                    "body": {
-                        "${1:container}": {
-                            "resource": "${2:resource}",
-                            "mounts": [
-                                {
-                                    "storage": "${3:storage}",
-                                    "location": "${4:/path}"
-                                }
-                            ]
-                        }
-                    }
-                },
-                {
-                    "label": "Insert container (with bases)",
-                    "markdownDescription": "Inserts a container (with bases)",
-                    "body": {
-                        "${1:container}": {
-                            "bases": [
-                                {
-                                    "name": "${2|ubuntu,centos,windows,osx,opensuse|}",
-                                    "channel": "${3:channel}",
-                                    "architectures": [
-                                        "${4:amd64}"
-                                    ]
-                                }
-                            ],
-                            "mounts": [
-                                {
-                                    "storage": "${5:storage}",
-                                    "location": "${6:/path}"
-                                }
-                            ]
-                        }
-                    }
-                }
-            ],
-            "markdownDescription": "{{{include 'containers'}}}"
         }
     },
     "required": [
