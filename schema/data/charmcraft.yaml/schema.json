@@ -1508,23 +1508,23 @@
                                 "filesystem",
                                 "block"
                             ],
-                            "markdownDescription": "{{{include 'storage-entry-type'}}}"
+                            "markdownDescription": "{{{include 'storage'}}}"
                         },
                         "description": {
                             "type": "string",
-                            "markdownDescription": "{{{include 'storage-entry-description'}}}"
+                            "markdownDescription": "{{{include 'storage'}}}"
                         },
                         "location": {
                             "type": "string",
-                            "markdownDescription": "{{{include 'storage-entry-location'}}}"
+                            "markdownDescription": "{{{include 'storage'}}}"
                         },
                         "shared": {
                             "type": "boolean",
-                            "markdownDescription": "{{{include 'storage-entry-shared'}}}"
+                            "markdownDescription": "{{{include 'storage'}}}"
                         },
                         "read-only": {
                             "type": "boolean",
-                            "markdownDescription": "{{{include 'storage-entry-read-only'}}}"
+                            "markdownDescription": "{{{include 'storage'}}}"
                         },
                         "multiple": {
                             "oneOf": [
@@ -1536,7 +1536,7 @@
                                     "type": "integer"
                                 }
                             ],
-                            "markdownDescription": "{{{include 'storage-entry-multiple'}}}"
+                            "markdownDescription": "{{{include 'storage'}}}"
                         },
                         "minimum-size": {
                             "oneOf": [
@@ -1548,16 +1548,17 @@
                                     "type": "integer"
                                 }
                             ],
-                            "markdownDescription": "{{{include 'storage-entry-minimum-size'}}}"
+                            "markdownDescription": "{{{include 'storage'}}}"
                         },
                         "properties": {
                             "type": "array",
+                            "uniqueItems": true,
                             "items": {
                                 "enum": [
                                     "transient"
                                 ]
                             },
-                            "markdownDescription": "{{{include 'storage-entry-properties'}}}"
+                            "markdownDescription": "{{{include 'storage'}}}"
                         }
                     },
                     "required": [
@@ -1573,7 +1574,7 @@
                             }
                         }
                     ],
-                    "markdownDescription": "{{{include 'storage-entry'}}}"
+                    "markdownDescription": "{{{include 'storage'}}}"
                 }
             },
             "defaultSnippets": [
