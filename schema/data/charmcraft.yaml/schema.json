@@ -98,20 +98,20 @@
                             "if": {
                                 "pattern": "^juju(-.*)?$"
                             },
-                            "then":{
+                            "then": {
                                 "type": "null",
-                                 "errorMessage": "Cannot be 'juju' or begin with 'juju-'"
+                                "errorMessage": "Cannot be 'juju' or begin with 'juju-'"
                             }
                         },
                         {
                             "if": {
-                                "not":{
+                                "not": {
                                     "pattern": "^[a-z\\-]+$"
                                 }
                             },
-                            "then":{
+                            "then": {
                                 "type": "null",
-                                 "errorMessage": "Must only contain 'a-z' and '-'."
+                                "errorMessage": "Must only contain 'a-z' and '-'."
                             }
                         }
                     ],
