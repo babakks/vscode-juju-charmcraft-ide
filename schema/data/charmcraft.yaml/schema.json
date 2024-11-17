@@ -1209,6 +1209,128 @@
             "minLength": 1,
             "markdownDescription": "{{{include 'name'}}}"
         },
+        "parts": {
+            "type": "object",
+            "patternProperties": {
+                "^.+$": {
+                    "type": "object",
+                    "properties": {
+                        "plugin": {
+                            "type": "string",
+                            "examples": [
+                                "charm",
+                                "bundle",
+                                "reactive"
+                            ],
+                            "markdownDescription": "{{{include 'parts'}}}"
+                        }
+                    },
+                    "additionalProperties": {
+                        "markdownDescription": "{{{include 'parts'}}}"
+                    },
+                    "defaultSnippets": [
+                        {
+                            "label": "Insert charm plugin",
+                            "markdownDescription": "Inserts a part with charm plugin",
+                            "body": {
+                                "plugin": "charm",
+                                "charm-entrypoint": "path/to/entrypoint/script",
+                                "charm-requirements": [
+                                    "requirement-1"
+                                ],
+                                "charm-python-packages": [
+                                    "package-1"
+                                ],
+                                "charm-binary-python-packages": [
+                                    "package-1"
+                                ],
+                                "prime": [
+                                    "path/to/extra-file-1"
+                                ]
+                            }
+                        },
+                        {
+                            "label": "Insert bundle plugin",
+                            "markdownDescription": "Inserts a part with bundle plugin",
+                            "body": {
+                                "plugin": "bundle",
+                                "prime": [
+                                    "path/to/extra-file-1"
+                                ]
+                            }
+                        },
+                        {
+                            "label": "Insert reactive plugin",
+                            "markdownDescription": "Inserts a part with reactive plugin",
+                            "body": {
+                                "plugin": "reactive",
+                                "source": ".",
+                                "build-snaps": [
+                                    "charm"
+                                ],
+                                "reactive-charm-build-arguments": [
+                                    "command-line-option-1"
+                                ]
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'parts'}}}"
+                }
+            },
+            "defaultSnippets": [
+                {
+                    "label": "Insert charm plugin",
+                    "markdownDescription": "Inserts a part with charm plugin",
+                    "body": {
+                        "${1:part-name}": {
+                            "plugin": "charm",
+                            "charm-entrypoint": "path/to/entrypoint/script",
+                            "charm-requirements": [
+                                "requirement-1"
+                            ],
+                            "charm-python-packages": [
+                                "package-1"
+                            ],
+                            "charm-binary-python-packages": [
+                                "package-1"
+                            ],
+                            "prime": [
+                                "path/to/extra-file-1"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "label": "Insert bundle plugin",
+                    "markdownDescription": "Inserts a part with bundle plugin",
+                    "body": {
+                        "${1:part-name}": {
+                            "plugin": "bundle",
+                            "prime": [
+                                "path/to/extra-file-1"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "label": "Insert reactive plugin",
+                    "markdownDescription": "Inserts a part with reactive plugin",
+                    "body": {
+                        "${1:part-name}": {
+                            "plugin": "reactive",
+                            "source": ".",
+                            "build-snaps": [
+                                "charm"
+                            ],
+                            "reactive-charm-build-arguments": [
+                                "command-line-option-1"
+                            ]
+                        }
+                    }
+                }
+            ],
+            "markdownDescription": "{{{include 'parts'}}}"
+        },
         "requires": {
             "$ref": "#/$defs/endpoint-map",
             "markdownDescription": "{{{include 'requires'}}}"
