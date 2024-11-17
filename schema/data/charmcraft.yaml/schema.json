@@ -1378,15 +1378,15 @@
                                 "oci-image",
                                 "file"
                             ],
-                            "markdownDescription": "{{{include 'resource-entry-type'}}}"
+                            "markdownDescription": "{{{include 'resources'}}}"
                         },
                         "description": {
                             "type": "string",
-                            "markdownDescription": "{{{include 'resource-entry-description'}}}"
+                            "markdownDescription": "{{{include 'resources'}}}"
                         },
                         "filename": {
                             "type": "string",
-                            "markdownDescription": "{{{include 'resource-entry-filename'}}}"
+                            "markdownDescription": "{{{include 'resources'}}}"
                         }
                     },
                     "required": [
@@ -1456,20 +1456,20 @@
                             "markdownDescription": "Inserts a resource (file)",
                             "body": {
                                 "type": "file",
-                                "description": "${1:A resource}",
+                                "description": "${1:A file resource}",
                                 "filename": "${2:filename}"
                             }
                         },
                         {
-                            "label": "Insert resource (oci-image)",
-                            "markdownDescription": "Inserts a resource (oci-image)",
+                            "label": "Insert resource (OCI image)",
+                            "markdownDescription": "Inserts a resource (OCI image)",
                             "body": {
                                 "type": "oci-image",
-                                "description": "${1:A resource}"
+                                "description": "${1:An OCI image resource}"
                             }
                         }
                     ],
-                    "markdownDescription": "{{{include 'resource-entry'}}}"
+                    "markdownDescription": "{{{include 'resources'}}}"
                 }
             },
             "defaultSnippets": [
@@ -1477,20 +1477,20 @@
                     "label": "Insert resource (file)",
                     "markdownDescription": "Inserts a resource (file)",
                     "body": {
-                        "${1:resource}": {
+                        "${1:file-resource}": {
                             "type": "file",
-                            "description": "${2:A resource}",
+                            "description": "${2:A file resource}",
                             "filename": "${3:filename}"
                         }
                     }
                 },
                 {
-                    "label": "Insert resource (oci-image)",
-                    "markdownDescription": "Inserts a resource (oci-image)",
+                    "label": "Insert resource (OCI image)",
+                    "markdownDescription": "Inserts a resource (OCI image)",
                     "body": {
-                        "${1:resource}": {
+                        "${1:oci-image-resource}": {
                             "type": "oci-image",
-                            "description": "${2:A resource}"
+                            "description": "${1:An OCI image resource}"
                         }
                     }
                 }
