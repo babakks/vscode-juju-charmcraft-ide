@@ -1583,7 +1583,7 @@
             },
             "markdownDescription": "{{{include 'terms'}}}"
         },
-        "title":{
+        "title": {
             "type": "string",
             "minLength": 1,
             "markdownDescription": "{{{include 'title'}}}"
