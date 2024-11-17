@@ -93,15 +93,39 @@
             "properties": {
                 "interface": {
                     "type": "string",
-                    "markdownDescription": "{{{include 'endpoint-interface'}}}"
+                    "allOf": [
+                        {
+                            "if": {
+                                "pattern": "^juju(-.*)?$"
+                            },
+                            "then":{
+                                "type": "null",
+                                 "errorMessage": "Cannot be 'juju' or begin with 'juju-'"
+                            }
+                        },
+                        {
+                            "if": {
+                                "not":{
+                                    "pattern": "^[a-z\\-]+$"
+                                }
+                            },
+                            "then":{
+                                "type": "null",
+                                 "errorMessage": "Must only contain 'a-z' and '-'."
+                            }
+                        }
+                    ],
+                    "markdownDescription": "{{{include 'peers-provides-requires'}}}"
                 },
                 "limit": {
                     "type": "integer",
-                    "markdownDescription": "{{{include 'endpoint-limit'}}}"
+                    "minimum": 1,
+                    "markdownDescription": "{{{include 'peers-provides-requires'}}}"
                 },
                 "optional": {
                     "type": "boolean",
-                    "markdownDescription": "{{{include 'endpoint-optional'}}}"
+                    "default": false,
+                    "markdownDescription": "{{{include 'peers-provides-requires'}}}"
                 },
                 "scope": {
                     "enum": [
@@ -109,7 +133,7 @@
                         "container"
                     ],
                     "default": "global",
-                    "markdownDescription": "{{{include 'endpoint-scope'}}}"
+                    "markdownDescription": "{{{include 'peers-provides-requires'}}}"
                 }
             },
             "required": [
@@ -135,7 +159,7 @@
                     }
                 }
             ],
-            "markdownDescription": "{{{include 'endpoint'}}}"
+            "markdownDescription": "{{{include 'peers-provides-requires'}}}"
         },
         "endpoint-map": {
             "type": "object",
@@ -1331,17 +1355,17 @@
             ],
             "markdownDescription": "{{{include 'parts'}}}"
         },
-        "requires": {
+        "peers": {
             "$ref": "#/$defs/endpoint-map",
-            "markdownDescription": "{{{include 'requires'}}}"
+            "markdownDescription": "{{{include 'peers-provides-requires'}}}"
         },
         "provides": {
             "$ref": "#/$defs/endpoint-map",
-            "markdownDescription": "{{{include 'provides'}}}"
+            "markdownDescription": "{{{include 'peers-provides-requires'}}}"
         },
-        "peers": {
+        "requires": {
             "$ref": "#/$defs/endpoint-map",
-            "markdownDescription": "{{{include 'peers'}}}"
+            "markdownDescription": "{{{include 'peers-provides-requires'}}}"
         },
         "resources": {
             "type": "object",
