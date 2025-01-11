@@ -16,7 +16,6 @@ import {
     parseDocument
 } from 'yaml';
 import {
-    CharmActions,
     CharmAssumption,
     CharmContainer,
     CharmContainerBase,
@@ -35,6 +34,7 @@ import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
 import { GENERIC_YAML_PROBLEMS, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from './model/yaml';
 import { CONFIG_YAML_PROBLEMS, type CharmConfigYAML } from './model/config.yaml';
+import type { CharmActions } from './model/actions.yaml';
 
 
 /**
