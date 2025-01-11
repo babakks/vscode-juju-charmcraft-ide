@@ -11,9 +11,10 @@ import {
 } from 'vscode';
 import { Registry } from './registry';
 import { getConfigParamDocumentation, getEventDocumentation } from './util';
-import { CharmConfigParameter } from './model/charm';
+import { } from './model/charm';
 import { isInRange } from './model/common';
 import TelemetryReporter from '@vscode/extension-telemetry';
+import type { CharmConfigParameter } from './model/config.yaml';
 
 export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['"', "'"];
 

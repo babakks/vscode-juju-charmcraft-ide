@@ -15,7 +15,6 @@ import { LinterMessage, parseGenericLinterOutput, parseToxLinterOutput } from '.
 import {
     Charm,
     CharmActions,
-    CharmConfig,
     CharmMetadata,
     CharmToxConfig,
     CharmToxConfigSection,
@@ -23,7 +22,6 @@ import {
     SourceCodeFile,
     SourceCodeTree,
     emptyActions,
-    emptyConfig,
     emptyMetadata,
     emptyToxConfig
 } from './model/charm';
@@ -49,6 +47,7 @@ import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
 import { BackgroundWorkerManager } from './worker';
 import { NonStackableEvent } from './event';
+import { emptyConfig, type CharmConfig } from './model/config.yaml';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;

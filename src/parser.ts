@@ -18,7 +18,6 @@ import {
 import {
     CharmActions,
     CharmAssumption,
-    CharmConfig,
     CharmContainer,
     CharmContainerBase,
     CharmContainerMount,
@@ -35,6 +34,7 @@ import {
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
 import { GENERIC_YAML_PROBLEMS, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from './model/yaml';
+import { CONFIG_YAML_PROBLEMS, type CharmConfig } from './model/config.yaml';
 
 
 /**
@@ -446,7 +446,7 @@ export function parseCharmConfigYAML(text: string): CharmConfig {
                     || entry.value.type.value === 'int' && (typeof entry.value.default.value !== 'number' || !Number.isInteger(defaultValue.value))
                 ) {
                     entry.value.default.value = undefined; // Dropping invalid value.
-                    entry.value.default.node.problems.push(YAML_PROBLEMS.config.wrongDefaultType(entry.value.type.value));
+                    entry.value.default.node.problems.push(CONFIG_YAML_PROBLEMS.wrongDefaultType(entry.value.type.value));
                 }
             } else {
                 // Parameter has no `type`, so we should check if the default value is not essentially invalid.
@@ -456,7 +456,7 @@ export function parseCharmConfigYAML(text: string): CharmConfig {
                     && typeof entry.value.default.value !== 'number'
                 ) {
                     entry.value.default.value = undefined; // Dropping invalid value.
-                    entry.value.default.node.problems.push(YAML_PROBLEMS.config.invalidDefault);
+                    entry.value.default.node.problems.push(CONFIG_YAML_PROBLEMS.invalidDefault);
                 }
             }
         }

@@ -2,17 +2,14 @@ import * as vscode from "vscode";
 import {
     Charm,
     CharmActions,
-    CharmConfig,
     CharmMetadata,
-    MapWithNode,
-    Problem,
     SOURCE_CODE_PROBLEMS,
-    SequenceWithNode,
     SourceCodeFile,
-    WithNode
 } from "./model/charm";
 import { Range, TextPositionMapper, isInRange, zeroRange } from "./model/common";
 import { rangeToVSCodeRange } from "./util";
+import type { MapWithNode, Problem, SequenceWithNode, WithNode } from "./model/yaml";
+import type { CharmConfig } from "./model/config.yaml";
 
 export class ProblemBasedDiagnostic extends vscode.Diagnostic {
     constructor(readonly problem: Problem, range: vscode.Range, message: string, severity?: vscode.DiagnosticSeverity) {
