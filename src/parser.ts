@@ -30,15 +30,11 @@ import {
     CharmStorage,
     CharmToxConfig,
     CharmToxConfigSection,
-    MapWithNode,
-    Problem,
-    SequenceWithNode,
-    WithNode,
-    YAMLNode,
     YAML_PROBLEMS
 } from './model/charm';
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
+import { GENERIC_YAML_PROBLEMS, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from './model/yaml';
 
 
 /**
@@ -184,7 +180,7 @@ function assignScalarFromPair<T>(map: WithNode<any>, key: string, t: SupportedTy
     }
     if (!map.value || !(key in map.value)) {
         if (required) {
-            parentNodeProblems!.push(YAML_PROBLEMS.generic.missingField(key));
+            parentNodeProblems!.push(GENERIC_YAML_PROBLEMS.missingField(key));
         }
         return undefined;
     }
@@ -202,7 +198,7 @@ function assignScalarFromPair<T>(map: WithNode<any>, key: string, t: SupportedTy
     if (value !== undefined && (typeof value === t || t === 'integer' && typeof value === 'number' && Number.isInteger(value))) {
         result.value = value;
     } else {
-        result.node.problems.push(YAML_PROBLEMS.generic.unexpectedScalarType(t));
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.unexpectedScalarType(t));
     }
     return result;
 }
@@ -217,7 +213,7 @@ function assignAnyFromPair(map: WithNode<any>, key: string, required?: boolean, 
     }
     if (!map.value || !(key in map.value)) {
         if (required) {
-            parentNodeProblems!.push(YAML_PROBLEMS.generic.missingField(key));
+            parentNodeProblems!.push(GENERIC_YAML_PROBLEMS.missingField(key));
         }
         return undefined;
     }
@@ -244,7 +240,7 @@ function assignStringEnumFromScalarPair<T>(map: WithNode<any>, key: string, enum
     }
     if (!enumValues.includes(result.value as string)) {
         result.value = undefined;
-        result.node.problems.push(YAML_PROBLEMS.generic.expectedEnumValue(enumValues));
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.expectedEnumValue(enumValues));
     }
     return result;
 }
@@ -265,7 +261,7 @@ function assignArrayOfScalarsFromPair<T>(map: WithNode<any>, key: string, t: Sup
         return result;
     }
     if (initial.node.kind !== 'sequence') {
-        result.node.problems.push(YAML_PROBLEMS.generic.expectedSequenceOfScalars(t));
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.expectedSequenceOfScalars(t));
         return result;
     }
 
@@ -279,7 +275,7 @@ function assignArrayOfScalarsFromPair<T>(map: WithNode<any>, key: string, t: Sup
         if (x.node.kind === 'scalar' && x.value !== undefined && (typeof x.value === t || t === 'integer' && typeof x.value === 'number' && Number.isInteger(x.value))) {
             entry.value = x.value;
         } else {
-            entry.node.problems.push(YAML_PROBLEMS.generic.unexpectedScalarType(t));
+            entry.node.problems.push(GENERIC_YAML_PROBLEMS.unexpectedScalarType(t));
         }
     }
     return result;
@@ -301,12 +297,12 @@ function assignArrayOfMapsFromPair<T>(map: WithNode<any>, key: string, required?
         return result;
     }
     if (initial.node.kind !== 'sequence') {
-        result.node.problems.push(YAML_PROBLEMS.generic.expectedSequence);
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.expectedSequence);
         return result;
     }
     result.elements = (initial.value as WithNode<any>[]).map(x => {
         if (x.node.kind !== 'map') {
-            x.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+            x.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
             x.value = undefined;
         }
         return x;
@@ -334,7 +330,7 @@ function assignScalarOrArrayOfScalarsFromPair<T>(map: WithNode<any>, key: string
     } else if (initial.node.kind === 'scalar') {
         return assignScalarFromPair(map, key, t, required, parentNodeProblems);
     } else {
-        initial.node.problems.push(YAML_PROBLEMS.generic.expectedScalarOrSequence(t));
+        initial.node.problems.push(GENERIC_YAML_PROBLEMS.expectedScalarOrSequence(t));
         return {
             node: initial.node,
         };
@@ -347,7 +343,7 @@ function readMap<T>(map: WithNode<any>, cb: ((value: WithNode<any>, key: string,
     };
 
     if (!map.value || map.node.kind !== 'map') {
-        result.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
         return result;
     }
 
@@ -370,7 +366,7 @@ function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: s
     }
     return readMap<T>(initial, (value, key, entry) => {
         if (value.node.kind !== 'map' || !value.value) {
-            entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+            entry.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
             return;
         }
         cb(value, key, entry);
@@ -401,7 +397,7 @@ export function parseCharmActionsYAML(text: string): CharmActions {
             symbol: toValidSymbol(key),
         };
         if (value.node.kind !== 'map') {
-            entry.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+            entry.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
             return;
         }
         entry.value.description = assignScalarFromPair(value, 'description', 'string');
@@ -427,7 +423,7 @@ export function parseCharmConfigYAML(text: string): CharmConfig {
     };
 
     if (tree.node.kind !== 'map') {
-        result.node.problems.push(YAML_PROBLEMS.generic.expectedMap);
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
         return result;
     }
 
@@ -486,7 +482,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
     };
 
     if (tree.node.kind !== 'map') {
-        result.node.problems.push(YAML_PROBLEMS.generic.invalidYAML);
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.invalidYAML);
         return result;
     }
 
@@ -632,7 +628,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 const supported = ['transient'];
                 for (const e of entry.value.properties.elements) {
                     if (e.value !== undefined && !supported.includes(e.value)) {
-                        e.node.problems.push(YAML_PROBLEMS.generic.expectedEnumValue(supported));
+                        e.node.problems.push(GENERIC_YAML_PROBLEMS.expectedEnumValue(supported));
                         e.value = undefined;
                     }
                 }
@@ -682,7 +678,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 name: key,
             };
             if (value.value !== null) {
-                entry.node.problems.push(YAML_PROBLEMS.generic.expectedNull);
+                entry.node.problems.push(GENERIC_YAML_PROBLEMS.expectedNull);
             }
         });
     }
@@ -749,7 +745,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
         };
 
         if (!initial.value || initial.node.kind !== 'sequence') {
-            result.node.problems.push(YAML_PROBLEMS.generic.expectedSequence);
+            result.node.problems.push(GENERIC_YAML_PROBLEMS.expectedSequence);
             return result;
         }
 
