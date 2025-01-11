@@ -9,20 +9,10 @@ import {
     escapeRegex,
     toValidSymbol
 } from "./common";
+import { emptyConfig, type CharmConfig } from "./config.yaml";
 import { emptyYAMLNode, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
 
 export const YAML_PROBLEMS = {
-    /**
-     * Problems specific to `config.yaml`.
-     */
-    config: {
-        /**
-        * Occurs when the `default` field is assigned with a wrong type of value (e.g., object or array) and also the `type`
-        * field (to pinpoint the type of the default value) is missing,
-         */
-        invalidDefault: { id: 'invalidDefault', message: `Default value must have a valid type; boolean, string, integer, or float.` },
-        wrongDefaultType: (expected: CharmConfigParameterType) => ({ id: 'wrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
-    },
     /**
      * Problems specific to `metadata.yaml`.
      */
@@ -51,25 +41,6 @@ export const SOURCE_CODE_PROBLEMS = {
     },
 } satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
 
-export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
-export function isConfigParameterType(value: string): value is CharmConfigParameterType {
-    return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
-}
-
-export interface CharmConfigParameter {
-    name: string;
-    type?: WithNode<CharmConfigParameterType>;
-    description?: WithNode<string>;
-    default?: WithNode<string | number | boolean>;
-}
-
-export interface CharmConfig {
-    parameters?: MapWithNode<CharmConfigParameter>;
-    /**
-     * Root node.
-     */
-    node: YAMLNode;
-}
 
 export type CharmEndpointScope = 'global' | 'container';
 
@@ -908,12 +879,6 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
 };
 
 export function emptyActions(): CharmActions {
-    return {
-        node: emptyYAMLNode(),
-    };
-}
-
-export function emptyConfig(): CharmConfig {
     return {
         node: emptyYAMLNode(),
     };
