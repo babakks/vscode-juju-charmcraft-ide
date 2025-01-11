@@ -1,3 +1,4 @@
+import { emptyActions, type CharmAction, type CharmActions } from "./actions.yaml";
 import {
     CHARM_DIR_SRC,
     CHARM_DIR_SRC_MAIN,
@@ -155,20 +156,6 @@ export interface CharmEvent {
     symbol: string;
     preferredHandlerSymbol: string;
     description?: string;
-}
-
-export interface CharmAction {
-    name: string;
-    symbol: string;
-    description?: WithNode<string>;
-}
-
-export interface CharmActions {
-    actions?: MapWithNode<CharmAction>;
-    /**
-     * Root node.
-     */
-    node: YAMLNode;
 }
 
 /*
@@ -877,12 +864,6 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
         }
     ];
 };
-
-export function emptyActions(): CharmActions {
-    return {
-        node: emptyYAMLNode(),
-    };
-}
 
 export function emptyMetadata(): CharmMetadata {
     return {
