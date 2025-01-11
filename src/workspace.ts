@@ -47,7 +47,7 @@ import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
 import { BackgroundWorkerManager } from './worker';
 import { NonStackableEvent } from './event';
-import { emptyConfig, type CharmConfig } from './model/config.yaml';
+import { emptyConfig, type CharmConfigYAML } from './model/config.yaml';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;
@@ -352,7 +352,7 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     private async _refreshConfig() {
         const content = await tryReadWorkspaceFileAsText(this.configUri);
-        let config: CharmConfig;
+        let config: CharmConfigYAML;
         if (content === undefined) {
             this._hasConfig = false;
             config = emptyConfig();

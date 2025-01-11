@@ -14,7 +14,7 @@ import { getConfigParamDocumentation, getEventDocumentation } from './util';
 import { } from './model/charm';
 import { isInRange } from './model/common';
 import TelemetryReporter from '@vscode/extension-telemetry';
-import type { CharmConfigParameter } from './model/config.yaml';
+import type { CharmConfigYAMLParameter } from './model/config.yaml';
 
 export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['"', "'"];
 
@@ -108,7 +108,7 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     //     return;
     // }
 
-    getParameterDefaultValueAsString(param: CharmConfigParameter): string {
+    getParameterDefaultValueAsString(param: CharmConfigYAMLParameter): string {
         if (!param.type?.value) {
             return '""';
         }

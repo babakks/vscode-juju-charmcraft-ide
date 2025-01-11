@@ -9,7 +9,7 @@ import {
 import { Range, TextPositionMapper, isInRange, zeroRange } from "./model/common";
 import { rangeToVSCodeRange } from "./util";
 import type { MapWithNode, Problem, SequenceWithNode, WithNode } from "./model/yaml";
-import type { CharmConfig } from "./model/config.yaml";
+import type { CharmConfigYAML } from "./model/config.yaml";
 
 export class ProblemBasedDiagnostic extends vscode.Diagnostic {
     constructor(readonly problem: Problem, range: vscode.Range, message: string, severity?: vscode.DiagnosticSeverity) {
@@ -23,7 +23,7 @@ export class ProblemBasedDiagnostic extends vscode.Diagnostic {
     }
 }
 
-export function getConfigDiagnostics(config: CharmConfig): vscode.Diagnostic[] {
+export function getConfigDiagnostics(config: CharmConfigYAML): vscode.Diagnostic[] {
     return [
         ...config.node.problems.map(p => ProblemBasedDiagnostic.fromProblem(p, config.node.range)),
         ...Object.values(config.parameters?.entries ?? {}).map(config => [
