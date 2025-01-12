@@ -1,7 +1,10 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
-import { CharmActions, CharmConfig, CharmToxConfig, MapWithNode, Problem, SequenceWithNode, WithNode } from "../model/charm";
+import type { CharmActions } from "../model/actions.yaml";
+import type { CharmToxConfig } from "../model/charm";
 import { Range } from "../model/common";
+import type { CharmConfig } from "../model/config.yaml";
+import type { MapWithNode, Problem, SequenceWithNode, WithNode } from "../model/yaml";
 import { YAMLParser, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from "../parser";
 import { newRange, unindent } from "./util";
 
