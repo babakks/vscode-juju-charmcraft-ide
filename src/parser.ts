@@ -15,6 +15,13 @@ import {
     isSeq,
     parseDocument
 } from 'yaml';
+import type { CharmActions } from './model/actions.yaml';
+import {
+    CharmToxConfig,
+    CharmToxConfigSection,
+} from './model/charm';
+import { Range, TextPositionMapper, toValidSymbol } from './model/common';
+import { CONFIG_YAML_PROBLEMS, type CharmConfig } from './model/config.yaml';
 import {
     CharmAssumption,
     CharmContainer,
@@ -26,15 +33,10 @@ import {
     CharmMetadata,
     CharmResource,
     CharmStorage,
-    CharmToxConfig,
-    CharmToxConfigSection,
-    YAML_PROBLEMS
-} from './model/charm';
-import { Range, TextPositionMapper, toValidSymbol } from './model/common';
-import path = require('path');
+    METADATA_YAML_PROBLEMS,
+} from './model/metadata.yaml';
 import { GENERIC_YAML_PROBLEMS, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from './model/yaml';
-import { CONFIG_YAML_PROBLEMS, type CharmConfig } from './model/config.yaml';
-import type { CharmActions } from './model/actions.yaml';
+import path = require('path');
 
 
 /**
@@ -547,9 +549,9 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 const resource = container.value.resource?.value;
                 if (resource !== undefined) {
                     if (!Object.values(result.resources?.entries ?? {}).find(v => v.value?.name === resource)) {
-                        container.node.problems.push(YAML_PROBLEMS.metadata.containerResourceUndefined(resource));
+                        container.node.problems.push(METADATA_YAML_PROBLEMS.containerResourceUndefined(resource));
                     } else if (!Object.values(result.resources?.entries ?? {}).find(v => v.value?.name === resource && v.value?.type?.value === 'oci-image')) {
-                        container.node.problems.push(YAML_PROBLEMS.metadata.containerResourceOCIImageExpected(resource));
+                        container.node.problems.push(METADATA_YAML_PROBLEMS.containerResourceOCIImageExpected(resource));
                     }
                 }
             }
@@ -559,7 +561,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                     const mount = container.value.mounts.elements[i];
                     const storage = mount.value?.storage?.value;
                     if (storage !== undefined && !Object.values(result.storage?.entries ?? {}).find(v => v.value?.name === storage)) {
-                        mount.node.problems.push(YAML_PROBLEMS.metadata.containerMountStorageUndefined(storage));
+                        mount.node.problems.push(METADATA_YAML_PROBLEMS.containerMountStorageUndefined(storage));
                     }
                 }
             }
@@ -592,9 +594,9 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
             if (entry.value.type?.value) {
                 const t = entry.value.type.value;
                 if (t === 'file' && !entry.value.filename) {
-                    entry.node.problems.push(YAML_PROBLEMS.metadata.resourceExpectedFilenameForFileResource);
+                    entry.node.problems.push(METADATA_YAML_PROBLEMS.resourceExpectedFilenameForFileResource);
                 } else if (t !== 'file' && entry.value.filename) {
-                    entry.value.filename.node.problems.push(YAML_PROBLEMS.metadata.resourceUnexpectedFilenameForNonFileResource);
+                    entry.value.filename.node.problems.push(METADATA_YAML_PROBLEMS.resourceUnexpectedFilenameForNonFileResource);
                 }
             }
         });
@@ -644,7 +646,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 entry.value.multiple = assignScalarFromPair<string>(map, 'multiple', 'string');
                 if (entry.value.multiple?.value !== undefined) {
                     if (!entry.value.multiple.value.match(/\d+(\+|-)?|\d+-\d+/)) {
-                        entry.value.multiple.node.problems.push(YAML_PROBLEMS.metadata.storageMultipleInvalid);
+                        entry.value.multiple.node.problems.push(METADATA_YAML_PROBLEMS.storageMultipleInvalid);
                         entry.value.multiple.value = undefined;
                     }
                 }
@@ -660,7 +662,7 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                 entry.value.minimumSize = assignScalarFromPair<string>(map, 'minimum-size', 'string');
                 if (entry.value.minimumSize?.value !== undefined) {
                     if (!entry.value.minimumSize.value.match(/\d+[MGTPEZY]?/)) {
-                        entry.value.minimumSize.node.problems.push(YAML_PROBLEMS.metadata.storageMinimumSizeInvalid);
+                        entry.value.minimumSize.node.problems.push(METADATA_YAML_PROBLEMS.storageMinimumSizeInvalid);
                         entry.value.minimumSize.value = undefined;
                     }
                 }
@@ -710,9 +712,9 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
             }
 
             if (entry.value.resource === undefined && entry.value.bases === undefined) {
-                entry.node.problems.push(YAML_PROBLEMS.metadata.containerExpectedResourceOrBases);
+                entry.node.problems.push(METADATA_YAML_PROBLEMS.containerExpectedResourceOrBases);
             } else if (entry.value.resource !== undefined && entry.value.bases !== undefined) {
-                entry.node.problems.push(YAML_PROBLEMS.metadata.containerExpectedOnlyResourceOrBases);
+                entry.node.problems.push(METADATA_YAML_PROBLEMS.containerExpectedOnlyResourceOrBases);
             }
 
             entry.value.mounts = assignArrayOfMapsFromPair(map, 'mounts');
@@ -780,10 +782,10 @@ export function parseCharmMetadataYAML(text: string): CharmMetadata {
                         anyOf: assignArrayOfScalarsFromPair<string>(map, 'any-of', 'string'),
                     };
                 } else {
-                    entry.node.problems.push(YAML_PROBLEMS.metadata.assumptionExpectedAnyOfOrAllOf);
+                    entry.node.problems.push(METADATA_YAML_PROBLEMS.assumptionExpectedAnyOfOrAllOf);
                 }
             } else {
-                entry.node.problems.push(YAML_PROBLEMS.metadata.assumptionExpected);
+                entry.node.problems.push(METADATA_YAML_PROBLEMS.assumptionExpected);
             }
         }
         return result;

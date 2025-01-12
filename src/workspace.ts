@@ -14,13 +14,11 @@ import { DiagnosticCollectionManager } from './diagnostic.collection';
 import { LinterMessage, parseGenericLinterOutput, parseToxLinterOutput } from './lint.parser';
 import {
     Charm,
-    CharmMetadata,
     CharmToxConfig,
     CharmToxConfigSection,
     SourceCode,
     SourceCodeFile,
     SourceCodeTree,
-    emptyMetadata,
     emptyToxConfig
 } from './model/charm';
 import {
@@ -47,6 +45,7 @@ import { BackgroundWorkerManager } from './worker';
 import { NonStackableEvent } from './event';
 import { emptyConfig, type CharmConfig } from './model/config.yaml';
 import { emptyActions, type CharmActions } from './model/actions.yaml';
+import { emptyMetadata, type CharmMetadata } from './model/metadata.yaml';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;
