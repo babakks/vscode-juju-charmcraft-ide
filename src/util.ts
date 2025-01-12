@@ -2,11 +2,11 @@ import { TextDecoder } from 'util';
 import { MarkdownString, Uri, Range as VSCodeRange, workspace } from 'vscode';
 import { CharmEvent } from './model/charm';
 import { Range } from './model/common';
-import type { CharmConfigYAMLParameter } from './model/config.yaml';
+import type { CharmConfigParameter } from './model/config.yaml';
 
 const SEPARATOR = '\n<hr/>\n\n';
 
-export function getConfigParamDocumentation(param: CharmConfigYAMLParameter, includeTitle?: boolean): MarkdownString {
+export function getConfigParamDocumentation(param: CharmConfigParameter, includeTitle?: boolean): MarkdownString {
     const result = new MarkdownString();
     result.supportHtml = true;
 

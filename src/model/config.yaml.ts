@@ -9,30 +9,30 @@ export const CONFIG_YAML_PROBLEMS = {
     * field (to pinpoint the type of the default value) is missing,
      */
     invalidDefault: { id: 'invalidDefault', message: `Default value must have a valid type; boolean, string, integer, or float.` },
-    wrongDefaultType: (expected: CharmConfigYAMLParameterType) => ({ id: 'wrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
+    wrongDefaultType: (expected: CharmConfigParameterType) => ({ id: 'wrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
 
-export type CharmConfigYAMLParameterType = 'string' | 'int' | 'float' | 'boolean';
-export function isCharmConfigYAMLParameterType(value: string): value is CharmConfigYAMLParameterType {
+export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
+export function isCharmConfigParameterType(value: string): value is CharmConfigParameterType {
     return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
 }
 
-export interface CharmConfigYAMLParameter {
+export interface CharmConfigParameter {
     name: string;
-    type?: WithNode<CharmConfigYAMLParameterType>;
+    type?: WithNode<CharmConfigParameterType>;
     description?: WithNode<string>;
     default?: WithNode<string | number | boolean>;
 }
 
-export interface CharmConfigYAML {
-    parameters?: MapWithNode<CharmConfigYAMLParameter>;
+export interface CharmConfig {
+    parameters?: MapWithNode<CharmConfigParameter>;
     /**
      * Root node.
      */
     node: YAMLNode;
 }
 
-export function emptyConfig(): CharmConfigYAML {
+export function emptyConfig(): CharmConfig {
     return {
         node: emptyYAMLNode(),
     };

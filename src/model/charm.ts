@@ -10,7 +10,7 @@ import {
     escapeRegex,
     toValidSymbol
 } from "./common";
-import { emptyConfig, type CharmConfigYAML } from "./config.yaml";
+import { emptyConfig, type CharmConfig } from "./config.yaml";
 import { emptyYAMLNode, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
 
 export const YAML_PROBLEMS = {
@@ -878,7 +878,7 @@ export function emptyToxConfig(): CharmToxConfig {
 }
 
 export class Charm {
-    private _config: CharmConfigYAML = emptyConfig();
+    private _config: CharmConfig = emptyConfig();
 
     private _eventSymbolMap = new Map<string, CharmEvent>();
     private _actions: CharmActions = emptyActions();
@@ -890,7 +890,7 @@ export class Charm {
 
     constructor() { }
 
-    get config(): CharmConfigYAML {
+    get config(): CharmConfig {
         return this._config;
     }
 
@@ -923,7 +923,7 @@ export class Charm {
         this._repopulateEvents();
     }
 
-    async updateConfig(config: CharmConfigYAML) {
+    async updateConfig(config: CharmConfig) {
         this._config = config;
     }
 

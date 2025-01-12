@@ -33,7 +33,7 @@ import {
 import { Range, TextPositionMapper, toValidSymbol } from './model/common';
 import path = require('path');
 import { GENERIC_YAML_PROBLEMS, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from './model/yaml';
-import { CONFIG_YAML_PROBLEMS, type CharmConfigYAML } from './model/config.yaml';
+import { CONFIG_YAML_PROBLEMS, type CharmConfig } from './model/config.yaml';
 import type { CharmActions } from './model/actions.yaml';
 
 
@@ -405,7 +405,7 @@ export function parseCharmActionsYAML(text: string): CharmActions {
     return result;
 }
 
-export function parseCharmConfigYAML(text: string): CharmConfigYAML {
+export function parseCharmConfigYAML(text: string): CharmConfig {
     const { tree } = new YAMLParser(text).parse();
     if (!tree) {
         return {
@@ -418,7 +418,7 @@ export function parseCharmConfigYAML(text: string): CharmConfigYAML {
         };
     }
 
-    const result: CharmConfigYAML = {
+    const result: CharmConfig = {
         node: tree.node,
     };
 
