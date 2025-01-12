@@ -32,13 +32,6 @@ import {
     CHARM_FILE_TOX_INI,
     CHARM_TOX_LINT_SECTION
 } from './model/common';
-import {
-    getPythonAST,
-    parseCharmActionsYAML,
-    parseCharmConfigYAML,
-    parseCharmMetadataYAML,
-    parseToxINI
-} from './parser';
 import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
 import { VirtualEnv } from './venv';
 import { BackgroundWorkerManager } from './worker';
@@ -46,6 +39,11 @@ import { NonStackableEvent } from './event';
 import { emptyConfig, type CharmConfig } from './model/config.yaml';
 import { emptyActions, type CharmActions } from './model/actions.yaml';
 import { emptyMetadata, type CharmMetadata } from './model/metadata.yaml';
+import { parseCharmActionsYAML } from './parser/actions.yaml';
+import { parseCharmConfigYAML } from './parser/config.yaml';
+import { parseCharmMetadataYAML } from './parser/metadata.yaml';
+import { parseToxINI } from './parser/tox.ini';
+import { getPythonAST } from './parser/common';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;

@@ -5,8 +5,12 @@ import type { CharmToxConfig } from "../model/charm";
 import { Range } from "../model/common";
 import type { CharmConfig } from "../model/config.yaml";
 import type { MapWithNode, Problem, SequenceWithNode, WithNode } from "../model/yaml";
-import { YAMLParser, parseCharmActionsYAML, parseCharmConfigYAML, parseCharmMetadataYAML, parseToxINI } from "../parser";
 import { newRange, unindent } from "./util";
+import { YAMLParser } from "../parser/common";
+import { parseCharmActionsYAML } from "../parser/actions.yaml";
+import { parseCharmConfigYAML } from "../parser/config.yaml";
+import { parseCharmMetadataYAML } from "../parser/metadata.yaml";
+import { parseToxINI } from "../parser/tox.ini";
 
 function cursorOverMap<T>(map: MapWithNode<T> | undefined) {
     let index = -1;
