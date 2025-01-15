@@ -468,9 +468,6 @@
                             "markdownDescription": "{{{include 'platforms'}}}"
                         }
                     },
-                    "required": [
-                        "build-on"
-                    ],
                     "markdownDescription": "{{{include 'platforms'}}}"
                 }
             },
