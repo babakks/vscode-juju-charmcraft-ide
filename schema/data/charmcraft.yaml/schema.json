@@ -456,7 +456,7 @@
         "platforms": {
             "type": "object",
             "patternProperties": {
-                "^(amd64|arm64|armhf|ppc64el|riscv64|s390x)$": {
+                "^.+$": {
                     "type": "object",
                     "properties": {
                         "build-on": {
