@@ -25,7 +25,7 @@ export const GENERIC_YAML_PROBLEMS = {
     expectedScalarOrSequence: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'expectedScalarOrSequence', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected} or a sequence of them.` }),
     expectedMap: { id: 'expectedMap', message: `Must be a map.` },
     expectedSequence: { id: 'expectedSequence', message: `Must be a sequence.` },
-    expectedEnumValue: (expected: string[]) => ({ id: 'expectedEnumValue', expected, message: `Must be one of the following: ${expected.join(', ')}.` }),
+    expectedEnumValue: (expected: readonly string[]) => ({ id: 'expectedEnumValue', expected, message: `Must be one of the following: ${expected.join(', ')}.` }),
     expectedNull: { id: 'expectedNull', message: 'Must be null' },
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
 
