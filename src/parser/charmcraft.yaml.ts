@@ -32,6 +32,7 @@ import {
     type CharmCharmLib,
     type CharmConfig,
     type CharmConfigOption,
+    type CharmConfigOptionDefaultType,
     type CharmLinks,
     type CharmPart,
     type CharmPlatform,
@@ -309,8 +310,10 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
                             || entry.value.type.value === 'float' && typeof entry.value.default.value !== 'number'
                             || entry.value.type.value === 'int' && (typeof entry.value.default.value !== 'number' || !Number.isInteger(defaultValue.value))
                         ) {
+                            const expectedDefaultType: CharmConfigOptionDefaultType =
+                                entry.value.type.value === 'secret' ? 'string' : entry.value.type.value;
                             entry.value.default.value = undefined; // Dropping invalid value.
-                            entry.value.default.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.configOptionWrongDefaultType(entry.value.type.value));
+                            entry.value.default.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.configOptionWrongDefaultType(expectedDefaultType));
                         }
                     } else {
                         // Parameter has no `type`, so we should check if the default value is not essentially invalid.

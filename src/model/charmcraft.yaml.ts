@@ -20,8 +20,8 @@ export const CHARMCRAFT_YAML_PROBLEMS = {
     platformsInvalidFormat: {id: 'platformsInvalidFormat', message: `Platform should be formatted like \`ubuntu@24.04:amd64\`.`},
     endpointInvalidInterface: {id: 'endpointInvalidInterface', message: `Invalid interface name; should only contain \`a-z\`, cannot start with \`-\` or \`juju-\`, and cannot be \`juju\`.`},
     subordinateRequiresContainerScopeIntegration: {id: 'subordinateRequiresContainerScopeIntegration', message: `Subordinate charms are only valid if they have at least one \`requires\` integration with \`container\` scope.`},
-    configOptionInvalidDefault: { id: 'configOptionInvalidDefault', message: `Default value must have a valid type; boolean, string, integer, float, or secret.` },
-    configOptionWrongDefaultType: (expected: CharmConfigOptionType) => ({ id: 'configOptionWrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
+    configOptionInvalidDefault: { id: 'configOptionInvalidDefault', message: `Default value must have a valid type; boolean, string, integer, or float.` },
+    configOptionWrongDefaultType: (expected: CharmConfigOptionDefaultType) => ({ id: 'configOptionWrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
     charmLibInvalidName: { id: 'charmLibInvalidName', message: `Charm library name should be in \`<charm>.<library>\` format.` },
     charmLibInvalidVersion: { id: 'charmLibInvalidVersion', message: `Charm library version should be in \`<api version>[.<patch version>]\` format.` },
     resourceExpectedFilenameForFileResource: { id: 'resourceExpectedFilenameForFileResource', message: `Field \`filename\` is required since resource type is \`file\`.` },
@@ -134,9 +134,9 @@ export const SUPPORTED_CHARM_CONFIG_TYPES = ['string', 'int', 'float', 'boolean'
 
 export type CharmConfigOptionType = typeof SUPPORTED_CHARM_CONFIG_TYPES[number];
 
-export function isCharmConfigOptionType(value: string): value is CharmConfigOptionType {
-    return value in SUPPORTED_CHARM_CONFIG_TYPES;
-}
+export const SUPPORTED_CHARM_CONFIG_DEFAULT_TYPES = ['string', 'int', 'float', 'boolean'] as const;
+
+export type CharmConfigOptionDefaultType = typeof SUPPORTED_CHARM_CONFIG_DEFAULT_TYPES[number];
 
 export interface CharmConfigOption {
     name: string;
