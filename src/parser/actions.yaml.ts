@@ -21,14 +21,14 @@ export function parseCharmActionsYAML(text: string): CharmActions {
     };
 
     result.actions = readMap(tree, (value, key, entry) => {
-        entry.value = {
-            name: key,
-            symbol: toValidSymbol(key),
-        };
         if (value.node.kind !== 'map') {
             entry.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
             return;
         }
+        entry.value = {
+            name: key,
+            symbol: toValidSymbol(key),
+        };
         entry.value.description = assignScalarFromPair(value, 'description', 'string');
     });
     return result;
