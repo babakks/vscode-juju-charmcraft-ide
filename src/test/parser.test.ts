@@ -20,6 +20,7 @@ function cursorOverMap<T>(map: MapWithNode<T> | undefined) {
     return {
         next() { return entries[++index][1]; },
         get current() { return entries[index][1]; },
+        get currentKey() { return entries[index][0]; }
     };
 }
 
@@ -373,13 +374,14 @@ suite(parseCharmActionsYAML.name, function () {
         const c = cursorOverMap(actions.actions);
 
         c.next();
+        assert.strictEqual(c.currentKey, 'action-empty');
         assert.equal(c.current.value?.name, 'action-empty');
         assert.equal(c.current.value?.symbol, 'action_empty');
         assert.isUndefined(c.current.value?.description);
         assert.equal(c.current.node.text, 'action-empty: {}');
 
-
         c.next();
+        assert.strictEqual(c.currentKey, 'action-with-description-empty');
         assert.equal(c.current.value?.name, 'action-with-description-empty');
         assert.equal(c.current.value?.symbol, 'action_with_description_empty');
         assert.equal(c.current.node.text, 'action-with-description-empty:\n  description: ""');
@@ -388,6 +390,7 @@ suite(parseCharmActionsYAML.name, function () {
         assert.equal(c.current.value?.description?.node.text, '""');
 
         c.next();
+        assert.strictEqual(c.currentKey, 'action-with-description');
         assert.equal(c.current.value?.name, 'action-with-description');
         assert.equal(c.current.value?.symbol, 'action_with_description');
         assert.equal(c.current.node.text, 'action-with-description:\n  description: description');
@@ -418,34 +421,31 @@ suite(parseCharmActionsYAML.name, function () {
         const c = cursorOverMap(actions.actions);
 
         c.next();
-        assert.strictEqual(c.current.value?.name, 'action-array-empty');
-        assert.strictEqual(c.current.value?.symbol, 'action_array_empty');
+        assert.strictEqual(c.currentKey, 'action-array-empty');
+        assert.isUndefined(c.current.value);
         assert.strictEqual(c.current.node.text, 'action-array-empty: []');
         assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
-        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.value?.name, 'action-array');
-        assert.strictEqual(c.current.value?.symbol, 'action_array');
+        assert.strictEqual(c.currentKey, 'action-array');
+        assert.isUndefined(c.current.value);
         assert.strictEqual(c.current.node.text, 'action-array:\n  - element');
         assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
-        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.value?.name, 'action-string');
-        assert.strictEqual(c.current.value?.symbol, 'action_string');
+        assert.strictEqual(c.currentKey, 'action-string');
+        assert.isUndefined(c.current.value);
         assert.strictEqual(c.current.node.text, 'action-string: something');
         assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
-        assert.isUndefined(c.current.value?.description);
 
         c.next();
-        assert.strictEqual(c.current.value?.name, 'action-number');
-        assert.strictEqual(c.current.value?.symbol, 'action_number');
+        assert.strictEqual(c.currentKey, 'action-number');
+        assert.isUndefined(c.current.value);
         assert.strictEqual(c.current.node.text, 'action-number: 0');
         assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
-        assert.isUndefined(c.current.value?.description);
 
         c.next();
+        assert.strictEqual(c.currentKey, 'action-invalid-description-array-empty');
         assert.strictEqual(c.current.value?.name, 'action-invalid-description-array-empty');
         assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_array_empty');
         assert.strictEqual(c.current.node.text, 'action-invalid-description-array-empty:\n  description: []');
@@ -460,6 +460,7 @@ suite(parseCharmActionsYAML.name, function () {
         assert.strictEqual(c.current.value?.description?.node.text, '[]');
 
         c.next();
+        assert.strictEqual(c.currentKey, 'action-invalid-description-array');
         assert.strictEqual(c.current.value?.name, 'action-invalid-description-array');
         assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_array');
         assert.strictEqual(c.current.node.text, 'action-invalid-description-array:\n  description:\n    - element');
@@ -474,6 +475,7 @@ suite(parseCharmActionsYAML.name, function () {
         assert.strictEqual(c.current.value?.description?.node.text, '- element');
 
         c.next();
+        assert.strictEqual(c.currentKey, 'action-invalid-description-number');
         assert.strictEqual(c.current.value?.name, 'action-invalid-description-number');
         assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_number');
         assert.strictEqual(c.current.node.text, 'action-invalid-description-number:\n  description: 0');
