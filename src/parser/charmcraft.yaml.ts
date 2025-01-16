@@ -67,7 +67,7 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
     result.name = assignScalarFromPair(tree, 'name', 'string');
     result.description = assignScalarFromPair(tree, 'description', 'string');
     result.summary = assignScalarFromPair(tree, 'summary', 'string');
-    result.title = assignScalarFromPair(tree, 'title', 'string', true, result.node.problems);
+    result.title = assignScalarFromPair(tree, 'title', 'string');
     result.terms = assignArrayOfScalarsFromPair(tree, 'terms', 'string');
     result.links = _links(tree, 'links');
     result.charmhub = _charmhub(tree, 'charmhub');
