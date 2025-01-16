@@ -214,7 +214,27 @@ export function assignAnyFromPair(map: WithNode<any>, key: string, required?: bo
  * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
  * @returns `undefined` if the field was missing.
  */
-export function assignStringEnumFromScalarPair<T>(map: WithNode<any>, key: string, enumValues: string[], required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
+export function assignMapFromPair<T>(map: WithNode<any>, key: string, required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
+    const result = assignAnyFromPair(map, key, required, parentNodeProblems);
+
+    if (!result) {
+        return undefined;
+    }
+
+    if (result.node.kind !== 'map') {
+        result.value = undefined;
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
+        return result;
+    }
+
+    return result;
+}
+
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+export function assignStringEnumFromScalarPair<T>(map: WithNode<any>, key: string, enumValues: readonly string[], required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
     const result = assignAnyFromPair(map, key, required, parentNodeProblems);
     if (!result || result.value === undefined || result.node.problems.length) {
         return result;
@@ -318,6 +338,54 @@ export function assignScalarOrArrayOfScalarsFromPair<T>(map: WithNode<any>, key:
     }
 }
 
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+export function assignArrayOfEnumsFromPair<T>(map: WithNode<any>, key: string, enumValues: readonly string[], required?: boolean, parentNodeProblems?: Problem[]): SequenceWithNode<T> | undefined {
+    const result = assignArrayOfScalarsFromPair<T>(map, key, 'string', required, parentNodeProblems);
+    if (result?.elements) {
+        for (const element of result?.elements) {
+            if (element.value === undefined) {
+                continue;
+            }
+            if (!enumValues.includes(element.value as string)) {
+                element.value = undefined;
+                element.node.problems.push(GENERIC_YAML_PROBLEMS.expectedEnumValue(enumValues));
+            }
+        }
+    }
+    return result;
+}
+
+
+/**
+ * If there's any problem parsing the field, the returned object's `value` property will be `undefined`.
+ * @returns `undefined` if the field was missing.
+ */
+export function assignStringEnumOrArrayOfEnumsFromPair<T>(map: WithNode<any>, key: string, enumValues: readonly string[], required?: boolean, parentNodeProblems?: Problem[]): SequenceWithNode<T> | WithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key, required, parentNodeProblems);
+    if (!initial) {
+        return undefined;
+    }
+    if (initial.value === undefined || initial.node.problems.length) {
+        return {
+            node: initial.node,
+        };
+    }
+
+    if (initial.node.kind === 'sequence') {
+        return assignArrayOfEnumsFromPair<T>(map, key, enumValues, required, parentNodeProblems);
+    } else if (initial.node.kind === 'scalar') {
+        return assignStringEnumFromScalarPair(map, key, enumValues, required, parentNodeProblems);
+    } else {
+        initial.node.problems.push(GENERIC_YAML_PROBLEMS.expectedScalarOrSequence('string'));
+        return {
+            node: initial.node,
+        };
+    }
+}
+
 export function readMap<T>(map: WithNode<any>, cb: ((value: WithNode<any>, key: string, entry: WithNode<T>) => void)): MapWithNode<T> | undefined {
     const result: MapWithNode<T> = {
         node: map.node,
@@ -340,8 +408,8 @@ export function readMap<T>(map: WithNode<any>, cb: ((value: WithNode<any>, key: 
     return result;
 }
 
-export function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: string, entry: WithNode<T>) => void)): MapWithNode<T> | undefined {
-    const initial = assignAnyFromPair(map, key);
+export function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: string, entry: WithNode<T>) => void), required?: boolean, parentNodeProblems?: Problem[]): MapWithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key, required, parentNodeProblems);
     if (!initial || initial.value === undefined) {
         return undefined;
     }
@@ -351,6 +419,59 @@ export function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any,
             return;
         }
         cb(value, key, entry);
+    });
+}
+
+export function readPlainMap<T>(map: WithNode<any>, key: string, cb: ((map: any, entry: WithNode<T>) => void), required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key, required, parentNodeProblems);
+    if (!initial || initial.value === undefined) {
+        return undefined;
+    }
+    if (initial.node.kind !== 'map') {
+        initial.value = undefined;
+        initial.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
+        return initial;
+    }
+
+    const result: WithNode<T> = {
+        node: initial.node,
+    };
+    cb(initial, result);
+    return result;
+}
+
+export function readSequence<T>(map: WithNode<any>, cb: ((value: WithNode<any>, element: WithNode<T>) => void)): SequenceWithNode<T> | undefined {
+    const result: SequenceWithNode<T> = {
+        node: map.node,
+    };
+
+    if (!map.value || map.node.kind !== 'sequence') {
+        result.node.problems.push(GENERIC_YAML_PROBLEMS.expectedSequence);
+        return result;
+    }
+
+    result.elements = [];
+    for (const x of map.value) {
+        const element: WithNode<T> = {
+            node: x.node,
+        };
+        result.elements.push(element);
+        cb(x, element);
+    }
+    return result;
+}
+
+export function readSequenceOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, element: WithNode<T>) => void)): SequenceWithNode<T> | undefined {
+    const initial = assignAnyFromPair(map, key);
+    if (!initial || initial.value === undefined) {
+        return undefined;
+    }
+    return readSequence<T>(initial, (value, element) => {
+        if (value.node.kind !== 'map' || !value.value) {
+            element.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
+            return;
+        }
+        cb(value, element);
     });
 }
 
