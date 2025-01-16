@@ -6,6 +6,24 @@ import { emptyYAMLNode, type MapWithNode, type Problem, type SequenceWithNode, t
 export const CHARMCRAFT_YAML_PROBLEMS = {
     assumptionExpectedAnyOfOrAllOf: { id: 'assumptionExpectedAnyOfOrAllOf', message: `Must include only one of \`any-of\` or \`all-of\` keys.` },
     assumptionExpected: { id: 'assumptionExpected', message: 'Expected a string entry or a map with only \`any-of\` or \`all-of\` keys.' },
+    assumptionInvalidFormat: {id: 'assumptionInvalidFormat', message: `Condition should be \`k8s-api\` or in a comparison format like \`juju [<|<=|>=|>] #.#.#\`.`},
+    basesMissingBuildOn: { id: 'basesMissingBuildOn', message: `Field \`build-on\` is required.` },
+    basesNotSupportedWhenTypeIsBundle: {id: 'basesNotSupportedWhenTypeIsBundle', message: `Field \`bases\` must not be assigned when \`type\` is \`bundle\`.`},
+    basesOrBaseAndPlatformRequiredWhenTypeIsCharm: {id: 'basesOrBaseAndPlatformRequiredWhenTypeIsCharm', message: `Either \`bases\` or \`base\` (and \`platforms\`) fields must be assigned when \`type\` is \`charm\`.`},
+    basesNotSupportedWhenBaseIsAssigned: {id:'basesNotSupportedWhenBaseIsAssigned', message: `Field \`bases\` must not be assigned when \`base\` is assigned.`},
+    baseNotSupportedWhenTypeIsBundle: {id: 'baseNotSupportedWhenTypeIsBundle', message: `Field \`base\` must not be assigned when \`type\` is \`bundle\`.`},
+    buildBaseNotSupportedWhenTypeIsBundle: {id: 'buildBaseNotSupportedWhenTypeIsBundle', message: `Field \`build-base\` must not be assigned when \`type\` is \`bundle\`.`},
+    platformsNotSupportedWhenTypeIsBundle: {id: 'platformsNotSupportedWhenTypeIsBundle', message: `Field \`platforms\` must not be assigned when \`type\` is \`bundle\`.`},
+    platformsInvalidArchitecture: (value: string, expected: readonly string[]) => ({id: 'platformsInvalidArchitecture', message: `Unknown architecture \`${value}\`; it must be one of ${expected.map(x=>`\`${x}\``).join(', ')}.`}),
+    platformsBuildOnRequiredWhenPlatformNameNotFormatted: {id: 'platformsBuildOnRequiredWhenPlatformNameNotFormatted', message: `Field \`build-on\` is required when platform name is not fully formatted (like \`ubuntu@24.04:amd64\`).`},
+    platformsBuildForRequiredWhenPlatformNameNotFormatted: {id: 'platformsBuildForRequiredWhenPlatformNameNotFormatted', message: `Field \`build-for\` is required when platform name is not fully formatted (like \`ubuntu@24.04:amd64\`).`},
+    platformsInvalidFormat: {id: 'platformsInvalidFormat', message: `Platform should be formatted like \`ubuntu@24.04:amd64\`.`},
+    endpointInvalidInterface: {id: 'endpointInvalidInterface', message: `Invalid interface name; should only contain \`a-z\`, cannot start with \`-\` or \`juju-\`, and cannot be \`juju\`.`},
+    subordinateRequiresContainerScopeIntegration: {id: 'subordinateRequiresContainerScopeIntegration', message: `Subordinate charms are only valid if they have at least one \`requires\` integration with \`container\` scope.`},
+    configOptionInvalidDefault: { id: 'configOptionInvalidDefault', message: `Default value must have a valid type; boolean, string, integer, float, or secret.` },
+    configOptionWrongDefaultType: (expected: CharmConfigOptionType) => ({ id: 'configOptionWrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
+    charmLibInvalidName: { id: 'charmLibInvalidName', message: `Charm library name should be in \`<charm>.<library>\` format.` },
+    charmLibInvalidVersion: { id: 'charmLibInvalidVersion', message: `Charm library version should be in \`<api version>[.<patch version>]\` format.` },
     resourceExpectedFilenameForFileResource: { id: 'resourceExpectedFilenameForFileResource', message: `Field \`filename\` is required since resource type is \`file\`.` },
     resourceUnexpectedFilenameForNonFileResource: { id: 'resourceUnexpectedFilenameForNonFileResource', message: `Field \`filename\` must be assigned only if resource type is \`file\`.` },
     storageMultipleInvalid: { id: 'storageMultipleInvalid', message: `Should be one of \`n\`, \`n+\`, \`n-\`, or \`n-m\`, where \`n\` and \`m\` are integers.` },
@@ -15,7 +33,21 @@ export const CHARMCRAFT_YAML_PROBLEMS = {
     containerResourceUndefined: (expectedResource: string) => ({ id: 'containerResourceUndefined', expectedResource, message: `Container resource \`${expectedResource}\` is not defined.` }),
     containerResourceOCIImageExpected: (expectedResource: string) => ({ id: 'containerResourceOCIImageExpected', expectedResource, message: `Container resource \`${expectedResource}\` is not of type \`oci-image\`.` }),
     containerMountStorageUndefined: (expectedStorage: string) => ({ id: 'containerMountStorageUndefined', expectedStorage, message: `Container mount storage \`${expectedStorage}\` is not defined.` }),
+    containerUIDOutOfRange: { id: 'containerUIDOutOfRange', message: `\`uid\` value must be in range [0, 999] or >= 10000.` },
+    containerGIDOutOfRange: { id: 'containerGIDOutOfRange', message: `\`gid\` value must be in range [0, 999] or >= 10000.` },
+    descriptionRequiredWhenTypeIsCharm: {id: 'descriptionRequiredWhenTypeIsCharm', message: `Field \`description\` is required when \`type\` is \`charm\`.`},
+    nameRequiredWhenTypeIsCharm: {id: 'nameRequiredWhenTypeIsCharm', message: `Field \`name\` is required when \`type\` is \`charm\`.`},
+    summaryRequiredWhenTypeIsCharm: {id: 'summaryRequiredWhenTypeIsCharm', message: `Field \`summary\` is required when \`type\` is \`charm\`.`},
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
+
+export interface CharmActionParam {
+    name: string;
+
+    // The following are common JSON schema properties. We can add more when we
+    // need them.
+    type?: WithNode<string>;
+    description?: WithNode<string>;
+}
 
 export interface CharmAction {
     name: string;
@@ -23,6 +55,7 @@ export interface CharmAction {
     description?: WithNode<string>;
     executionGroup?: WithNode<string>;
     parallel?: WithNode<boolean>;
+    params?: MapWithNode<CharmActionParam>;
 }
 
 export interface CharmAnalysisIgnore {
@@ -57,10 +90,14 @@ export interface CharmBasesPlatform {
     architectures?: SequenceWithNode<CharmBasesPlatformArchitecture>;
 };
 
-export interface CharmBases {
+export interface CharmBasesLongForm {
     buildOn?: SequenceWithNode<CharmBasesPlatform>;
     runOn?: SequenceWithNode<CharmBasesPlatform>;
 };
+
+export type CharmBasesShortForm = CharmBasesPlatform;
+
+export type CharmBases = CharmBasesLongForm | CharmBasesShortForm;
 
 /**
  * Supported values for the `base` key.
@@ -76,12 +113,10 @@ export const SUPPORTED_CHARM_BUILD_BASE_VALUES = ['devel', 'ubuntu@24.04'] as co
 
 export type CharmBuildBase = typeof SUPPORTED_CHARM_BUILD_BASE_VALUES[number];
 
-export type CharmPlatformArchitecture = typeof SUPPORTED_ARCHITECTURES[number];
-
 export interface CharmPlatform {
     name: string;
-    buildOn?: WithNode<CharmPlatformArchitecture> | SequenceWithNode<CharmPlatformArchitecture>;
-    buildFor?: WithNode<CharmPlatformArchitecture> | SequenceWithNode<CharmPlatformArchitecture>;
+    buildOn?: WithNode<string> | SequenceWithNode<string>;
+    buildFor?: WithNode<string> | SequenceWithNode<string>;
 };
 
 export interface CharmCharmLib {
@@ -90,9 +125,9 @@ export interface CharmCharmLib {
 };
 
 export interface CharmCharmhub {
-    apiURL: WithNode<string>;
-    storageURL: WithNode<string>;
-    registryURL: WithNode<string>;
+    apiURL?: WithNode<string>;
+    storageURL?: WithNode<string>;
+    registryURL?: WithNode<string>;
 };
 
 export const SUPPORTED_CHARM_CONFIG_TYPES = ['string', 'int', 'float', 'boolean', 'secret'] as const;
@@ -114,10 +149,12 @@ export interface CharmConfig {
     options?: MapWithNode<CharmConfigOption>;
 }
 
+export type CharmContainerBasesPlatformArchitecture = typeof SUPPORTED_ARCHITECTURES[number];
+
 export interface CharmContainerBase {
     name?: WithNode<string>;
     channel?: WithNode<string>;
-    architectures?: SequenceWithNode<string>;
+    architectures?: SequenceWithNode<CharmContainerBasesPlatformArchitecture>;
 }
 
 export interface CharmContainerMount {
@@ -160,42 +197,47 @@ export interface CharmLinks {
 
 export interface CharmPartBase {
     name: string;
-
     // When we were interested in the properties a part (e.g., `build-packages`
     // or `build-snaps`), we can add them here.
-}
-
-export interface CharmPartUnknownPlugin extends CharmPartBase {
-    name: string;
     plugin?: WithNode<string>;
+    buildSnaps?: SequenceWithNode<string>;
+    prime?: SequenceWithNode<string>;
+    source?: WithNode<string>;
 }
 
 export interface CharmPartNilPlugin extends CharmPartBase {
-    name: string;
     plugin: WithNode<'nil'>;
 }
 
+export interface CharmPartDumpPlugin extends CharmPartBase {
+    plugin: WithNode<'dump'>;
+}
+
 export interface CharmPartCharmPlugin extends CharmPartBase {
-    name: string;
     plugin: WithNode<'charm'>;
     charmEntrypoint?: WithNode<string>;
     charmRequirements?: SequenceWithNode<string>;
     charmPythonPackages?: SequenceWithNode<string>;
     charmBinaryPythonPackages?: SequenceWithNode<string>;
-    prime?: SequenceWithNode<string>;
+    charmStrictDependencies?: WithNode<boolean>;
 }
 
 export interface CharmPartBundlePlugin extends CharmPartBase {
-    name: string;
     plugin: WithNode<'bundle'>;
-    prime?: SequenceWithNode<string>;
 }
 
 export interface CharmPartReactivePlugin extends CharmPartBase {
-    name: string;
     plugin: WithNode<'reactive'>;
     reactiveCharmBuildArguments?: SequenceWithNode<string>;
 };
+
+export type CharmPart =
+    CharmPartBase |
+    CharmPartNilPlugin |
+    CharmPartDumpPlugin |
+    CharmPartCharmPlugin |
+    CharmPartBundlePlugin |
+    CharmPartReactivePlugin;
 
 export const SUPPORTED_CHARM_ENDPOINT_SCOPES = ['global', 'container'] as const;
 
@@ -225,7 +267,7 @@ export const SUPPORTED_CHARM_STORAGE_TYPES = ['filesystem', 'block'] as const;
 export type CharmStorageType = typeof SUPPORTED_CHARM_STORAGE_TYPES[number];
 
 export interface CharmStorageMultiple {
-    range?: WithNode<string>
+    range?: WithNode<number | string>
 }
 
 export const SUPPORTED_CHARM_STORAGE_PROPERTIES = ['transient'] as const;
@@ -240,7 +282,7 @@ export interface CharmStorage {
     shared?: WithNode<boolean>;
     readOnly?: WithNode<boolean>;
     multiple?: WithNode<CharmStorageMultiple>;
-    minimumSize?: WithNode<string>;
+    minimumSize?: WithNode<number | string>;
     properties?: SequenceWithNode<CharmStorageProperty>;
 }
 
@@ -265,7 +307,7 @@ export interface CharmCharmcraft {
     extraBindings?: MapWithNode<CharmExtraBinding>;
     links?: WithNode<CharmLinks>;
     name?: WithNode<string>;
-    parts?: MapWithNode<CharmPartBase>;
+    parts?: MapWithNode<CharmPart>;
     peers?: MapWithNode<CharmEndpoint>;
     provides?: MapWithNode<CharmEndpoint>;
     requires?: MapWithNode<CharmEndpoint>;
