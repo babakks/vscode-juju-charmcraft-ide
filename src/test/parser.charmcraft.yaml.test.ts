@@ -1,19 +1,19 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
 import type {
+    CharmAction,
     CharmBasesLongForm,
     CharmBasesShortForm,
-    CharmPartBundlePlugin,
+    CharmConfig, CharmPartBundlePlugin,
     CharmPartCharmPlugin,
     CharmPartDumpPlugin,
     CharmPartNilPlugin,
-    CharmPartReactivePlugin,
+    CharmPartReactivePlugin
 } from "../model/charmcraft.yaml";
 import type { MapWithNode, Problem, SequenceWithNode, WithNode } from "../model/yaml";
 import { parseCharmCharmcraftYAML } from "../parser/charmcraft.yaml";
-import { unindent } from "./util";
-import type { CharmAction } from "../model/charmcraft.yaml";
 import { cursorOverMap } from "./parser.common.test";
+import { unindent } from "./util";
 
 suite(parseCharmCharmcraftYAML.name, function () {
     /**
@@ -1361,6 +1361,509 @@ suite(parseCharmCharmcraftYAML.name, function () {
             assert.isUndefined(c.current.value?.description?.value);
             assert.strictEqual(c.current.value?.description?.node.pairText, 'description: 0');
             assert.strictEqual(c.current.value?.description?.node.text, '0');
+        });
+    });
+
+    suite('config', function () {
+        function allProblems(config: WithNode<CharmConfig>): Problem[] {
+            return [
+                ...config.node.problems,
+                ...config.value?.options?.node.problems || [],
+                ...(Object.entries(config.value?.options?.entries ?? {})).map(([, x]) => [
+                    ...x.node.problems,
+                    ...x.value?.type?.node.problems || [],
+                    ...x.value?.description?.node.problems || [],
+                    ...x.value?.default?.node.problems || [],
+                ]).flat(),
+            ];
+        }
+
+        test('valid', function () {
+            const content = unindent(`
+                config:
+                  options:
+                    int-param-full:
+                        type: int
+                        description: some description
+                        default: -1
+                    float-param-full:
+                        type: float
+                        description: some description
+                        default: -1e-1
+                    string-param-full:
+                        type: string
+                        description: some description
+                        default: hello
+                    boolean-param-full:
+                        type: boolean
+                        description: some description
+                        default: false
+                    secret-param-full:
+                        type: secret
+                        description: some description
+                        default: foo
+                    int-param-minimal:
+                        type: int
+                    float-param-minimal:
+                        type: float
+                    string-param-minimal:
+                        type: string
+                    boolean-param-minimal:
+                        type: boolean
+                    secret-param-minimal:
+                        type: secret
+                    int-param-with-default:
+                        type: int
+                        default: -1
+                    float-param-with-default:
+                        type: float
+                        default: -1e-1
+                    string-param-with-default:
+                        type: string
+                        default: hello
+                    boolean-param-with-default:
+                        type: boolean
+                        default: false
+                    secret-param-with-default:
+                        type: secret
+                        default: foo
+                    int-param-with-description:
+                        type: int
+                        description: some description
+                    float-param-with-description:
+                        type: float
+                        description: some description
+                    string-param-with-description:
+                        type: string
+                        description: some description
+                    boolean-param-with-description:
+                        type: boolean
+                        description: some description
+                    secret-param-with-description:
+                        type: secret
+                        description: some description
+            `);
+
+            const charmcraft = parseCharmCharmcraftYAML(content);
+            const options = charmcraft.config?.value?.options!;
+
+            assert.lengthOf(charmcraft.config?.node.problems!, 0, 'expected no root-scope problem');
+            assert.isEmpty(allProblems(charmcraft.config!), 'problem in some parameter(s)');
+            assert.hasAllKeys(options.entries, [
+                'int-param-full',
+                'float-param-full',
+                'string-param-full',
+                'boolean-param-full',
+                'secret-param-full',
+                'int-param-minimal',
+                'float-param-minimal',
+                'string-param-minimal',
+                'boolean-param-minimal',
+                'secret-param-minimal',
+                'int-param-with-default',
+                'float-param-with-default',
+                'string-param-with-default',
+                'boolean-param-with-default',
+                'secret-param-with-default',
+                'int-param-with-description',
+                'float-param-with-description',
+                'string-param-with-description',
+                'boolean-param-with-description',
+                'secret-param-with-description',
+            ]);
+
+            const c = cursorOverMap(options);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'int-param-full');
+            assert.strictEqual(c.current.value?.type?.value, 'int');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.strictEqual(c.current.value?.default?.value, -1);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'float-param-full');
+            assert.strictEqual(c.current.value?.type?.value, 'float');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.strictEqual(c.current.value?.default?.value, -1e-1);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'string-param-full');
+            assert.strictEqual(c.current.value?.type?.value, 'string');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.strictEqual(c.current.value?.default?.value, 'hello');
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'boolean-param-full');
+            assert.strictEqual(c.current.value?.type?.value, 'boolean');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.strictEqual(c.current.value?.default?.value, false);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'secret-param-full');
+            assert.strictEqual(c.current.value?.type?.value, 'secret');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.strictEqual(c.current.value?.default?.value, 'foo');
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'int-param-minimal');
+            assert.strictEqual(c.current.value?.type?.value, 'int');
+            assert.isUndefined(c.current.value?.description);
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'float-param-minimal');
+            assert.strictEqual(c.current.value?.type?.value, 'float');
+            assert.isUndefined(c.current.value?.description);
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'string-param-minimal');
+            assert.strictEqual(c.current.value?.type?.value, 'string');
+            assert.isUndefined(c.current.value?.description);
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'boolean-param-minimal');
+            assert.strictEqual(c.current.value?.type?.value, 'boolean');
+            assert.isUndefined(c.current.value?.description);
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'secret-param-minimal');
+            assert.strictEqual(c.current.value?.type?.value, 'secret');
+            assert.isUndefined(c.current.value?.description);
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'int-param-with-default');
+            assert.strictEqual(c.current.value?.type?.value, 'int');
+            assert.strictEqual(c.current.value?.default?.value, -1);
+            assert.isUndefined(c.current.value?.description);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'float-param-with-default');
+            assert.strictEqual(c.current.value?.type?.value, 'float');
+            assert.strictEqual(c.current.value?.default?.value, -1e-1);
+            assert.isUndefined(c.current.value?.description);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'string-param-with-default');
+            assert.strictEqual(c.current.value?.type?.value, 'string');
+            assert.strictEqual(c.current.value?.default?.value, 'hello');
+            assert.isUndefined(c.current.value?.description);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'boolean-param-with-default');
+            assert.strictEqual(c.current.value?.type?.value, 'boolean');
+            assert.strictEqual(c.current.value?.default?.value, false);
+            assert.isUndefined(c.current.value?.description);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'secret-param-with-default');
+            assert.strictEqual(c.current.value?.type?.value, 'secret');
+            assert.strictEqual(c.current.value?.default?.value, 'foo');
+            assert.isUndefined(c.current.value?.description);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'int-param-with-description');
+            assert.strictEqual(c.current.value?.type?.value, 'int');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'float-param-with-description');
+            assert.strictEqual(c.current.value?.type?.value, 'float');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'string-param-with-description');
+            assert.strictEqual(c.current.value?.type?.value, 'string');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'boolean-param-with-description');
+            assert.strictEqual(c.current.value?.type?.value, 'boolean');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.isUndefined(c.current.value?.default);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'secret-param-with-description');
+            assert.strictEqual(c.current.value?.type?.value, 'secret');
+            assert.strictEqual(c.current.value?.description?.value, 'some description');
+            assert.isUndefined(c.current.value?.default);
+        });
+
+        test('type/default mismatch', function () {
+            const content = unindent(`
+                config:
+                  options:
+                    int-param-with-boolean-default:
+                      type: int
+                      default: false
+                    int-param-with-string-default:
+                      type: int
+                      default: hello
+                    int-param-with-float-default:
+                      type: int
+                      default: 0.5
+                    float-param-with-boolean-default:
+                      type: float
+                      default: false
+                    float-param-with-string-default:
+                      type: float
+                      default: hello
+                    string-param-with-boolean-default:
+                      type: string
+                      default: false
+                    string-param-with-int-default:
+                      type: string
+                      default: 1
+                    string-param-with-float-default:
+                      type: string
+                      default: 0.5
+                    secret-param-with-boolean-default:
+                      type: secret
+                      default: false
+                    secret-param-with-int-default:
+                      type: secret
+                      default: 1
+                    secret-param-with-float-default:
+                      type: secret
+                      default: 0.5
+                    boolean-param-with-string-default:
+                      type: boolean
+                      default: hello
+                    boolean-param-with-int-default:
+                      type: boolean
+                      default: 1
+                    boolean-param-with-float-default:
+                      type: boolean
+                      default: 0.5
+            `);
+
+            const charmcraft = parseCharmCharmcraftYAML(content);
+            const options = charmcraft.config?.value?.options!;
+
+            assert.lengthOf(charmcraft.config?.node.problems!, 0, 'expected no root-scope problem');
+            assert.hasAllKeys(options.entries, [
+                'int-param-with-boolean-default',
+                'int-param-with-string-default',
+                'int-param-with-float-default',
+                'float-param-with-boolean-default',
+                'float-param-with-string-default',
+                'string-param-with-boolean-default',
+                'string-param-with-int-default',
+                'string-param-with-float-default',
+                'secret-param-with-boolean-default',
+                'secret-param-with-int-default',
+                'secret-param-with-float-default',
+                'boolean-param-with-string-default',
+                'boolean-param-with-int-default',
+                'boolean-param-with-float-default',
+            ]);
+
+            const c = cursorOverMap(options);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'int-param-with-boolean-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'int-param-with-string-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'int-param-with-float-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be an integer.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'float-param-with-boolean-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a float.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'float-param-with-string-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a float.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'string-param-with-boolean-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'string-param-with-int-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'string-param-with-float-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'secret-param-with-boolean-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'secret-param-with-int-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'secret-param-with-float-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'boolean-param-with-string-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'boolean-param-with-int-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'boolean-param-with-float-default');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionWrongDefaultType', message: 'Default value must match the parameter type; it must be a boolean.' }]);
+        });
+
+        test('invalid option', function () {
+            const content = unindent(`
+                config:
+                  options:
+                    type-missing: {}
+                    type-invalid-string:
+                      type: invalid-value-for-type
+                    type-invalid-int:
+                      type: 0
+                    type-invalid-array:
+                      type: []
+                    type-invalid-object:
+                      type: {}
+                    type-invalid-boolean:
+                      type: false
+                    description-invalid-int:
+                      type: string
+                      description: 0
+                    description-invalid-array:
+                      type: string
+                      description: []
+                    description-invalid-object:
+                      type: string
+                      description: {}
+                    description-invalid-boolean:
+                      type: string
+                      description: false
+                    # Invalid default values when type is missing (Note that when the type field
+                    # is present, the default value should match the that type)
+                    default-invalid-object:
+                      default: {}
+                    default-invalid-array:
+                      default: []
+            `);
+
+            const charmcraft = parseCharmCharmcraftYAML(content);
+            const options = charmcraft.config?.value?.options!;
+
+            assert.lengthOf(charmcraft.config?.node.problems!, 0, 'expected no root-scope problem');
+            assert.hasAllKeys(options.entries, [
+                'type-missing',
+                'type-invalid-string',
+                'type-invalid-int',
+                'type-invalid-array',
+                'type-invalid-object',
+                'type-invalid-boolean',
+                'description-invalid-int',
+                'description-invalid-array',
+                'description-invalid-object',
+                'description-invalid-boolean',
+                'default-invalid-object',
+                'default-invalid-array',
+            ]);
+
+            const c = cursorOverMap(options);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'type-missing');
+            assert.deepEqual(c.current.node.problems, [{ id: 'missingField', key: 'type', message: 'Missing `type` field.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'type-invalid-string');
+            assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean', 'secret'], message: 'Must be one of the following: `string`, `int`, `float`, `boolean`, `secret`.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'type-invalid-int');
+            assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean', 'secret'], message: 'Must be one of the following: `string`, `int`, `float`, `boolean`, `secret`.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'type-invalid-array');
+            assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean', 'secret'], message: 'Must be one of the following: `string`, `int`, `float`, `boolean`, `secret`.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'type-invalid-object');
+            assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean', 'secret'], message: 'Must be one of the following: `string`, `int`, `float`, `boolean`, `secret`.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'type-invalid-boolean');
+            assert.deepEqual(c.current.value?.type?.node.problems, [{ id: 'expectedEnumValue', expected: ['string', 'int', 'float', 'boolean', 'secret'], message: 'Must be one of the following: `string`, `int`, `float`, `boolean`, `secret`.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'description-invalid-int');
+            assert.deepEqual(c.current.value?.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'description-invalid-array');
+            assert.deepEqual(c.current.value?.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'description-invalid-object');
+            assert.deepEqual(c.current.value?.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'description-invalid-boolean');
+            assert.deepEqual(c.current.value?.description?.node.problems, [{ id: 'unexpectedScalarType', expected: 'string', message: 'Must be a string.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'default-invalid-object');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionInvalidDefault', message: 'Default value must have a valid type; boolean, string, integer, or float.' }]);
+
+            c.next();
+            assert.strictEqual(c.current.value?.name, 'default-invalid-array');
+            assert.deepEqual(c.current.value?.default?.node.problems, [{ id: 'configOptionInvalidDefault', message: 'Default value must have a valid type; boolean, string, integer, or float.' }]);
+        });
+
+        suite('invalid `options` value', function () {
+            const tests: { name: string; content: string; expectedProblems: Problem[] }[] = [
+                {
+                    name: 'non-object `options` (empty array)',
+                    content: 'config:\n  options: []',
+                    expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+                },
+                {
+                    name: 'non-object `options` (array)',
+                    content: 'config:\n  options:\n    - element',
+                    expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+                },
+                {
+                    name: 'non-object parameter',
+                    content: 'config:\n  options:\n    param: 999',
+                    expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+                },
+                {
+                    name: 'non-object parameter (empty array)',
+                    content: 'config:\n  options:\n    param: []',
+                    expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+                },
+                {
+                    name: 'non-object parameter (array)',
+                    content: 'config:\n  options:\n    param:\n      - element',
+                    expectedProblems: [{ id: 'expectedMap', message: 'Must be a map.' }],
+                },
+            ];
+
+            for (const t of tests) {
+                const tt = t;
+                test(tt.name, function () {
+                    const charmcraft = parseCharmCharmcraftYAML(tt.content);
+                    assert.includeDeepMembers(allProblems(charmcraft.config!), tt.expectedProblems);
+                });
+            }
         });
     });
 
