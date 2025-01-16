@@ -21,3 +21,23 @@ platforms:
         # The run time architecture
         build-for: <list-of-arch> | <arch>
 ```
+
+Platforms can be defined in a shorthand notation:
+
+```
+platforms:
+  ubuntu@22.04:amd64:
+  ubuntu@24.04:amd64:
+```
+
+Or they can be defined in standard form:
+
+```
+platforms:
+  jammy:
+    build-on: [ubuntu@22.04:amd64]
+    build-for: [ubuntu@22.04:amd64]
+  noble:
+    build-on: [ubuntu@24.04:amd64]
+    build-for: [ubuntu@24.04:amd64]
+```
