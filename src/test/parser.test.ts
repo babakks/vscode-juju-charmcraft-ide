@@ -3029,6 +3029,170 @@ suite(parseCharmCharmcraftYAML.name, function () {
         });
     });
 
+    suite('actions', function () {
+        function allProblems(actions: CharmActions): Problem[] {
+            return [
+                ...actions.node.problems,
+                ...Object.entries(actions.actions?.entries ?? {}).map(([, x]) => [
+                    ...x.node.problems,
+                    ...x.value?.description?.node.problems || [],
+                ]).flat(),
+            ];
+        }
+
+        test('valid', function () {
+            const content = unindent(`
+                actions:
+                  action-empty: {}
+                  action-with-description-empty:
+                    description: ""
+                  action-full:
+                    description: some-description
+                    execution-group: some-execution-group
+                    parallel: true
+                    params:
+                      param-a:
+                        type: string
+                      param-b:
+                        type: int
+                        description: some-description
+            `);
+
+            const charmcraft = parseCharmCharmcraftYAML(content);
+
+            assert.hasAllKeys(charmcraft.actions?.entries, [
+                'action-empty',
+                'action-with-description-empty',
+                'action-full',
+            ]);
+            assert.isEmpty(allProblems(charmcraft.actions!), 'problem in some action(s)');
+
+            const c = cursorOverMap(charmcraft.actions);
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-empty');
+            assert.equal(c.current.value?.name, 'action-empty');
+            assert.equal(c.current.value?.symbol, 'action_empty');
+            assert.isUndefined(c.current.value?.description);
+            assert.equal(c.current.node.text, 'action-empty: {}');
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-with-description-empty');
+            assert.equal(c.current.value?.name, 'action-with-description-empty');
+            assert.equal(c.current.value?.symbol, 'action_with_description_empty');
+            assert.equal(c.current.node.text, 'action-with-description-empty:\n    description: ""');
+            assert.equal(c.current.value?.description?.value, '');
+            assert.equal(c.current.value?.description?.node.pairText, 'description: ""');
+            assert.equal(c.current.value?.description?.node.text, '""');
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-full');
+            assert.equal(c.current.value?.name, 'action-full');
+            assert.equal(c.current.value?.symbol, 'action_full');
+            assert.equal(c.current.value?.description?.value, 'some-description');
+            assert.equal(c.current.value?.executionGroup?.value, 'some-execution-group');
+            assert.equal(c.current.value?.parallel?.value, true);
+            assert.hasAllKeys(c.current.value?.params?.entries, ['param-a', 'param-b']);
+            assert.equal(c.current.value?.params?.entries?.['param-a']?.value?.name, 'param-a');
+            assert.equal(c.current.value?.params?.entries?.['param-a']?.value?.type?.value, 'string');
+            assert.isUndefined(c.current.value?.params?.entries?.['param-a']?.value?.description);
+            assert.equal(c.current.value?.params?.entries?.['param-b']?.value?.name, 'param-b');
+            assert.equal(c.current.value?.params?.entries?.['param-b']?.value?.type?.value, 'int');
+            assert.equal(c.current.value?.params?.entries?.['param-b']?.value?.description?.value, 'some-description');
+        });
+
+        test('invalid', function () {
+            const content = unindent(`
+                actions:
+                  action-array-empty: []
+                  action-array:
+                    - element
+                  action-string: something
+                  action-number: 0
+                  action-invalid-description-array-empty:
+                    description: []
+                  action-invalid-description-array:
+                    description:
+                      - element
+                  action-invalid-description-number:
+                    description: 0
+            `);
+
+            const charmcraft = parseCharmCharmcraftYAML(content);
+            assert.lengthOf(charmcraft.actions?.node.problems!, 0, 'expected no root-scope problem');
+
+            const c = cursorOverMap(charmcraft.actions);
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-array-empty');
+            assert.isUndefined(c.current.value);
+            assert.strictEqual(c.current.node.text, 'action-array-empty: []');
+            assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-array');
+            assert.isUndefined(c.current.value);
+            assert.strictEqual(c.current.node.text, 'action-array:\n    - element');
+            assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-string');
+            assert.isUndefined(c.current.value);
+            assert.strictEqual(c.current.node.text, 'action-string: something');
+            assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-number');
+            assert.isUndefined(c.current.value);
+            assert.strictEqual(c.current.node.text, 'action-number: 0');
+            assert.deepStrictEqual(c.current.node.problems, [{ id: 'expectedMap', message: 'Must be a map.' }]);
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-invalid-description-array-empty');
+            assert.strictEqual(c.current.value?.name, 'action-invalid-description-array-empty');
+            assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_array_empty');
+            assert.strictEqual(c.current.node.text, 'action-invalid-description-array-empty:\n    description: []');
+            assert.isEmpty(c.current.node.problems);
+            assert.deepStrictEqual(c.current.value?.description?.node.problems, [{
+                expected: 'string',
+                id: 'unexpectedScalarType',
+                message: 'Must be a string.',
+            }]);
+            assert.isUndefined(c.current.value?.description?.value);
+            assert.strictEqual(c.current.value?.description?.node.pairText, 'description: []');
+            assert.strictEqual(c.current.value?.description?.node.text, '[]');
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-invalid-description-array');
+            assert.strictEqual(c.current.value?.name, 'action-invalid-description-array');
+            assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_array');
+            assert.strictEqual(c.current.node.text, 'action-invalid-description-array:\n    description:\n      - element');
+            assert.isEmpty(c.current.node.problems);
+            assert.deepStrictEqual(c.current.value?.description?.node.problems, [{
+                expected: 'string',
+                id: 'unexpectedScalarType',
+                message: 'Must be a string.',
+            }]);
+            assert.isUndefined(c.current.value?.description?.value);
+            assert.strictEqual(c.current.value?.description?.node.pairText, 'description:\n      - element');
+            assert.strictEqual(c.current.value?.description?.node.text, '- element');
+
+            c.next();
+            assert.strictEqual(c.currentKey, 'action-invalid-description-number');
+            assert.strictEqual(c.current.value?.name, 'action-invalid-description-number');
+            assert.strictEqual(c.current.value?.symbol, 'action_invalid_description_number');
+            assert.strictEqual(c.current.node.text, 'action-invalid-description-number:\n    description: 0');
+            assert.isEmpty(c.current.node.problems);
+            assert.deepStrictEqual(c.current.value?.description?.node.problems, [{
+                expected: 'string',
+                id: 'unexpectedScalarType',
+                message: 'Must be a string.',
+            }]);
+            assert.isUndefined(c.current.value?.description?.value);
+            assert.strictEqual(c.current.value?.description?.node.pairText, 'description: 0');
+            assert.strictEqual(c.current.value?.description?.node.text, '0');
+        });
+    });
 
     // TODO copy the full config option tests from config.yaml parser test
     // TODO copy the full action tests from actions.yaml parser test
