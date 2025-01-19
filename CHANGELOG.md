@@ -3,6 +3,8 @@
 ## 0.0.15
 
 - Improve charm directory detection criteria.
+- Add `charmcraft.yaml` schema and diagnostics.
+- Support charms with a single `charmcraft.yaml` manifest.
 
 ## 0.0.14
 
