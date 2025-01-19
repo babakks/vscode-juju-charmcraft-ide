@@ -1,6 +1,6 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
-import type { CharmToxConfig } from "../model/charm";
+import type { CharmToxConfig } from "../model/tox.ini";
 import { parseToxINI } from "../parser/tox.ini";
 import { unindent } from "./util";
 

@@ -1,5 +1,5 @@
 import * as ini from 'ini';
-import { CharmToxConfig, CharmToxConfigSection, } from '../model/charm';
+import { CharmToxConfig, CharmToxConfigSection } from '../model/tox.ini';
 
 const _TOX_SECTION_PATTERN = /(?<parent>.*):(?<env>[^:]+)$/;
 export function parseToxINI(text: string): CharmToxConfig {

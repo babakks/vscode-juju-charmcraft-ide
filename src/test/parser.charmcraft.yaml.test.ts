@@ -4,13 +4,10 @@ import type {
     CharmAction,
     CharmBasesLongForm,
     CharmBasesShortForm,
-    CharmConfig, CharmPartBundlePlugin,
-    CharmPartCharmPlugin,
-    CharmPartDumpPlugin,
-    CharmPartNilPlugin,
-    CharmPartReactivePlugin
+    CharmConfig,
 } from "../model/charmcraft.yaml";
-import type { MapWithNode, Problem, SequenceWithNode, WithNode } from "../model/yaml";
+import type { Problem } from "../model/common";
+import type { MapWithNode, SequenceWithNode, WithNode } from "../model/yaml";
 import { parseCharmCharmcraftYAML } from "../parser/charmcraft.yaml";
 import { cursorOverMap } from "./parser.common.test";
 import { unindent } from "./util";
@@ -345,6 +342,7 @@ suite(parseCharmCharmcraftYAML.name, function () {
         assert.lengthOf(charmcraft.bases?.elements!, 4);
 
         const bases1 = charmcraft.bases?.elements?.[0].value as CharmBasesLongForm;
+        assert.strictEqual(bases1.kind, 'long');
         assert.strictEqual(bases1?.buildOn?.elements?.[0]?.value?.name?.value, 'base-a');
         assert.strictEqual(bases1?.buildOn?.elements?.[0]?.value?.channel?.value, 'channel-a');
         assert.strictEqual(bases1?.buildOn?.elements?.[0]?.value?.architectures?.elements?.[0]?.value, 'amd64');
@@ -353,6 +351,7 @@ suite(parseCharmCharmcraftYAML.name, function () {
         assert.strictEqual(bases1?.runOn?.elements?.[0]?.value?.architectures?.elements?.[0]?.value, 'amd64');
 
         const bases2 = charmcraft.bases?.elements?.[1].value as CharmBasesLongForm;
+        assert.strictEqual(bases2.kind, 'long');
         assert.strictEqual(bases2?.buildOn?.elements?.[0]?.value?.name?.value, 'base-c');
         assert.strictEqual(bases2?.buildOn?.elements?.[0]?.value?.channel?.value, 'channel-c');
         assert.strictEqual(bases2?.buildOn?.elements?.[0]?.value?.architectures?.elements?.[0]?.value, 'arm64');
@@ -361,11 +360,13 @@ suite(parseCharmCharmcraftYAML.name, function () {
         assert.strictEqual(bases2?.runOn?.elements?.[0]?.value?.architectures?.elements?.[0]?.value, 'arm64');
 
         const bases3 = charmcraft.bases?.elements?.[2].value as CharmBasesShortForm;
+        assert.strictEqual(bases3.kind, 'short');
         assert.strictEqual(bases3?.name?.value, 'base-e');
         assert.strictEqual(bases3?.channel?.value, 'channel-e');
         assert.strictEqual(bases3?.architectures?.elements?.[0]?.value, 'amd64');
 
         const bases4 = charmcraft.bases?.elements?.[3].value as CharmBasesShortForm;
+        assert.strictEqual(bases4.kind, 'short');
         assert.strictEqual(bases4?.name?.value, 'base-f');
         assert.strictEqual(bases4?.channel?.value, 'channel-f');
         assert.strictEqual(bases4?.architectures?.elements?.[0]?.value, 'arm64');
@@ -461,16 +462,16 @@ suite(parseCharmCharmcraftYAML.name, function () {
 
         assert.hasAllKeys(charmcraft.parts?.entries, ['part-nil', 'part-dump', 'part-charm', 'part-bundle', 'part-reactive']);
 
-        const partNil = charmcraft.parts?.entries?.['part-nil'].value as CharmPartNilPlugin;
+        const partNil = charmcraft.parts?.entries?.['part-nil'].value;
         assert.strictEqual(partNil?.name, 'part-nil');
         assert.strictEqual(partNil?.plugin?.value, 'nil');
 
-        const partDump = charmcraft.parts?.entries?.['part-dump'].value as CharmPartDumpPlugin;
+        const partDump = charmcraft.parts?.entries?.['part-dump'].value;
         assert.strictEqual(partDump?.name, 'part-dump');
         assert.strictEqual(partDump?.plugin?.value, 'dump');
         assert.strictEqual(partDump?.source?.value, 'some-source');
 
-        const partCharm = charmcraft.parts?.entries?.['part-charm'].value as CharmPartCharmPlugin;
+        const partCharm = charmcraft.parts?.entries?.['part-charm'].value;
         assert.strictEqual(partCharm?.name, 'part-charm');
         assert.strictEqual(partCharm?.plugin?.value, 'charm');
         assert.strictEqual(partCharm?.source?.value, 'some-source');
@@ -483,13 +484,13 @@ suite(parseCharmCharmcraftYAML.name, function () {
         assert.strictEqual(partCharm?.charmRequirements?.elements?.[1]?.value, 'f');
         assert.strictEqual(partCharm?.charmStrictDependencies?.value, true);
 
-        const partBundle = charmcraft.parts?.entries?.['part-bundle'].value as CharmPartBundlePlugin;
+        const partBundle = charmcraft.parts?.entries?.['part-bundle'].value;
         assert.strictEqual(partBundle?.name, 'part-bundle');
         assert.strictEqual(partBundle?.plugin?.value, 'bundle');
         assert.strictEqual(partBundle?.prime?.elements?.[0]?.value, 'a');
         assert.strictEqual(partBundle?.prime?.elements?.[1]?.value, 'b');
 
-        const partReactive = charmcraft.parts?.entries?.['part-reactive'].value as CharmPartReactivePlugin;
+        const partReactive = charmcraft.parts?.entries?.['part-reactive'].value;
         assert.strictEqual(partReactive?.name, 'part-reactive');
         assert.strictEqual(partReactive?.plugin?.value, 'reactive');
         assert.strictEqual(partReactive?.source?.value, 'some-source');

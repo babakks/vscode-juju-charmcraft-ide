@@ -14,8 +14,8 @@ import {
     isSeq,
     parseDocument
 } from 'yaml';
-import { Range, TextPositionMapper } from '../model/common';
-import { GENERIC_YAML_PROBLEMS, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from '../model/yaml';
+import { Range, TextPositionMapper, type Problem } from '../model/common';
+import { GENERIC_YAML_PROBLEMS, type MapWithNode, type SequenceWithNode, type WithNode, type YAMLNode } from '../model/yaml';
 import path = require('path');
 
 

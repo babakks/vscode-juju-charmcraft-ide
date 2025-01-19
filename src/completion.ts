@@ -10,11 +10,10 @@ import {
     TextEdit
 } from 'vscode';
 import { Registry } from './registry';
-import { getConfigParamDocumentation, getEventDocumentation } from './util';
-import { } from './model/charm';
+import { getConfigOptionDocumentation, getEventDocumentation } from './util';
+import { type CharmConfigOption } from './model/charm';
 import { isInRange } from './model/common';
 import TelemetryReporter from '@vscode/extension-telemetry';
-import type { CharmConfigParameter } from './model/config.yaml';
 
 export const CHARM_CONFIG_COMPLETION_TRIGGER_CHARS = ['"', "'"];
 
@@ -75,16 +74,13 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
         const needsCloseQuote = openQuote && !trailingText.startsWith(openQuote);
 
         const result: CompletionItem[] = [];
-        for (const [, v] of Object.entries(workspaceCharm.live.config.parameters?.entries ?? {})) {
-            if (!v.value) {
-                continue;
-            }
-            const p = v.value;
+        for (const v of workspaceCharm.live.configOptions) {
+            const p = v;
             const completion: CompletionItem = {
                 label: p.name,
                 sortText: "0",
                 detail: p.name,
-                documentation: getConfigParamDocumentation(p),
+                documentation: getConfigOptionDocumentation(p),
             };
             result.push(completion);
 
@@ -108,20 +104,23 @@ export class CharmConfigParametersCompletionProvider implements CompletionItemPr
     //     return;
     // }
 
-    getParameterDefaultValueAsString(param: CharmConfigParameter): string {
-        if (!param.type?.value) {
+    getParameterDefaultValueAsString(option: CharmConfigOption): string {
+        if (!option.type) {
             return '""';
         }
-        const defaultValue = param.default?.value;
-        switch (param.type.value) {
+        switch (option.type) {
             case 'string':
-                return defaultValue !== undefined && typeof defaultValue === 'string' ? JSON.stringify(defaultValue) : '""';
+                return option.default !== undefined ? JSON.stringify(option.default) : '""';
             case 'boolean':
-                return defaultValue !== undefined && typeof defaultValue === 'boolean' ? (defaultValue ? 'True' : 'False') : 'False';
+                return option.default !== undefined ? (option.default ? 'True' : 'False') : 'False';
             case 'int':
-                return defaultValue !== undefined && typeof defaultValue === 'number' && Number.isInteger(defaultValue) ? defaultValue.toString() : '0';
+                return option.default !== undefined ? option.default.toString() : '0';
             case 'float':
-                return defaultValue !== undefined && typeof defaultValue === 'number' ? defaultValue.toString() : '0';
+                return option.default !== undefined ? option.default.toString() : '0';
+            case 'secret':
+                return option.default !== undefined ? JSON.stringify(option.default) : '""';
+            default:
+                return '""';
         }
     }
 }

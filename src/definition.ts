@@ -1,18 +1,15 @@
+import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     CancellationToken,
     Definition,
-    DefinitionProvider,
-    Hover,
-    HoverProvider,
-    LocationLink,
+    DefinitionProvider, LocationLink,
     Position,
     ProviderResult,
     Range,
     TextDocument
 } from 'vscode';
 import { Registry } from './registry';
-import { getConfigParamDocumentation, getEventDocumentation, rangeToVSCodeRange } from './util';
-import TelemetryReporter from '@vscode/extension-telemetry';
+import { rangeToVSCodeRange } from './util';
 
 const REGEX_SELF_CONFIG_BRACKET = /self(?:\.model)?\.config\[(['"])(?<name>.*?)\1/;
 const REGEX_SELF_CONFIG_GET_SET = /self(?:\.model)?\.config\.(?:get|set)\((['"])(?<name>.*?)\1/;
@@ -41,16 +38,28 @@ export class CharmConfigDefinitionProvider implements DefinitionProvider {
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
-        const parameter = workspaceCharm.live.config.parameters?.entries?.[name];
-        if (!parameter || !parameter.node.range) {
+        const option = workspaceCharm.live.getConfigOptionByName(name);
+        if (!option) {
+            return;
+        }
+
+        const uri = option.definition === 'charmcraft.yaml' ? workspaceCharm.charmcraftUri :
+            option.definition === 'config.yaml' ? workspaceCharm.configUri : undefined;
+        if (!uri) {
+            return;
+        }
+
+        const node = option.definition === 'charmcraft.yaml' ? workspaceCharm.live.charmcraftYAML.config?.value?.options?.entries?.[name]?.node :
+            option.definition === 'config.yaml' ? workspaceCharm.live.configYAML.parameters?.entries?.[name]?.node : undefined;
+        if (!node?.range) {
             return;
         }
 
         this.reporter.sendTelemetryEvent(CharmConfigDefinitionProvider._telemetryEvent);
 
         return {
-            uri: workspaceCharm.configUri,
-            range: rangeToVSCodeRange(parameter.node.range),
+            uri,
+            range: rangeToVSCodeRange(node.range),
         };
     }
 }
@@ -80,20 +89,27 @@ export class CharmEventDefinitionProvider implements DefinitionProvider {
             return;
         }
 
-        if (event.source !== 'action' || event.sourceActionName === undefined) {
+        if (event.source !== 'action') {
             return;
         }
 
-        const action = workspaceCharm.live.actions.actions?.entries?.[event.sourceActionName];
-        if (!action || !action.node.range) {
+        const uri = event.definition === 'charmcraft.yaml' ? workspaceCharm.charmcraftUri :
+            event.definition === 'actions.yaml' ? workspaceCharm.actionsUri : undefined;
+        if (!uri) {
+            return;
+        }
+
+        const node = event.definition === 'charmcraft.yaml' ? workspaceCharm.live.charmcraftYAML.actions?.entries?.[event.sourceActionName]?.node :
+            event.definition === 'actions.yaml' ? workspaceCharm.live.actionsYAML.actions?.entries?.[event.sourceActionName]?.node : undefined;
+        if (!node?.range) {
             return;
         }
 
         this.reporter.sendTelemetryEvent(CharmEventDefinitionProvider._telemetryEvent);
 
         return {
-            uri: workspaceCharm.actionsUri,
-            range: rangeToVSCodeRange(action.node.range),
+            uri,
+            range: rangeToVSCodeRange(node.range),
         };
     }
 }

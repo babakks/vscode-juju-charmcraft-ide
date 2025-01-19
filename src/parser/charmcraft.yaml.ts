@@ -337,6 +337,7 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
             if (keys.includes('name') && keys.includes('channel')) {
                 // Short-form
                 const value: CharmBasesShortForm = {
+                    kind: 'short',
                     name: assignScalarFromPair(map, 'name', 'string', true, element.node.problems),
                     channel: assignScalarFromPair(map, 'channel', 'string', true, element.node.problems),
                     architectures: assignArrayOfEnumsFromPair(map, 'architectures', SUPPORTED_ARCHITECTURES, true, element.node.problems),
@@ -345,6 +346,7 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
             } else {
                 // Long-form
                 const value: CharmBasesLongForm = {
+                    kind: 'long',
                     buildOn: _basesPlatform(map, 'build-on'),
                     runOn: _basesPlatform(map, 'run-on'),
                 };
@@ -448,6 +450,7 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
                 charmBinaryPythonPackages: assignArrayOfScalarsFromPair(map, 'charm-binary-python-packages', 'string'),
                 charmStrictDependencies: assignScalarFromPair(map, 'charm-strict-dependencies', 'boolean'),
                 // `bundle` plugin fields:
+                // `reactive` plugin fields:
                 reactiveCharmBuildArguments: assignArrayOfScalarsFromPair(map, 'reactive-charm-build-arguments', 'string'),
             };
         });

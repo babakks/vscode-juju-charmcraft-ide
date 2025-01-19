@@ -4,46 +4,44 @@ import * as vscode from 'vscode';
 import { Uri } from 'vscode';
 import { WorkspaceRunLintOnSaveConfig } from './config';
 import {
-    getActionsDiagnostics,
+    getActionsYAMLDiagnostics,
     getAllSourceCodeDiagnostics,
-    getConfigDiagnostics,
-    getMetadataDiagnostics,
+    getCharmcraftYAMLDiagnostics,
+    getConfigYAMLDiagnostics,
+    getMetadataYAMLDiagnostics,
     getSourceCodeDiagnostics
 } from './diagnostic';
 import { DiagnosticCollectionManager } from './diagnostic.collection';
+import { NonStackableEvent } from './event';
 import { LinterMessage, parseGenericLinterOutput, parseToxLinterOutput } from './lint.parser';
-import {
-    Charm,
-    CharmToxConfig,
-    CharmToxConfigSection,
-    SourceCode,
-    SourceCodeFile,
-    SourceCodeTree,
-    emptyToxConfig
-} from './model/charm';
+import * as actionsYAML from './model/actions.yaml';
+import { Charm } from './model/charm';
+import * as charmcraftYAML from './model/charmcraft.yaml';
 import {
     CHARM_DIR_LIB,
     CHARM_DIR_SRC,
     CHARM_DIR_TESTS,
     CHARM_DIR_VENV,
     CHARM_FILE_ACTIONS_YAML,
+    CHARM_FILE_CHARMCRAFT_YAML,
     CHARM_FILE_CONFIG_YAML,
     CHARM_FILE_METADATA_YAML,
     CHARM_FILE_TOX_INI,
     CHARM_TOX_LINT_SECTION
 } from './model/common';
-import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
-import { VirtualEnv } from './venv';
-import { BackgroundWorkerManager } from './worker';
-import { NonStackableEvent } from './event';
-import { emptyConfig, type CharmConfig } from './model/config.yaml';
-import { emptyActions, type CharmActions } from './model/actions.yaml';
-import { emptyMetadata, type CharmMetadata } from './model/metadata.yaml';
+import * as configYAML from './model/config.yaml';
+import * as metadataYAML from './model/metadata.yaml';
+import { SourceCode, SourceCodeFile, type SourceCodeTree } from './model/source';
+import * as toxINI from './model/tox.ini';
 import { parseCharmActionsYAML } from './parser/actions.yaml';
+import { parseCharmCharmcraftYAML } from './parser/charmcraft.yaml';
+import { getPythonAST } from './parser/common';
 import { parseCharmConfigYAML } from './parser/config.yaml';
 import { parseCharmMetadataYAML } from './parser/metadata.yaml';
 import { parseToxINI } from './parser/tox.ini';
-import { getPythonAST } from './parser/common';
+import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
+import { VirtualEnv } from './venv';
+import { BackgroundWorkerManager } from './worker';
 
 export interface WorkspaceCharmConfig {
     virtualEnvDirectory?: string;
@@ -140,6 +138,20 @@ export class WorkspaceCharm implements vscode.Disposable {
      */
     readonly onMetadataChanged = this._onMetadataChanged.event;
 
+    private _hasCharmcraft: boolean = false;
+    private readonly _onCharmcraftChanged = new vscode.EventEmitter<void>();
+    /**
+     * URI of the charm's `charmcraft.yaml` file. This property is always
+     * assigned with the standard path, so consult with {@link hasCharmcraft} to
+     * check if the file exists.
+     */
+    readonly charmcraftUri: Uri;
+    /**
+     * Fires when the **persisted** charmcraft file (i.e., `charmcraft.yaml`)
+     * changes, or is created/deleted).
+     */
+    readonly onCharmcraftChanged = this._onCharmcraftChanged.event;
+
     private readonly _virtualEnvDirectory: string;
 
     private _hasVirtualEnv: boolean = false;
@@ -157,7 +169,7 @@ export class WorkspaceCharm implements vscode.Disposable {
     readonly onVirtualEnvChanged = this._onVirtualEnvChanged.event;
     readonly virtualEnv: VirtualEnv;
 
-    private _hasToxConfig: boolean = false;
+    private _hasToxINI: boolean = false;
     private readonly _onToxConfigChanged = new vscode.EventEmitter<void>();
     /**
      * URI of the charm's `tox.ini` file. This property is always assigned with
@@ -185,6 +197,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         this.live = new Charm();
         this.actionsUri = Uri.joinPath(this.home, CHARM_FILE_ACTIONS_YAML);
         this.metadataUri = Uri.joinPath(this.home, CHARM_FILE_METADATA_YAML);
+        this.charmcraftUri = Uri.joinPath(this.home, CHARM_FILE_CHARMCRAFT_YAML);
         this.toxConfigUri = Uri.joinPath(this.home, CHARM_FILE_TOX_INI);
         this.srcUri = Uri.joinPath(this.home, CHARM_DIR_SRC);
         this.testsUri = Uri.joinPath(this.home, CHARM_DIR_TESTS);
@@ -200,6 +213,7 @@ export class WorkspaceCharm implements vscode.Disposable {
             this._virtualEnvDirectory,
             CHARM_FILE_CONFIG_YAML,
             CHARM_FILE_METADATA_YAML,
+            CHARM_FILE_CHARMCRAFT_YAML,
             CHARM_FILE_ACTIONS_YAML,
             CHARM_FILE_TOX_INI,
             `${CHARM_DIR_SRC}/**/*.py`,
@@ -226,6 +240,7 @@ export class WorkspaceCharm implements vscode.Disposable {
         this._onConfigChanged.dispose();
         this._onActionsChanged.dispose();
         this._onMetadataChanged.dispose();
+        this._onCharmcraftChanged.dispose();
         this._onVirtualEnvChanged.dispose();
         this._onToxConfigChanged.dispose();
     }
@@ -282,10 +297,17 @@ export class WorkspaceCharm implements vscode.Disposable {
     }
 
     /**
+     * Returns `true` if there's a `charmcraft.yaml` file associated with the charm; otherwise, `false`.
+     */
+    get hasCharmcraft() {
+        return this._hasCharmcraft;
+    }
+
+    /**
      * Returns `true` if there's a `tox.ini` file associated with the charm; otherwise, `false`.
      */
     get hasToxConfig() {
-        return this._hasToxConfig;
+        return this._hasToxINI;
     }
 
     private async _onFileSystemEvent(kind: 'change' | 'create' | 'delete', uri: Uri) {
@@ -297,6 +319,8 @@ export class WorkspaceCharm implements vscode.Disposable {
             await this._refreshConfig();
         } else if (uri.path === this.metadataUri.path) {
             await this._refreshMetadata();
+        } else if (uri.path === this.charmcraftUri.path) {
+            await this._refreshCharmcraft();
         } else if (uri.path === this.toxConfigUri.path) {
             await this._refreshToxConfig();
         } else {
@@ -316,6 +340,7 @@ export class WorkspaceCharm implements vscode.Disposable {
             this._refreshActions(),
             this._refreshConfig(),
             this._refreshMetadata(),
+            this._refreshCharmcraft(),
             this._refreshToxConfig(),
             this._refreshSourceCodeTree(),
         ]);
@@ -333,60 +358,75 @@ export class WorkspaceCharm implements vscode.Disposable {
 
     private async _refreshActions() {
         const content = await tryReadWorkspaceFileAsText(this.actionsUri);
-        let actions: CharmActions;
+        let actions: actionsYAML.CharmActions;
         if (content === undefined) {
             this._hasActions = false;
-            actions = emptyActions();
+            actions = actionsYAML.emptyActions();
         } else {
             this._hasActions = true;
             actions = parseCharmActionsYAML(content);
         }
-        this.model.updateActions(actions);
+        this.model.updateActionsYAML(actions);
         await this.updateLiveActionsFile();
         this._onActionsChanged.fire();
     }
 
     private async _refreshConfig() {
         const content = await tryReadWorkspaceFileAsText(this.configUri);
-        let config: CharmConfig;
+        let config: configYAML.CharmConfig;
         if (content === undefined) {
             this._hasConfig = false;
-            config = emptyConfig();
+            config = configYAML.emptyConfig();
         } else {
             this._hasConfig = true;
             config = parseCharmConfigYAML(content);
         }
-        this.model.updateConfig(config);
+        this.model.updateConfigYAML(config);
         await this.updateLiveConfigFile();
         this._onConfigChanged.fire();
     }
 
     private async _refreshMetadata() {
         const content = await tryReadWorkspaceFileAsText(this.metadataUri);
-        let metadata: CharmMetadata;
+        let metadata: metadataYAML.CharmMetadata;
         if (content === undefined) {
             this._hasMetadata = false;
-            metadata = emptyMetadata();
+            metadata = metadataYAML.emptyMetadata();
         } else {
             this._hasMetadata = true;
             metadata = parseCharmMetadataYAML(content);
         }
-        this.model.updateMetadata(metadata);
+        this.model.updateMetadataYAML(metadata);
         await this.updateLiveMetadataFile();
         this._onMetadataChanged.fire();
     }
 
+    private async _refreshCharmcraft() {
+        const content = await tryReadWorkspaceFileAsText(this.charmcraftUri);
+        let charmcraft: charmcraftYAML.CharmCharmcraft;
+        if (content === undefined) {
+            this._hasCharmcraft = false;
+            charmcraft = charmcraftYAML.emptyCharmcraft();
+        } else {
+            this._hasCharmcraft = true;
+            charmcraft = parseCharmCharmcraftYAML(content);
+        }
+        this.model.updateCharmcraftYAML(charmcraft);
+        await this.updateLiveCharmcraftFile();
+        this._onCharmcraftChanged.fire();
+    }
+
     private async _refreshToxConfig() {
         const content = await tryReadWorkspaceFileAsText(this.toxConfigUri);
-        let toxConfig: CharmToxConfig;
+        let tox: toxINI.CharmToxConfig;
         if (content === undefined) {
-            this._hasToxConfig = false;
-            toxConfig = emptyToxConfig();
+            this._hasToxINI = false;
+            tox = toxINI.emptyToxConfig();
         } else {
-            this._hasToxConfig = true;
-            toxConfig = parseToxINI(content);
+            this._hasToxINI = true;
+            tox = parseToxINI(content);
         }
-        this.model.updateToxConfig(toxConfig);
+        this.model.updateToxINI(tox);
         await this.updateLiveToxConfigFile();
         this._onToxConfigChanged.fire();
     }
@@ -436,10 +476,10 @@ export class WorkspaceCharm implements vscode.Disposable {
         const commands = this.hasVirtualEnv && this.config?.runLintOnSave?.commands || [];
         const toxSections = this.config?.runLintOnSave?.tox ?? [CHARM_TOX_LINT_SECTION];
         const correspondingToxSections = toxSections.map(s =>
-            s in this.model.toxConfig.sections
-                ? this.model.toxConfig.sections[s]
-                : Object.values(this.model.toxConfig.sections).find(v => v.env === s)
-        ).filter((s): s is CharmToxConfigSection => !!s);
+            s in this.model.toxINI.sections
+                ? this.model.toxINI.sections[s]
+                : Object.values(this.model.toxINI.sections).find(v => v.env === s)
+        ).filter((s): s is toxINI.CharmToxConfigSection => !!s);
 
         if (correspondingToxSections.length && !(await this._checkToxAvailable())) {
             if (this.hasVirtualEnv) {
@@ -450,7 +490,7 @@ export class WorkspaceCharm implements vscode.Disposable {
                 );
             } else {
                 vscode.window.showErrorMessage(
-                    "Tox is not installed. Please either install it globally or setup a virtual environment. "+
+                    "Tox is not installed. Please either install it globally or setup a virtual environment. " +
                     `(Charm at ${this.home.path})`
                 );
             }
@@ -539,6 +579,8 @@ export class WorkspaceCharm implements vscode.Disposable {
             await this.updateLiveActionsFile();
         } else if (uri.path === this.metadataUri.path) {
             await this.updateLiveMetadataFile();
+        } else if (uri.path === this.charmcraftUri.path) {
+            await this.updateLiveCharmcraftFile();
         }
     }
 
@@ -563,51 +605,64 @@ export class WorkspaceCharm implements vscode.Disposable {
     async updateLiveConfigFile() {
         const content = this._getDirtyDocumentContent(this.configUri);
         if (content === undefined) {
-            this.live.updateConfig(this.model.config);
-            this._diagnostics.updateByURI(this.configUri, getConfigDiagnostics(this.live.config));
+            this.live.updateConfigYAML(this.model.configYAML);
+            this._diagnostics.updateByURI(this.configUri, getConfigYAMLDiagnostics(this.live.configYAML));
             return;
         }
 
         this._log('config refreshed');
-        this.live.updateConfig(parseCharmConfigYAML(content));
-        this._diagnostics.updateByURI(this.configUri, getConfigDiagnostics(this.live.config));
+        this.live.updateConfigYAML(parseCharmConfigYAML(content));
+        this._diagnostics.updateByURI(this.configUri, getConfigYAMLDiagnostics(this.live.configYAML));
     }
 
     async updateLiveActionsFile() {
         const content = this._getDirtyDocumentContent(this.actionsUri);
         if (content === undefined) {
-            this.live.updateActions(this.model.actions);
-            this._diagnostics.updateByURI(this.actionsUri, getActionsDiagnostics(this.live.actions));
+            this.live.updateActionsYAML(this.model.actionsYAML);
+            this._diagnostics.updateByURI(this.actionsUri, getActionsYAMLDiagnostics(this.live.actionsYAML));
             return;
         }
 
         this._log('actions refreshed');
-        this.live.updateActions(parseCharmActionsYAML(content));
-        this._diagnostics.updateByURI(this.actionsUri, getActionsDiagnostics(this.live.actions));
+        this.live.updateActionsYAML(parseCharmActionsYAML(content));
+        this._diagnostics.updateByURI(this.actionsUri, getActionsYAMLDiagnostics(this.live.actionsYAML));
     }
 
     async updateLiveMetadataFile() {
         const content = this._getDirtyDocumentContent(this.metadataUri);
         if (content === undefined) {
-            this.live.updateMetadata(this.model.metadata);
-            this._diagnostics.updateByURI(this.metadataUri, getMetadataDiagnostics(this.live.metadata));
+            this.live.updateMetadataYAML(this.model.metadataYAML);
+            this._diagnostics.updateByURI(this.metadataUri, getMetadataYAMLDiagnostics(this.live.metadataYAML));
             return;
         }
 
         this._log('metadata refreshed');
-        this.live.updateMetadata(parseCharmMetadataYAML(content));
-        this._diagnostics.updateByURI(this.metadataUri, getMetadataDiagnostics(this.live.metadata));
+        this.live.updateMetadataYAML(parseCharmMetadataYAML(content));
+        this._diagnostics.updateByURI(this.metadataUri, getMetadataYAMLDiagnostics(this.live.metadataYAML));
+    }
+
+    async updateLiveCharmcraftFile() {
+        const content = this._getDirtyDocumentContent(this.charmcraftUri);
+        if (content === undefined) {
+            this.live.updateCharmcraftYAML(this.model.charmcraftYAML);
+            this._diagnostics.updateByURI(this.charmcraftUri, getCharmcraftYAMLDiagnostics(this.live.charmcraftYAML));
+            return;
+        }
+
+        this._log('charmcraft refreshed');
+        this.live.updateCharmcraftYAML(parseCharmCharmcraftYAML(content));
+        this._diagnostics.updateByURI(this.charmcraftUri, getCharmcraftYAMLDiagnostics(this.live.charmcraftYAML));
     }
 
     async updateLiveToxConfigFile() {
         const content = this._getDirtyDocumentContent(this.toxConfigUri);
         if (content === undefined) {
-            this.live.updateToxConfig(this.model.toxConfig);
+            this.live.updateToxINI(this.model.toxINI);
             return;
         }
 
         this._log('tox config refreshed');
-        this.live.updateToxConfig(parseToxINI(content));
+        this.live.updateToxINI(parseToxINI(content));
     }
 
     async updateLiveSourceCodeFile(uri: Uri) {

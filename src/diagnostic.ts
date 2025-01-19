@@ -1,15 +1,13 @@
 import * as vscode from "vscode";
-import {
-    Charm,
-    SOURCE_CODE_PROBLEMS,
-    SourceCodeFile,
-} from "./model/charm";
-import { Range, TextPositionMapper, isInRange, zeroRange } from "./model/common";
+import * as actionsYAML from "./model/actions.yaml";
+import type { Charm } from "./model/charm";
+import * as charmcraftYAML from "./model/charmcraft.yaml";
+import { Range, TextPositionMapper, isInRange, zeroRange, type Problem } from "./model/common";
+import * as configYAML from "./model/config.yaml";
+import * as metadataYAML from "./model/metadata.yaml";
+import { SOURCE_CODE_PROBLEMS, type SourceCodeFile } from "./model/source";
+import { isSequenceWithNode, isWithNode, type MapWithNode, type SequenceWithNode, type WithNode } from "./model/yaml";
 import { rangeToVSCodeRange } from "./util";
-import type { MapWithNode, Problem, SequenceWithNode, WithNode } from "./model/yaml";
-import type { CharmConfig } from "./model/config.yaml";
-import type { CharmActions } from "./model/actions.yaml";
-import type { CharmMetadata } from "./model/metadata.yaml";
 
 export class ProblemBasedDiagnostic extends vscode.Diagnostic {
     constructor(readonly problem: Problem, range: vscode.Range, message: string, severity?: vscode.DiagnosticSeverity) {
@@ -23,7 +21,7 @@ export class ProblemBasedDiagnostic extends vscode.Diagnostic {
     }
 }
 
-export function getConfigDiagnostics(config: CharmConfig): vscode.Diagnostic[] {
+export function getConfigYAMLDiagnostics(config: configYAML.CharmConfig): vscode.Diagnostic[] {
     return [
         ...config.node.problems.map(p => ProblemBasedDiagnostic.fromProblem(p, config.node.range)),
         ...Object.values(config.parameters?.entries ?? {}).map(config => [
@@ -35,7 +33,7 @@ export function getConfigDiagnostics(config: CharmConfig): vscode.Diagnostic[] {
     ];
 }
 
-export function getActionsDiagnostics(actions: CharmActions): vscode.Diagnostic[] {
+export function getActionsYAMLDiagnostics(actions: actionsYAML.CharmActions): vscode.Diagnostic[] {
     return [
         ...actions.node.problems.map(p => ProblemBasedDiagnostic.fromProblem(p, actions.node.range)),
         ...Object.values(actions.actions?.entries ?? {}).map(action => [
@@ -45,7 +43,7 @@ export function getActionsDiagnostics(actions: CharmActions): vscode.Diagnostic[
     ];
 }
 
-export function getMetadataDiagnostics(metadata: CharmMetadata): vscode.Diagnostic[] {
+export function getMetadataYAMLDiagnostics(metadata: metadataYAML.CharmMetadata): vscode.Diagnostic[] {
     return [
         ...metadata.node.problems.map(x => ProblemBasedDiagnostic.fromProblem(x, metadata.node.range)),
         ...fs(metadata.assumes, x => [
@@ -116,32 +114,185 @@ export function getMetadataDiagnostics(metadata: CharmMetadata): vscode.Diagnost
         ...fs(metadata.terms),
         ...(metadata.website ? (metadata.website.node.kind === 'sequence' ? fs(metadata.website as SequenceWithNode<string>) : f(metadata.website as WithNode<string>)) : []),
     ];
+}
 
-    function fs<T>(e: SequenceWithNode<T> | undefined, cb?: ((e: T) => vscode.Diagnostic[])) {
-        return !e ? [] : [
-            ...f(e),
-            ...(e.elements ?? []).map(x => [
-                ...f(x),
-                ...(x.value !== undefined && cb ? cb(x.value) : [])
-            ]).flat(1),
-        ];
-    }
+export function getCharmcraftYAMLDiagnostics(charmcraft: charmcraftYAML.CharmCharmcraft): vscode.Diagnostic[] {
+    return [
+        ...charmcraft.node.problems.map(x => ProblemBasedDiagnostic.fromProblem(x, charmcraft.node.range)),
+        ...fm(charmcraft.actions, x => [
+            ...f(x.description),
+            ...f(x.executionGroup),
+            ...f(x.parallel),
+            ...fm(x.params, x => [
+                ...f(x.description),
+                ...f(x.type),
+            ]),
+        ]),
+        ...f(charmcraft.analysis),
+        ...f(charmcraft.analysis?.value?.ignore),
+        ...f(charmcraft.analysis?.value?.ignore?.value?.attributes),
+        ...f(charmcraft.analysis?.value?.ignore?.value?.linters),
+        ...fs(charmcraft.assumes, x => {
+            function recurse(x: charmcraftYAML.CharmAssumption): vscode.Diagnostic[] {
+                return [
+                    ...fs(x.allOf, x => recurse(x)),
+                    ...fs(x.anyOf, x => recurse(x)),
+                    ...f(x.single),
+                ];
+            }
+            return recurse(x);
+        }),
+        ...fs(charmcraft.bases, x => [
+            ...(x.kind === 'short' ? [
+                ...f(x.channel),
+                ...f(x.name),
+                ...fs(x.architectures),
+            ] : []),
+            ...(x.kind === 'long' ? [
+                ...fs(x.buildOn, x => [
+                    ...f(x.channel),
+                    ...f(x.name),
+                    ...fs(x.architectures),
+                ]),
+                ...fs(x.runOn, x => [
+                    ...f(x.channel),
+                    ...f(x.name),
+                    ...fs(x.architectures),
+                ])
+            ] : []),
+        ]),
+        ...f(charmcraft.base),
+        ...f(charmcraft.buildBase),
+        ...fm(charmcraft.platforms, x => [
+            ...(isWithNode(x.buildFor) ? f(x.buildFor) : []),
+            ...(isSequenceWithNode(x.buildFor) ? fs(x.buildFor) : []),
+            ...(isWithNode(x.buildOn) ? f(x.buildOn) : []),
+            ...(isSequenceWithNode(x.buildOn) ? fs(x.buildOn) : []),
+        ]),
+        ...fs(charmcraft.charmLibs, x => [
+            ...f(x.lib),
+            ...f(x.version),
+        ]),
+        ...f(charmcraft.charmhub),
+        ...f(charmcraft.charmhub?.value?.apiURL),
+        ...f(charmcraft.charmhub?.value?.registryURL),
+        ...f(charmcraft.charmhub?.value?.storageURL),
+        ...f(charmcraft.config),
+        ...fm(charmcraft.config?.value?.options, x => [
+            ...f(x.default),
+            ...f(x.description),
+            ...f(x.type),
+        ]),
+        ...fm(charmcraft.containers, x => [
+            ...f(x.gid),
+            ...f(x.uid),
+            ...fs(x.bases, x => [
+                ...fs(x.architectures),
+                ...f(x.channel),
+                ...f(x.name),
+            ]),
+            ...fs(x.mounts, x => [
+                ...f(x.location),
+                ...f(x.storage),
+            ]),
+            ...f(x.resource),
+        ]),
+        ...f(charmcraft.description),
+        ...fm(charmcraft.devices, x => [
+            ...f(x.countMin),
+            ...f(x.countMax),
+            ...f(x.description),
+            ...f(x.type),
+        ]),
+        ...fm(charmcraft.extraBindings),
+        ...f(charmcraft.links),
+        ...f(charmcraft.links?.value?.contact),
+        ...f(charmcraft.links?.value?.documentation),
+        ...fs(charmcraft.links?.value?.issues),
+        ...fs(charmcraft.links?.value?.source),
+        ...fs(charmcraft.links?.value?.website),
+        ...f(charmcraft.name),
+        ...fm(charmcraft.parts, x => [
+            ...f(x.plugin),
+            ...fs(x.buildSnaps),
+            ...fs(x.prime),
+            ...f(x.source),
+            // `charm` plugin fields:
+            ...f(x.charmEntrypoint),
+            ...fs(x.charmRequirements),
+            ...fs(x.charmPythonPackages),
+            ...fs(x.charmBinaryPythonPackages),
+            ...f(x.charmStrictDependencies),
+            // `bundle` plugin fields:
+            // `reactive` plugin fields:
+            ...fs(x.reactiveCharmBuildArguments),
+        ]),
+        ...fm(charmcraft.peers, x => [
+            ...f(x.interface),
+            ...f(x.limit),
+            ...f(x.optional),
+            ...f(x.scope),
+        ]),
+        ...fm(charmcraft.provides, x => [
+            ...f(x.interface),
+            ...f(x.limit),
+            ...f(x.optional),
+            ...f(x.scope),
+        ]),
+        ...fm(charmcraft.requires, x => [
+            ...f(x.interface),
+            ...f(x.limit),
+            ...f(x.optional),
+            ...f(x.scope),
+        ]),
+        ...fm(charmcraft.resources, x => [
+            ...f(x.description),
+            ...f(x.filename),
+            ...f(x.type),
+        ]),
+        ...fm(charmcraft.storage, x => [
+            ...f(x.description),
+            ...f(x.location),
+            ...f(x.shared),
+            ...f(x.minimumSize),
+            ...f(x.multiple),
+            ...fs(x.properties),
+            ...f(x.readOnly),
+            ...f(x.type),
+        ]),
+        ...f(charmcraft.subordinate),
+        ...f(charmcraft.summary),
+        ...fs(charmcraft.terms),
+        ...f(charmcraft.title),
+        ...f(charmcraft.type),
+    ];
+}
 
-    function fm<T>(e: MapWithNode<T> | undefined, cb?: ((m: T) => vscode.Diagnostic[])) {
-        return !e ? [] : [
-            ...f(e),
-            ...Object.values(e.entries ?? {}).map(x => [
-                ...f(x),
-                ...(x.value !== undefined && cb ? cb(x.value) : [])
-            ]).flat(1),
-        ];
-    }
 
-    function f(e: WithNode<any> | MapWithNode<any> | SequenceWithNode<any> | undefined): vscode.Diagnostic[] {
-        return !e ? [] : [
-            ...e.node.problems.map(p => ProblemBasedDiagnostic.fromProblem(p, e.node.range)),
-        ];
-    }
+function fs<T>(e: SequenceWithNode<T> | undefined, cb?: ((e: T) => vscode.Diagnostic[])) {
+    return !e ? [] : [
+        ...f(e),
+        ...(e.elements ?? []).map(x => [
+            ...f(x),
+            ...(x.value !== undefined && cb ? cb(x.value) : [])
+        ]).flat(1),
+    ];
+}
+
+function fm<T>(e: MapWithNode<T> | undefined, cb?: ((m: T) => vscode.Diagnostic[])) {
+    return !e ? [] : [
+        ...f(e),
+        ...Object.values(e.entries ?? {}).map(x => [
+            ...f(x),
+            ...(x.value !== undefined && cb ? cb(x.value) : [])
+        ]).flat(1),
+    ];
+}
+
+function f(e: WithNode<any> | MapWithNode<any> | SequenceWithNode<any> | undefined): vscode.Diagnostic[] {
+    return !e ? [] : [
+        ...e.node.problems.map(p => ProblemBasedDiagnostic.fromProblem(p, e.node.range)),
+    ];
 }
 
 export function getAllSourceCodeDiagnostics(charm: Charm): Map<string, vscode.Diagnostic[]> {
@@ -195,7 +346,7 @@ function getConfigReferenceDiagnosticsByPattern(charm: Charm, file: SourceCodeFi
             continue;
         }
 
-        if (!(name in (charm.config.parameters?.entries ?? {}))) {
+        if (!charm.getConfigOptionByName(name)) {
             result.push(ProblemBasedDiagnostic.fromProblem(
                 SOURCE_CODE_PROBLEMS.reference.undefinedConfigParameter(name),
                 offsetLengthToRange(m.index, m[0].length, file.tpm),
@@ -227,7 +378,7 @@ function getEventReferenceDiagnostics(charm: Charm, file: SourceCodeFile): vscod
             continue;
         }
 
-        if (!charm.events.find(x => x.symbol === symbol)) {
+        if (!charm.getEventBySymbol(symbol)) {
             result.push(ProblemBasedDiagnostic.fromProblem(
                 SOURCE_CODE_PROBLEMS.reference.undefinedEvent(symbol),
                 offsetLengthToRange(m.index, m[0].length, file.tpm),

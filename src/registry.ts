@@ -58,6 +58,12 @@ export class Registry implements Disposable {
      */
     readonly onCharmMetadataChanged = this._onCharmMetadataChanged.event;
 
+    private readonly _onCharmCharmcraftChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onCharmcraftChanged} event.
+     */
+    readonly onCharmCharmcraftChanged = this._onCharmCharmcraftChanged.event;
+
     private readonly _onCharmToxConfigChanged = new EventEmitter<WorkspaceCharm>();
     /**
      * A de-mux/aggregator event for {@link WorkspaceCharm.onToxConfigChanged} event.
@@ -88,6 +94,7 @@ export class Registry implements Disposable {
         this._onCharmConfigChanged.dispose();
         this._onCharmActionsChanged.dispose();
         this._onCharmMetadataChanged.dispose();
+        this._onCharmCharmcraftChanged.dispose();
         this._onCharmToxConfigChanged.dispose();
         this._onChanged.dispose();
     }
@@ -195,6 +202,7 @@ export class Registry implements Disposable {
             charm.onConfigChanged(() => this._onCharmConfigChanged.fire(charm)),
             charm.onActionsChanged(() => this._onCharmActionsChanged.fire(charm)),
             charm.onMetadataChanged(() => this._onCharmMetadataChanged.fire(charm)),
+            charm.onCharmcraftChanged(() => this._onCharmCharmcraftChanged.fire(charm)),
             charm.onToxConfigChanged(() => this._onCharmToxConfigChanged.fire(charm)),
         ]);
         return charm;

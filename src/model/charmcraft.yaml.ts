@@ -1,4 +1,5 @@
-import { emptyYAMLNode, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
+import { type Problem } from "./common";
+import { emptyYAMLNode, type MapWithNode, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
 
 /**
  * Problems specific to `charmcraft.yaml`.
@@ -6,20 +7,20 @@ import { emptyYAMLNode, type MapWithNode, type Problem, type SequenceWithNode, t
 export const CHARMCRAFT_YAML_PROBLEMS = {
     assumptionExpectedAnyOfOrAllOf: { id: 'assumptionExpectedAnyOfOrAllOf', message: `Must include only one of \`any-of\` or \`all-of\` keys.` },
     assumptionExpected: { id: 'assumptionExpected', message: 'Expected a string entry or a map with only \`any-of\` or \`all-of\` keys.' },
-    assumptionInvalidFormat: {id: 'assumptionInvalidFormat', message: `Condition should be \`k8s-api\` or in a comparison format like \`juju [<|<=|>=|>] #.#.#\`.`},
+    assumptionInvalidFormat: { id: 'assumptionInvalidFormat', message: `Condition should be \`k8s-api\` or in a comparison format like \`juju [<|<=|>=|>] #.#.#\`.` },
     basesMissingBuildOn: { id: 'basesMissingBuildOn', message: `Field \`build-on\` is required.` },
-    basesNotSupportedWhenTypeIsBundle: {id: 'basesNotSupportedWhenTypeIsBundle', message: `Field \`bases\` must not be assigned when \`type\` is \`bundle\`.`},
-    basesOrBaseAndPlatformRequiredWhenTypeIsCharm: {id: 'basesOrBaseAndPlatformRequiredWhenTypeIsCharm', message: `Either \`bases\` or \`base\` (and \`platforms\`) fields must be assigned when \`type\` is \`charm\`.`},
-    basesNotSupportedWhenBaseIsAssigned: {id:'basesNotSupportedWhenBaseIsAssigned', message: `Field \`bases\` must not be assigned when \`base\` is assigned.`},
-    baseNotSupportedWhenTypeIsBundle: {id: 'baseNotSupportedWhenTypeIsBundle', message: `Field \`base\` must not be assigned when \`type\` is \`bundle\`.`},
-    buildBaseNotSupportedWhenTypeIsBundle: {id: 'buildBaseNotSupportedWhenTypeIsBundle', message: `Field \`build-base\` must not be assigned when \`type\` is \`bundle\`.`},
-    platformsNotSupportedWhenTypeIsBundle: {id: 'platformsNotSupportedWhenTypeIsBundle', message: `Field \`platforms\` must not be assigned when \`type\` is \`bundle\`.`},
-    platformsInvalidArchitecture: (value: string, expected: readonly string[]) => ({id: 'platformsInvalidArchitecture', message: `Unknown architecture \`${value}\`; it must be one of ${expected.map(x=>`\`${x}\``).join(', ')}.`}),
-    platformsBuildOnRequiredWhenPlatformNameNotFormatted: {id: 'platformsBuildOnRequiredWhenPlatformNameNotFormatted', message: `Field \`build-on\` is required when platform name is not fully formatted (like \`ubuntu@24.04:amd64\`).`},
-    platformsBuildForRequiredWhenPlatformNameNotFormatted: {id: 'platformsBuildForRequiredWhenPlatformNameNotFormatted', message: `Field \`build-for\` is required when platform name is not fully formatted (like \`ubuntu@24.04:amd64\`).`},
-    platformsInvalidFormat: {id: 'platformsInvalidFormat', message: `Platform should be formatted like \`ubuntu@24.04:amd64\`.`},
-    endpointInvalidInterface: {id: 'endpointInvalidInterface', message: `Invalid interface name; should only contain \`a-z\`, cannot start with \`-\` or \`juju-\`, and cannot be \`juju\`.`},
-    subordinateRequiresContainerScopeIntegration: {id: 'subordinateRequiresContainerScopeIntegration', message: `Subordinate charms are only valid if they have at least one \`requires\` integration with \`container\` scope.`},
+    basesNotSupportedWhenTypeIsBundle: { id: 'basesNotSupportedWhenTypeIsBundle', message: `Field \`bases\` must not be assigned when \`type\` is \`bundle\`.` },
+    basesOrBaseAndPlatformRequiredWhenTypeIsCharm: { id: 'basesOrBaseAndPlatformRequiredWhenTypeIsCharm', message: `Either \`bases\` or \`base\` (and \`platforms\`) fields must be assigned when \`type\` is \`charm\`.` },
+    basesNotSupportedWhenBaseIsAssigned: { id: 'basesNotSupportedWhenBaseIsAssigned', message: `Field \`bases\` must not be assigned when \`base\` is assigned.` },
+    baseNotSupportedWhenTypeIsBundle: { id: 'baseNotSupportedWhenTypeIsBundle', message: `Field \`base\` must not be assigned when \`type\` is \`bundle\`.` },
+    buildBaseNotSupportedWhenTypeIsBundle: { id: 'buildBaseNotSupportedWhenTypeIsBundle', message: `Field \`build-base\` must not be assigned when \`type\` is \`bundle\`.` },
+    platformsNotSupportedWhenTypeIsBundle: { id: 'platformsNotSupportedWhenTypeIsBundle', message: `Field \`platforms\` must not be assigned when \`type\` is \`bundle\`.` },
+    platformsInvalidArchitecture: (value: string, expected: readonly string[]) => ({ id: 'platformsInvalidArchitecture', message: `Unknown architecture \`${value}\`; it must be one of ${expected.map(x => `\`${x}\``).join(', ')}.` }),
+    platformsBuildOnRequiredWhenPlatformNameNotFormatted: { id: 'platformsBuildOnRequiredWhenPlatformNameNotFormatted', message: `Field \`build-on\` is required when platform name is not fully formatted (like \`ubuntu@24.04:amd64\`).` },
+    platformsBuildForRequiredWhenPlatformNameNotFormatted: { id: 'platformsBuildForRequiredWhenPlatformNameNotFormatted', message: `Field \`build-for\` is required when platform name is not fully formatted (like \`ubuntu@24.04:amd64\`).` },
+    platformsInvalidFormat: { id: 'platformsInvalidFormat', message: `Platform should be formatted like \`ubuntu@24.04:amd64\`.` },
+    endpointInvalidInterface: { id: 'endpointInvalidInterface', message: `Invalid interface name; should only contain \`a-z\`, cannot start with \`-\` or \`juju-\`, and cannot be \`juju\`.` },
+    subordinateRequiresContainerScopeIntegration: { id: 'subordinateRequiresContainerScopeIntegration', message: `Subordinate charms are only valid if they have at least one \`requires\` integration with \`container\` scope.` },
     configOptionInvalidDefault: { id: 'configOptionInvalidDefault', message: `Default value must have a valid type; boolean, string, integer, or float.` },
     configOptionWrongDefaultType: (expected: CharmConfigOptionDefaultType) => ({ id: 'configOptionWrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
     charmLibInvalidName: { id: 'charmLibInvalidName', message: `Charm library name should be in \`<charm>.<library>\` format.` },
@@ -35,9 +36,9 @@ export const CHARMCRAFT_YAML_PROBLEMS = {
     containerMountStorageUndefined: (expectedStorage: string) => ({ id: 'containerMountStorageUndefined', expectedStorage, message: `Container mount storage \`${expectedStorage}\` is not defined.` }),
     containerUIDOutOfRange: { id: 'containerUIDOutOfRange', message: `\`uid\` value must be in range [0, 999] or >= 10000.` },
     containerGIDOutOfRange: { id: 'containerGIDOutOfRange', message: `\`gid\` value must be in range [0, 999] or >= 10000.` },
-    descriptionRequiredWhenTypeIsCharm: {id: 'descriptionRequiredWhenTypeIsCharm', message: `Field \`description\` is required when \`type\` is \`charm\`.`},
-    nameRequiredWhenTypeIsCharm: {id: 'nameRequiredWhenTypeIsCharm', message: `Field \`name\` is required when \`type\` is \`charm\`.`},
-    summaryRequiredWhenTypeIsCharm: {id: 'summaryRequiredWhenTypeIsCharm', message: `Field \`summary\` is required when \`type\` is \`charm\`.`},
+    descriptionRequiredWhenTypeIsCharm: { id: 'descriptionRequiredWhenTypeIsCharm', message: `Field \`description\` is required when \`type\` is \`charm\`.` },
+    nameRequiredWhenTypeIsCharm: { id: 'nameRequiredWhenTypeIsCharm', message: `Field \`name\` is required when \`type\` is \`charm\`.` },
+    summaryRequiredWhenTypeIsCharm: { id: 'summaryRequiredWhenTypeIsCharm', message: `Field \`summary\` is required when \`type\` is \`charm\`.` },
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
 
 export interface CharmActionParam {
@@ -91,11 +92,14 @@ export interface CharmBasesPlatform {
 };
 
 export interface CharmBasesLongForm {
+    kind: 'long';
     buildOn?: SequenceWithNode<CharmBasesPlatform>;
     runOn?: SequenceWithNode<CharmBasesPlatform>;
 };
 
-export type CharmBasesShortForm = CharmBasesPlatform;
+export interface CharmBasesShortForm extends CharmBasesPlatform {
+    kind: 'short';
+}
 
 export type CharmBases = CharmBasesLongForm | CharmBasesShortForm;
 
@@ -195,7 +199,7 @@ export interface CharmLinks {
     website?: SequenceWithNode<string>;
 };
 
-export interface CharmPartBase {
+export interface CharmPart {
     name: string;
     // When we were interested in the properties a part (e.g., `build-packages`
     // or `build-snaps`), we can add them here.
@@ -203,41 +207,16 @@ export interface CharmPartBase {
     buildSnaps?: SequenceWithNode<string>;
     prime?: SequenceWithNode<string>;
     source?: WithNode<string>;
-}
-
-export interface CharmPartNilPlugin extends CharmPartBase {
-    plugin: WithNode<'nil'>;
-}
-
-export interface CharmPartDumpPlugin extends CharmPartBase {
-    plugin: WithNode<'dump'>;
-}
-
-export interface CharmPartCharmPlugin extends CharmPartBase {
-    plugin: WithNode<'charm'>;
+    // `charm` plugin fields:
     charmEntrypoint?: WithNode<string>;
     charmRequirements?: SequenceWithNode<string>;
     charmPythonPackages?: SequenceWithNode<string>;
     charmBinaryPythonPackages?: SequenceWithNode<string>;
     charmStrictDependencies?: WithNode<boolean>;
-}
-
-export interface CharmPartBundlePlugin extends CharmPartBase {
-    plugin: WithNode<'bundle'>;
-}
-
-export interface CharmPartReactivePlugin extends CharmPartBase {
-    plugin: WithNode<'reactive'>;
+    // `bundle` plugin fields:
+    // `reactive` plugin fields:
     reactiveCharmBuildArguments?: SequenceWithNode<string>;
-};
-
-export type CharmPart =
-    CharmPartBase |
-    CharmPartNilPlugin |
-    CharmPartDumpPlugin |
-    CharmPartCharmPlugin |
-    CharmPartBundlePlugin |
-    CharmPartReactivePlugin;
+}
 
 export const SUPPORTED_CHARM_ENDPOINT_SCOPES = ['global', 'container'] as const;
 

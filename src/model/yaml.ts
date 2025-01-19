@@ -1,18 +1,4 @@
-import { Range } from "./common";
-
-export interface Problem {
-    message: string;
-    /**
-     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
-     */
-    id?: string;
-    key?: string;
-    index?: number;
-    /**
-     * Supplementary data for further usage (e.g., when providing fix suggestions).
-     */
-    [key: string]: any;
-}
+import { Range, type Problem } from "./common";
 
 /**
  * Generic YAML file problems.
@@ -25,7 +11,7 @@ export const GENERIC_YAML_PROBLEMS = {
     expectedScalarOrSequence: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'expectedScalarOrSequence', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected} or a sequence of them.` }),
     expectedMap: { id: 'expectedMap', message: `Must be a map.` },
     expectedSequence: { id: 'expectedSequence', message: `Must be a sequence.` },
-    expectedEnumValue: (expected: readonly string[]) => ({ id: 'expectedEnumValue', expected, message: `Must be one of the following: ${expected.map(x=>`\`${x}\``).join(', ')}.` }),
+    expectedEnumValue: (expected: readonly string[]) => ({ id: 'expectedEnumValue', expected, message: `Must be one of the following: ${expected.map(x => `\`${x}\``).join(', ')}.` }),
     expectedNull: { id: 'expectedNull', message: 'Must be null' },
 } satisfies Record<string, Problem | ((...args: any[]) => Problem)>;
 
@@ -54,13 +40,32 @@ export type WithNode<T> = AttachedNode & {
     value?: T;
 };
 
+export function isWithNode<T>(v: any): v is WithNode<T> {
+    return 'value' in v;
+}
+
 export type SequenceWithNode<T> = AttachedNode & {
     elements?: WithNode<T>[];
 };
 
+export function isSequenceWithNode<T>(v: any): v is SequenceWithNode<T> {
+    return typeof v === 'object'
+        && !Array.isArray(v)
+        && 'elements' in v
+        && Array.isArray(v['elements']);
+}
+
 export type MapWithNode<T> = AttachedNode & {
     entries?: { [key: string]: WithNode<T> };
 };
+
+export function isMapWithNode<T>(v: any): v is MapWithNode<T> {
+    return typeof v === 'object'
+        && !Array.isArray(v)
+        && 'entries' in v
+        && typeof v['entries'] === 'object'
+        && !Array.isArray(v['entries']);
+}
 
 export function emptyYAMLNode(): YAMLNode {
     return {

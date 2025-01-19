@@ -1,15 +1,14 @@
+import TelemetryReporter from '@vscode/extension-telemetry';
 import {
     CancellationToken,
     CodeAction,
     CodeActionContext, CodeActionProvider,
     Command,
-    ProviderResult,
     Range,
     Selection,
     TextDocument
 } from 'vscode';
 import { Registry } from './registry';
-import TelemetryReporter from '@vscode/extension-telemetry';
 
 export class EventHandlerCodeActionProvider implements CodeActionProvider {
     constructor(readonly registry: Registry, readonly reporter: TelemetryReporter) { }

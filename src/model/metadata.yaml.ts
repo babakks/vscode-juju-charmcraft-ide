@@ -1,4 +1,5 @@
-import { emptyYAMLNode, type MapWithNode, type Problem, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
+import { type Problem } from "./common";
+import { emptyYAMLNode, type MapWithNode, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
 
 /**
  * Problems specific to `metadata.yaml`.

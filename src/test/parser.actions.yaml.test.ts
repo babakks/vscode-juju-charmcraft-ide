@@ -1,7 +1,7 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
 import type { CharmActions } from "../model/actions.yaml";
-import type { Problem } from "../model/yaml";
+import type { Problem } from "../model/common";
 import { parseCharmActionsYAML } from "../parser/actions.yaml";
 import { unindent } from "./util";
 import { cursorOverMap } from "./parser.common.test";
