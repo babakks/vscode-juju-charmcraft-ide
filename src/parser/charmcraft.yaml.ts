@@ -372,27 +372,31 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
         return readMapOfMap<CharmPlatform>(map, key, (map, key, entry) => {
             entry.value = {
                 name: key,
-                buildOn: assignScalarOrArrayOfScalarsFromPair(map, 'build-on', 'string'),
-                buildFor: assignScalarOrArrayOfScalarsFromPair(map, 'build-for', 'string'),
+                // Note that `map.value` can be `null` because the `acceptNull`
+                // argument of `readMapOfMap` is set to `true`. So, we have to
+                // check if it's not null for assignment.
+                buildOn: map.value ? assignScalarOrArrayOfScalarsFromPair(map, 'build-on', 'string') : undefined,
+                buildFor: map.value ? assignScalarOrArrayOfScalarsFromPair(map, 'build-for', 'string'): undefined,
             };
 
-            const platformPattern = /^.+@.+:(?<arch>.+)$/;  // Matches 'ubuntu@24.04:amd64'
             const supportedArchitectures = [...SUPPORTED_ARCHITECTURES] as string[];
-
-            const match = platformPattern.exec(entry.value.name);
-            if (match) {
-                // The architecture component must be one of supported architectures.
-                const arch = match.groups?.['arch'];
-                if (arch === undefined || !supportedArchitectures.includes(arch)) {
-                    entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsInvalidArchitecture(arch ?? '', supportedArchitectures));
-                }
-            } else {
-                // In this case both `build-on` and `build-for` are required.
+            const arch = entry.value.name;
+            if (!supportedArchitectures.includes(arch)) {
                 if (!entry.value.buildOn) {
-                    entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsBuildOnRequiredWhenPlatformNameNotFormatted);
+                    entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsBuildOnRequiredWhenPlatformNameIsNotArch(supportedArchitectures));
                 }
                 if (!entry.value.buildFor) {
-                    entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsBuildForRequiredWhenPlatformNameNotFormatted);
+                    entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsBuildForRequiredWhenPlatformNameIsNotArch(supportedArchitectures));
+                }
+            } else {
+                // This is not stated in the docs, but in this case either both
+                // or none of `build-on` and `build-for` fields should be
+                // assigned. The docs say `build-for` can be omitted, but in
+                // that case, the `charmcraft pack` returns an ambiguous error.
+                //
+                // TODO (#31): This has to be checked with the Charmcraft team and fixed.
+                if (!!entry.value.buildOn !== !!entry.value.buildFor) {
+                    entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsBothOrNoneOfBuildOnAndBuildForExpected);
                 }
             }
 
@@ -418,20 +422,12 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
                 if (entry.value === undefined) {
                     return;
                 }
-                const match = platformPattern.exec(entry.value);
-                if (match) {
-                    // The architecture component must be one of supported architectures.
-                    const arch = match.groups?.['arch'];
-                    if (arch === undefined || !supportedArchitectures.includes(arch)) {
-                        entry.value = undefined;
-                        entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsInvalidArchitecture(arch ?? '', supportedArchitectures));
-                    }
-                } else {
-                    entry.value = undefined;
-                    entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsInvalidFormat);
+                const arch = entry.value;
+                if (!supportedArchitectures.includes(arch)) {
+                    entry.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.platformsInvalidArchitecture(arch, supportedArchitectures));
                 }
             }
-        });
+        }, undefined, undefined, true);
     }
 
     function _parts(map: WithNode<any>, key: string): MapWithNode<CharmPart> | undefined {
