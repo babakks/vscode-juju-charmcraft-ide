@@ -364,7 +364,7 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
                 type: x.type,
                 range: getNodeRange(x),
                 uri: getURI(x),
-            } as ConfigOptionTreeItemModel));
+            } as ConfigOptionTreeItemModel)).sort((a,b)=> a.name.localeCompare(b.name));
 
             function getNodeRange(option: CharmConfigOption) {
                 const node =
@@ -388,7 +388,7 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
                 name: x.name,
                 uri: getURI(x),
                 range: getNodeRange(x),
-            } as ActionItemTreeItemModel));
+            } as ActionItemTreeItemModel)).sort((a,b)=> a.name.localeCompare(b.name));;
 
             function getNodeRange(action: CharmAction) {
                 const node =
