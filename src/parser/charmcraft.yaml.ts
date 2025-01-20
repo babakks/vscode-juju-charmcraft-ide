@@ -199,7 +199,7 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
         // Subordinate charms are only valid if they have at least one requires
         // integration with container scope.
         let found = false;
-        for(const endpoint of Object.values(result.requires?.entries ?? {})) {
+        for (const endpoint of Object.values(result.requires?.entries ?? {})) {
             if (endpoint.value?.scope?.value === 'container') {
                 found = true;
                 break;
@@ -530,7 +530,7 @@ export function parseCharmCharmcraftYAML(text: string): CharmCharmcraft {
                 //   - Cannot start with `-`.
                 const interfacePattern = /^[a-z][-a-z]*$/;
                 if (!interfacePattern.exec(value) || value === 'juju' || value.startsWith('juju-')) {
-                    entry.value.interface.node.problems.push(CHARMCRAFT_YAML_PROBLEMS. endpointInvalidInterface);
+                    entry.value.interface.node.problems.push(CHARMCRAFT_YAML_PROBLEMS.endpointInvalidInterface);
                 }
             }
         });
