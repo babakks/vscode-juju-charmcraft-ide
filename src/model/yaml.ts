@@ -41,7 +41,9 @@ export type WithNode<T> = AttachedNode & {
 };
 
 export function isWithNode<T>(v: any): v is WithNode<T> {
-    return 'value' in v;
+    return typeof v === 'object'
+        && !Array.isArray(v)
+        && 'value' in v;
 }
 
 export type SequenceWithNode<T> = AttachedNode & {
