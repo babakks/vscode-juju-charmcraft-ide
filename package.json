@@ -94,6 +94,40 @@
             ]
         },
         "menus": {
+            "commandPalette": [
+                {
+                    "command": "charmcraft-ide.discoverCharms",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.revealCharmDirectory",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.createAndSetupVirtualEnvironment",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.activateCharm",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.revealCharmFile",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.runToxEnvInTerminal",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.resetStateGlobal",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.resetStateWorkspace",
+                    "when": "false"
+                }
+            ],
             "view/title": [
                 {
                     "when": "view == charmcraft-charms",
