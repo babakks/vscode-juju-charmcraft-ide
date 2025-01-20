@@ -1160,35 +1160,47 @@ suite(parseCharmCharmcraftYAML.name, function () {
                 base: ubuntu@24.04
                 build-base: ubuntu@24.04
                 platforms:
+                  amd64: {}
+                  arm64:
                   platform-a:
-                    build-on: ubuntu@24.04:amd64
-                    build-for: ubuntu@24.04:amd64
+                    build-on: amd64
+                    build-for: amd64
                   platform-b:
                     build-on:
-                      - ubuntu@24.04:amd64
-                      - ubuntu@24.04:arm64
+                      - amd64
+                      - arm64
                     build-for:
-                      - ubuntu@24.04:amd64
-                      - ubuntu@24.04:arm64
+                      - amd64
+                      - arm64
             `);
 
             const charmcraft = parseCharmCharmcraftYAML(content);
 
             assert.strictEqual(charmcraft.base?.value, 'ubuntu@24.04');
             assert.strictEqual(charmcraft.buildBase?.value, 'ubuntu@24.04');
-            assert.hasAllKeys(charmcraft.platforms?.entries, ['platform-a', 'platform-b']);
+            assert.hasAllKeys(charmcraft.platforms?.entries, ['amd64', 'arm64', 'platform-a', 'platform-b']);
 
-            const platform1 = charmcraft.platforms?.entries?.['platform-a']?.value!;
-            assert.strictEqual(platform1.name, 'platform-a');
-            assert.strictEqual((platform1.buildOn as WithNode<string>).value, 'ubuntu@24.04:amd64');
-            assert.strictEqual((platform1.buildFor as WithNode<string>).value, 'ubuntu@24.04:amd64');
+            const platform1 = charmcraft.platforms?.entries?.['amd64']?.value!;
+            assert.strictEqual(platform1.name, 'amd64');
+            assert.isUndefined(platform1.buildOn);
+            assert.isUndefined(platform1.buildFor);
 
-            const platform2 = charmcraft.platforms?.entries?.['platform-b']?.value!;
-            assert.strictEqual(platform2.name, 'platform-b');
-            assert.strictEqual((platform2.buildOn as SequenceWithNode<string>).elements?.[0]?.value, 'ubuntu@24.04:amd64');
-            assert.strictEqual((platform2.buildOn as SequenceWithNode<string>).elements?.[1]?.value, 'ubuntu@24.04:arm64');
-            assert.strictEqual((platform2.buildFor as SequenceWithNode<string>).elements?.[0]?.value, 'ubuntu@24.04:amd64');
-            assert.strictEqual((platform2.buildFor as SequenceWithNode<string>).elements?.[1]?.value, 'ubuntu@24.04:arm64');
+            const platform2 = charmcraft.platforms?.entries?.['arm64']?.value!;
+            assert.strictEqual(platform2.name, 'arm64');
+            assert.isUndefined(platform2.buildOn);
+            assert.isUndefined(platform2.buildFor);
+
+            const platform3 = charmcraft.platforms?.entries?.['platform-a']?.value!;
+            assert.strictEqual(platform3.name, 'platform-a');
+            assert.strictEqual((platform3.buildOn as WithNode<string>).value, 'amd64');
+            assert.strictEqual((platform3.buildFor as WithNode<string>).value, 'amd64');
+
+            const platform4 = charmcraft.platforms?.entries?.['platform-b']?.value!;
+            assert.strictEqual(platform4.name, 'platform-b');
+            assert.strictEqual((platform4.buildOn as SequenceWithNode<string>).elements?.[0]?.value, 'amd64');
+            assert.strictEqual((platform4.buildOn as SequenceWithNode<string>).elements?.[1]?.value, 'arm64');
+            assert.strictEqual((platform4.buildFor as SequenceWithNode<string>).elements?.[0]?.value, 'amd64');
+            assert.strictEqual((platform4.buildFor as SequenceWithNode<string>).elements?.[1]?.value, 'arm64');
         });
     });
 
