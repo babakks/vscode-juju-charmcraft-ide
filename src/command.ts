@@ -18,10 +18,11 @@ import {
 import { PythonExtension } from './include/ms-python.python';
 import { CHARM_DIR_LIB, CHARM_DIR_SRC, CHARM_DIR_TESTS } from './model/common';
 import { Registry } from './registry';
-import {
+import type {
     ActionsTreeItemModel,
     CharmTreeItemModel,
     CharmcraftTreeDataProvider,
+    CharmcraftTreeItemModel,
     ConfigTreeItemModel,
     MetadataTreeItemModel,
     NoVirtualEnvWarningTreeItemModel,
@@ -50,7 +51,7 @@ export function registerCommands(ic: InternalCommands, reporter: TelemetryReport
             reporter.sendTelemetryEvent('v0.command.activateCharm');
             await ic.activateCharm(e.workspaceCharm);
         }),
-        commands.registerCommand(COMMAND_REVEAL_CHARM_FILE, async (e: ConfigTreeItemModel | ActionsTreeItemModel | MetadataTreeItemModel | ToxConfigTreeItemModel) => {
+        commands.registerCommand(COMMAND_REVEAL_CHARM_FILE, async (e: ConfigTreeItemModel | ActionsTreeItemModel | MetadataTreeItemModel | CharmcraftTreeItemModel | ToxConfigTreeItemModel) => {
             if (e.kind === 'config') {
                 reporter.sendTelemetryEvent('v0.command.revealCharmFile.config');
                 await commands.executeCommand('revealInExplorer', e.workspaceCharm.configUri);
@@ -60,6 +61,9 @@ export function registerCommands(ic: InternalCommands, reporter: TelemetryReport
             } else if (e.kind === 'metadata') {
                 reporter.sendTelemetryEvent('v0.command.revealCharmFile.metadata');
                 await commands.executeCommand('revealInExplorer', e.workspaceCharm.metadataUri);
+            } else if (e.kind === 'charmcraft') {
+                reporter.sendTelemetryEvent('v0.command.revealCharmFile.charmcraft');
+                await commands.executeCommand('revealInExplorer', e.workspaceCharm.charmcraftUri);
             } else if (e.kind === 'tox') {
                 reporter.sendTelemetryEvent('v0.command.revealCharmFile.toxConfig');
                 await commands.executeCommand('revealInExplorer', e.workspaceCharm.toxConfigUri);
