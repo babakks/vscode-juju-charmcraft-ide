@@ -178,7 +178,7 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
             item.description = element.type;
             item.iconPath = new ThemeIcon('gear');
             item.collapsibleState = TreeItemCollapsibleState.None;
-            if(element.uri) {
+            if (element.uri) {
                 item.tooltip = 'Go to definition';
                 item.command = {
                     title: 'Open',
@@ -213,7 +213,7 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
             const item = new TreeItem(element.name);
             item.iconPath = new ThemeIcon('wrench');
             item.collapsibleState = TreeItemCollapsibleState.None;
-            if(element.uri) {
+            if (element.uri) {
                 item.tooltip = 'Go to definition';
                 item.command = {
                     title: 'Open',
