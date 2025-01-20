@@ -327,26 +327,31 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
         if (element.kind === 'charm') {
             const result: TreeItemModel[] = [
                 ...(!workspaceCharm.hasVirtualEnv ? [{ kind: 'noVirtualEnvWarning', workspaceCharm } as NoVirtualEnvWarningTreeItemModel] : []),
-                ...(workspaceCharm.hasMetadata ? [{ kind: 'metadata', workspaceCharm } as MetadataTreeItemModel] : []),
                 ...(workspaceCharm.hasCharmcraft ? [{ kind: 'charmcraft', workspaceCharm } as CharmcraftTreeItemModel] : []),
-                ...(workspaceCharm.hasToxConfig ? [{ kind: 'tox', workspaceCharm } as ToxConfigTreeItemModel] : []),
+                ...(workspaceCharm.hasMetadata ? [{ kind: 'metadata', workspaceCharm } as MetadataTreeItemModel] : []),
             ];
 
             const configElement = { kind: 'config', workspaceCharm } as ConfigTreeItemModel;
             if (workspaceCharm.model.configOptions.some(x => x.definition === 'charmcraft.yaml')) {
                 configElement.uri = workspaceCharm.charmcraftUri;
+                result.push(configElement);
             } else if (workspaceCharm.model.configOptions.some(x => x.definition === 'config.yaml')) {
                 configElement.uri = workspaceCharm.configUri;
+                result.push(configElement);
             }
-            result.push(configElement);
 
             const actionsElement = { kind: 'actions', workspaceCharm } as ActionsTreeItemModel;
             if (workspaceCharm.model.actions.some(x => x.definition === 'charmcraft.yaml')) {
                 actionsElement.uri = workspaceCharm.charmcraftUri;
+                result.push(actionsElement);
             } else if (workspaceCharm.model.actions.some(x => x.definition === 'actions.yaml')) {
                 actionsElement.uri = workspaceCharm.actionsUri;
+                result.push(actionsElement);
             }
-            result.push(actionsElement);
+
+            if(workspaceCharm.hasToxConfig) {
+                result.push({ kind: 'tox', workspaceCharm } as ToxConfigTreeItemModel);
+            }
 
             return result;
         }
