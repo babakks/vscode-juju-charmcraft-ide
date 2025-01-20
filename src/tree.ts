@@ -392,7 +392,7 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
             function getNodeRange(action: CharmAction) {
                 const node =
-                    action.definition === 'charmcraft.yaml' ? workspaceCharm.model.charmcraftYAML.config?.value?.options?.entries?.[action.name]?.node :
+                    action.definition === 'charmcraft.yaml' ? workspaceCharm.model.charmcraftYAML.actions?.entries?.[action.name]?.node :
                         action.definition === 'actions.yaml' ? workspaceCharm.model.actionsYAML.actions?.entries?.[action.name]?.node :
                             undefined;
                 return node?.range ?? node?.pairKeyRange ?? node?.pairValueRange;
