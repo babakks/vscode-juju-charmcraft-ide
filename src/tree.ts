@@ -140,7 +140,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
             const item = new TreeItem(getWorkspaceCharmLabel(element.workspaceCharm));
             item.resourceUri = element.workspaceCharm.home;
-            item.id = item.resourceUri.fsPath;
             item.iconPath = isActive ? new ThemeIcon('pass-filled') : new ThemeIcon('package');
             item.description = isActive ? "Activated" : undefined;
             item.collapsibleState = TreeItemCollapsibleState.Expanded;
@@ -160,7 +159,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
         if (element.kind === 'config') {
             const item = new TreeItem('Config');
             item.resourceUri = element.uri;
-            item.id = element.uri?.fsPath;
             item.iconPath = new ThemeIcon('gear');
             item.collapsibleState = TreeItemCollapsibleState.Collapsed;
             item.contextValue = 'config';
@@ -177,7 +175,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
         if (element.kind === 'configOption') {
             const item = new TreeItem(element.name);
-            item.id = (element.uri?.fsPath ?? '') + "?option=" + element.name;
             item.description = element.type;
             item.iconPath = new ThemeIcon('gear');
             item.collapsibleState = TreeItemCollapsibleState.None;
@@ -198,7 +195,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
         if (element.kind === 'actions') {
             const item = new TreeItem('Actions');
             item.resourceUri = element.uri;
-            item.id = element.uri?.fsPath;
             item.iconPath = new ThemeIcon('wrench');
             item.collapsibleState = TreeItemCollapsibleState.Collapsed;
             item.contextValue = 'actions';
@@ -215,7 +211,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
         if (element.kind === 'actionItem') {
             const item = new TreeItem(element.name);
-            item.id = (element.uri?.fsPath ?? '') + "?action=" + element.name;
             item.iconPath = new ThemeIcon('wrench');
             item.collapsibleState = TreeItemCollapsibleState.None;
             if(element.uri) {
@@ -235,7 +230,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
         if (element.kind === 'metadata') {
             const item = new TreeItem('Metadata');
             item.resourceUri = element.workspaceCharm.metadataUri;
-            item.id = item.resourceUri.fsPath;
             item.iconPath = new ThemeIcon('info');
             item.collapsibleState = TreeItemCollapsibleState.None;
             item.contextValue = 'metadata';
@@ -251,7 +245,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
         if (element.kind === 'charmcraft') {
             const item = new TreeItem('Charmcraft');
             item.resourceUri = element.workspaceCharm.charmcraftUri;
-            item.id = item.resourceUri.fsPath;
             item.iconPath = new ThemeIcon('info');
             item.collapsibleState = TreeItemCollapsibleState.None;
             item.contextValue = 'charmcraft';
@@ -267,7 +260,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
         if (element.kind === 'tox') {
             const item = new TreeItem('Tox');
             item.resourceUri = element.workspaceCharm.toxConfigUri;
-            item.id = item.resourceUri.fsPath;
             item.iconPath = new ThemeIcon('zap');
             item.collapsibleState = TreeItemCollapsibleState.Expanded;
             item.contextValue = 'tox';
@@ -301,7 +293,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
             }
 
             const item = new TreeItem(label);
-            item.id = element.workspaceCharm.toxConfigUri.fsPath + `?section=${element.section}`;
             item.tooltip = element.section;
             item.iconPath = iconPath;
             item.collapsibleState = TreeItemCollapsibleState.None;
