@@ -408,13 +408,16 @@ export function readMap<T>(map: WithNode<any>, cb: ((value: WithNode<any>, key: 
     return result;
 }
 
-export function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: string, entry: WithNode<T>) => void), required?: boolean, parentNodeProblems?: Problem[]): MapWithNode<T> | undefined {
+export function readMapOfMap<T>(map: WithNode<any>, key: string, cb: ((map: any, key: string, entry: WithNode<T>) => void), required?: boolean, parentNodeProblems?: Problem[], acceptNull?: boolean): MapWithNode<T> | undefined {
     const initial = assignAnyFromPair(map, key, required, parentNodeProblems);
     if (!initial || initial.value === undefined) {
         return undefined;
     }
     return readMap<T>(initial, (value, key, entry) => {
-        if (value.node.kind !== 'map' || !value.value) {
+        if (
+            !acceptNull && (value.node.kind !== 'map' || !value.value)
+            || acceptNull && (value.node.kind !== 'map' && value.value)
+        ) {
             entry.node.problems.push(GENERIC_YAML_PROBLEMS.expectedMap);
             return;
         }
