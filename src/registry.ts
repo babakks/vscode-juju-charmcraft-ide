@@ -239,7 +239,7 @@ function getCharmSpecificConfig(config: WorkspaceConfig, charmHome: Uri): Worksp
     return result;
 }
 
-const GLOB_METADATA = `**/${CHARM_FILE_METADATA_YAML}}`;
+const GLOB_METADATA = `**/{${CHARM_FILE_CHARMCRAFT_YAML},${CHARM_FILE_METADATA_YAML}}`;
 
 export async function findCharms(token?: CancellationToken, ignorePattern?: string): Promise<Uri[]> {
     const matches = await workspace.findFiles(GLOB_METADATA, ignorePattern, undefined, token);
