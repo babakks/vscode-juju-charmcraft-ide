@@ -257,10 +257,14 @@ export async function findCharms(token?: CancellationToken, ignorePattern?: stri
 
 /**
  * Determines whether a given URI is charm directory. A directory is considered
- * to be a charm directory if at least one of the following is true:
+ * to be a charm directory if at least one of the following is true (in the same
+ * order of evaluation):
  *
  *   - Contains `charmcraft.yaml`.
  *   - Contains both `metadata.yaml` and `tox.ini`.
+ *   - Contains both `metadata.yaml` and `config.yaml`.
+ *   - Contains both `metadata.yaml` and `actions.yaml`.
+ *   - Contains a `metadata.yaml` file with required fields assigned.
  *
  */
 async function isCharmDirectory(uri: Uri): Promise<boolean> {
