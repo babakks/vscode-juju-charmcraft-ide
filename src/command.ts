@@ -53,11 +53,13 @@ export function registerCommands(ic: InternalCommands, reporter: TelemetryReport
         }),
         commands.registerCommand(COMMAND_REVEAL_CHARM_FILE, async (e: ConfigTreeItemModel | ActionsTreeItemModel | MetadataTreeItemModel | CharmcraftTreeItemModel | ToxConfigTreeItemModel) => {
             if (e.kind === 'config') {
+                // Note that `e.uri` points to the right file; either `charmcraft.yaml` or `config.yaml`.
                 reporter.sendTelemetryEvent('v0.command.revealCharmFile.config');
-                await commands.executeCommand('revealInExplorer', e.workspaceCharm.configUri);
+                await commands.executeCommand('revealInExplorer', e.uri ?? e.workspaceCharm.home);
             } else if (e.kind === 'actions') {
+                // Note that `e.uri` points to the right file; either `charmcraft.yaml` or `actions.yaml`.
                 reporter.sendTelemetryEvent('v0.command.revealCharmFile.actions');
-                await commands.executeCommand('revealInExplorer', e.workspaceCharm.actionsUri);
+                await commands.executeCommand('revealInExplorer', e.uri ?? e.workspaceCharm.home);
             } else if (e.kind === 'metadata') {
                 reporter.sendTelemetryEvent('v0.command.revealCharmFile.metadata');
                 await commands.executeCommand('revealInExplorer', e.workspaceCharm.metadataUri);

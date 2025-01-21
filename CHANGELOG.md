@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.0.16
+
+- Fix bug in detecting charm directories.
+- Fix issues with tree view contextual commands.
+
 ## 0.0.15
 
 - Improve charm directory detection criteria.
