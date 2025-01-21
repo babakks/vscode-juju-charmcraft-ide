@@ -24,14 +24,12 @@ import {
     workspace
 } from 'vscode';
 import { InternalCommands } from './command';
-import { COMMAND_CREATE_AND_SETUP_VIRTUAL_ENVIRONMENT } from './command.const';
 import type { ConfigManager } from './config';
 import { CHARM_DIR_TESTS } from './model/common';
 import { Registry } from './registry';
-import { rangeToVSCodeRange, tryReadWorkspaceFileAsText } from './util';
+import { rangeToVSCodeRange } from './util';
 import { WorkspaceCharm } from './workspace';
 import assert = require('assert');
-import path = require('path');
 
 type TestData = CharmTestData | DirectoryTestData | FileTestData | FunctionTestData | ClassTestData | MethodTestData;
 

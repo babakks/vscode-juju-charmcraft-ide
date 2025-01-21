@@ -27,10 +27,12 @@ This is a VS Code extension to provide tools for Juju Charms development. To lea
 
 ### YAML features
   > Note that for this feature to work, you need to install *Red Hat YAML* language server [extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml).
-  - Schema validation (e.g., `metadata.yaml` or `config.yaml`).
-  - Auto-completions (e.g., configurations or actions).
+  - Schema validation.
+  - Auto-completions.
   - Documentation hovers.
   - Diagnostics.
+
+These features are available for main charm YAML files; `charmcraft.yaml`, `metadata.yaml`, `actions.yaml` or `config.yaml`.
 
 ## Linting on save
 

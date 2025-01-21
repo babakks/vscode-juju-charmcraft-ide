@@ -2,7 +2,7 @@
     "name": "vscode-juju-charmcraft-ide",
     "displayName": "Charmcraft IDE",
     "description": "VS Code extension for Juju Charm development",
-    "version": "0.0.14",
+    "version": "0.0.15",
     "publisher": "babakks",
     "repository": {
         "type": "git",
@@ -94,6 +94,40 @@
             ]
         },
         "menus": {
+            "commandPalette": [
+                {
+                    "command": "charmcraft-ide.discoverCharms",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.revealCharmDirectory",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.createAndSetupVirtualEnvironment",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.activateCharm",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.revealCharmFile",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.runToxEnvInTerminal",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.resetStateGlobal",
+                    "when": "false"
+                },
+                {
+                    "command": "charmcraft-ide.resetStateWorkspace",
+                    "when": "false"
+                }
+            ],
             "view/title": [
                 {
                     "when": "view == charmcraft-charms",
@@ -262,8 +296,8 @@
         "chai": "^4.3.10",
         "eslint": "^8.52.0",
         "glob": "^7.2.3",
-        "mocha": "^9.2.2",
-        "typescript": "^4.9.5"
+        "mocha": "^11.0.1",
+        "typescript": "^5.1.3"
     },
     "dependencies": {
         "@vscode/extension-telemetry": "^0.8.5",

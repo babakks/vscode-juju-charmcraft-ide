@@ -12,6 +12,20 @@ export const CHARM_SOURCE_CODE_CHARM_BASE_CLASS = 'CharmBase';
 
 export const CHARM_TOX_LINT_SECTION = 'testenv:lint';
 
+export interface Problem {
+    message: string;
+    /**
+     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
+     */
+    id?: string;
+    key?: string;
+    index?: number;
+    /**
+     * Supplementary data for further usage (e.g., when providing fix suggestions).
+     */
+    [key: string]: any;
+}
+
 export interface Position {
     /**
      * Zero-base line number.

@@ -1,4 +1,5 @@
 import TelemetryReporter from '@vscode/extension-telemetry';
+import { TextDecoder } from 'util';
 import {
     CancellationToken,
     DiagnosticCollection,
@@ -9,8 +10,15 @@ import {
     Uri,
     workspace,
 } from 'vscode';
+import * as yaml from 'yaml';
 import { ConfigManager, WorkspaceConfig } from './config';
-import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML } from './model/common';
+import {
+     CHARM_FILE_ACTIONS_YAML,
+     CHARM_FILE_CHARMCRAFT_YAML,
+     CHARM_FILE_CONFIG_YAML,
+     CHARM_FILE_METADATA_YAML,
+     CHARM_FILE_TOX_INI
+     } from './model/common';
 import { BackgroundWorkerManager } from './worker';
 import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
 
@@ -58,6 +66,12 @@ export class Registry implements Disposable {
      */
     readonly onCharmMetadataChanged = this._onCharmMetadataChanged.event;
 
+    private readonly _onCharmCharmcraftChanged = new EventEmitter<WorkspaceCharm>();
+    /**
+     * A de-mux/aggregator event for {@link WorkspaceCharm.onCharmcraftChanged} event.
+     */
+    readonly onCharmCharmcraftChanged = this._onCharmCharmcraftChanged.event;
+
     private readonly _onCharmToxConfigChanged = new EventEmitter<WorkspaceCharm>();
     /**
      * A de-mux/aggregator event for {@link WorkspaceCharm.onToxConfigChanged} event.
@@ -88,6 +102,7 @@ export class Registry implements Disposable {
         this._onCharmConfigChanged.dispose();
         this._onCharmActionsChanged.dispose();
         this._onCharmMetadataChanged.dispose();
+        this._onCharmCharmcraftChanged.dispose();
         this._onCharmToxConfigChanged.dispose();
         this._onChanged.dispose();
     }
@@ -195,6 +210,7 @@ export class Registry implements Disposable {
             charm.onConfigChanged(() => this._onCharmConfigChanged.fire(charm)),
             charm.onActionsChanged(() => this._onCharmActionsChanged.fire(charm)),
             charm.onMetadataChanged(() => this._onCharmMetadataChanged.fire(charm)),
+            charm.onCharmcraftChanged(() => this._onCharmCharmcraftChanged.fire(charm)),
             charm.onToxConfigChanged(() => this._onCharmToxConfigChanged.fire(charm)),
         ]);
         return charm;
@@ -239,9 +255,52 @@ export async function findCharms(token?: CancellationToken, ignorePattern?: stri
     return result;
 }
 
+/**
+ * Determines whether a given URI is charm directory. A directory is considered
+ * to be a charm directory if at least one of the following is true:
+ *
+ *   - Contains `charmcraft.yaml`.
+ *   - Contains both `metadata.yaml` and `tox.ini`.
+ *
+ */
 async function isCharmDirectory(uri: Uri): Promise<boolean> {
-    return (await Promise.allSettled([
-        workspace.fs.stat(Uri.joinPath(uri, CHARM_FILE_CHARMCRAFT_YAML)),
-        workspace.fs.stat(Uri.joinPath(uri, CHARM_FILE_METADATA_YAML)),
-    ])).every(x => x.status === 'fulfilled' && x.value.type === FileType.File);
+    const files = {
+        [CHARM_FILE_CHARMCRAFT_YAML]: false,
+        [CHARM_FILE_METADATA_YAML]: false,
+        [CHARM_FILE_CONFIG_YAML]: false,
+        [CHARM_FILE_ACTIONS_YAML]: false,
+        [CHARM_FILE_TOX_INI]: false,
+    };
+
+    const checkFile = async (filename: keyof typeof files) => {
+        const stat = await workspace.fs.stat(Uri.joinPath(uri, filename));
+        files[filename] = stat.type === FileType.File;
+    };
+
+    await Promise.allSettled((Object.keys(files) as (keyof typeof files)[]).map(x => checkFile(x)));
+    const isCharm = files[CHARM_FILE_CHARMCRAFT_YAML]
+        || files[CHARM_FILE_METADATA_YAML] && files[CHARM_FILE_TOX_INI]
+        || files[CHARM_FILE_METADATA_YAML] && files[CHARM_FILE_CONFIG_YAML]
+        || files[CHARM_FILE_METADATA_YAML] && files[CHARM_FILE_ACTIONS_YAML];
+
+    if (isCharm) {
+        return true;
+    }
+
+    // Here, we cannot conclude it's a charm directory unless we check the
+    // content of the `metadata.yaml`, if exists.
+    return files[CHARM_FILE_METADATA_YAML]
+        ? await isCharmMetadataFile(Uri.joinPath(uri, CHARM_FILE_METADATA_YAML))
+        : false;
+}
+
+async function isCharmMetadataFile(uri: Uri): Promise<boolean> {
+    const raw = await workspace.fs.readFile(uri);
+    const content = new TextDecoder().decode(raw);
+    const parsed = yaml.parse(content);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return false;
+    }
+    // Checking if the file contains required `metadata.yaml` fields.
+    return 'name' in parsed && 'display-name' in parsed && 'summary' in parsed;
 }

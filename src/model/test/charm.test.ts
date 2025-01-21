@@ -15,7 +15,7 @@ import {
     getNodeExtendedRange,
     getNodeRange,
     unquoteSymbol
-} from "../charm";
+} from "../source";
 import { Range, escapeRegex } from "../common";
 import path = require('path');
 

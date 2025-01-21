@@ -1,0 +1,3 @@
+<a href="#heading--other-arbitrary-keywords"><h2 id="heading--other-arbitrary-keywords">`<other arbitrary keywords>`</h2></a>
+
+In addition to the official fields and keywords mentioned above, a `metadata.yaml` file may also contain other arbitrary keywords. These can serve to keep track of other choices a charmer might make. In some cases these become semi-official, being adopted by many charmers and even incorporated into CI processes. An example is [`upstream-source`](https://github.com/canonical/charmcraft/blob/b22fcdba3b894004468abfbf45caa54d93fbf7d0/charmcraft/templates/init-simple/metadata.yaml.j2#L40-L43).

@@ -1,28 +1,28 @@
 import { TextDecoder } from 'util';
 import { MarkdownString, Uri, Range as VSCodeRange, workspace } from 'vscode';
-import { CharmConfigParameter, CharmEvent } from './model/charm';
+import { CharmEvent, type CharmConfigOption } from './model/charm';
 import { Range } from './model/common';
 
 const SEPARATOR = '\n<hr/>\n\n';
 
-export function getConfigParamDocumentation(param: CharmConfigParameter, includeTitle?: boolean): MarkdownString {
+export function getConfigOptionDocumentation(configOption: CharmConfigOption, includeTitle?: boolean): MarkdownString {
     const result = new MarkdownString();
     result.supportHtml = true;
 
     if (includeTitle) {
-        result.appendMarkdown(`\`${param.name}\` *[charm configuration]* ${SEPARATOR}`);
+        result.appendMarkdown(`\`${configOption.name}\` *[charm configuration]* ${SEPARATOR}`);
     }
 
-    if (param.type?.value && param.default?.value !== undefined) {
-        result.appendMarkdown(`**Type:** ${param.type.value}<br/>**Default:** \`${JSON.stringify(param.default.value)}\` ${SEPARATOR}`);
-    } else if (param.type?.value) {
-        result.appendMarkdown(`**Type:** ${param.type.value} ${SEPARATOR}`);
-    } else if (param.default?.value !== undefined) {
-        result.appendMarkdown(`**Default:** \`${JSON.stringify(param.default.value)}\` ${SEPARATOR}`);
+    if (configOption.type !== undefined && configOption.default !== undefined) {
+        result.appendMarkdown(`**Type:** ${configOption.type}<br/>**Default:** \`${JSON.stringify(configOption.default)}\` ${SEPARATOR}`);
+    } else if (configOption.type !== undefined) {
+        result.appendMarkdown(`**Type:** ${configOption.type} ${SEPARATOR}`);
+    } else if (configOption.default !== undefined) {
+        result.appendMarkdown(`**Default:** \`${JSON.stringify(configOption.default)}\` ${SEPARATOR}`);
     }
 
-    if (param.description?.value) {
-        result.appendMarkdown(param.description.value);
+    if (configOption.description !== undefined) {
+        result.appendMarkdown(configOption.description);
     }
     return result;
 }

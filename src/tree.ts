@@ -7,22 +7,25 @@ import {
     ThemeIcon,
     TreeDataProvider,
     TreeItem,
-    TreeItemCollapsibleState
+    TreeItemCollapsibleState,
+    type Uri
 } from "vscode";
 import type { Range } from "./model/common";
 import { Registry } from "./registry";
 import { rangeToVSCodeRange } from "./util";
 import { WorkspaceCharm } from "./workspace";
+import type { CharmAction, CharmConfigOption } from "./model/charm";
 
 type TreeItemModel =
     NoCharmTreeItemModel
     | CharmTreeItemModel
     | NoVirtualEnvWarningTreeItemModel
     | ConfigTreeItemModel
-    | ConfigParameterTreeItemModel
+    | ConfigOptionTreeItemModel
     | ActionsTreeItemModel
     | ActionItemTreeItemModel
     | MetadataTreeItemModel
+    | CharmcraftTreeItemModel
     | ToxConfigTreeItemModel
     | ToxConfigEnvTreeItemModel;
 
@@ -44,27 +47,35 @@ export type NoVirtualEnvWarningTreeItemModel = WithWorkspaceCharm & {
 
 export type ConfigTreeItemModel = WithWorkspaceCharm & {
     kind: 'config';
+    uri: Uri | undefined;
 };
 
-export type ConfigParameterTreeItemModel = WithWorkspaceCharm & {
-    kind: 'configParameter';
+export type ConfigOptionTreeItemModel = WithWorkspaceCharm & {
+    kind: 'configOption';
     name: string;
     type: string | undefined;
+    uri: Uri | undefined;
     range: Range | undefined;
 };
 
 export type ActionsTreeItemModel = WithWorkspaceCharm & {
     kind: 'actions';
+    uri: Uri | undefined;
 };
 
 export type ActionItemTreeItemModel = WithWorkspaceCharm & {
     kind: 'actionItem';
     name: string;
+    uri: Uri | undefined;
     range: Range | undefined;
 };
 
 export type MetadataTreeItemModel = WithWorkspaceCharm & {
     kind: 'metadata';
+};
+
+export type CharmcraftTreeItemModel = WithWorkspaceCharm & {
+    kind: 'charmcraft';
 };
 
 export type ToxConfigTreeItemModel = WithWorkspaceCharm & {
@@ -101,6 +112,7 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
             this.registry.onCharmVirtualEnvChanged(() => this.triggerRefresh()),
             this.registry.onCharmActionsChanged(() => this.triggerRefresh()),
             this.registry.onCharmMetadataChanged(() => this.triggerRefresh()),
+            this.registry.onCharmCharmcraftChanged(() => this.triggerRefresh()),
             this.registry.onCharmToxConfigChanged(() => this.triggerRefresh()),
             this.registry.onActiveCharmChanged(() => this.triggerRefresh()),
         );
@@ -128,7 +140,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
             const item = new TreeItem(getWorkspaceCharmLabel(element.workspaceCharm));
             item.resourceUri = element.workspaceCharm.home;
-            item.id = item.resourceUri.fsPath;
             item.iconPath = isActive ? new ThemeIcon('pass-filled') : new ThemeIcon('package');
             item.description = isActive ? "Activated" : undefined;
             item.collapsibleState = TreeItemCollapsibleState.Expanded;
@@ -147,75 +158,78 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
         if (element.kind === 'config') {
             const item = new TreeItem('Config');
-            item.resourceUri = element.workspaceCharm.configUri;
-            item.id = item.resourceUri.fsPath;
+            item.resourceUri = element.uri;
             item.iconPath = new ThemeIcon('gear');
             item.collapsibleState = TreeItemCollapsibleState.Collapsed;
             item.contextValue = 'config';
-            item.tooltip = 'Open config.yaml';
-            item.command = {
-                title: 'Open',
-                command: 'vscode.open',
-                arguments: [element.workspaceCharm.configUri],
-            };
+            if (element.uri) {
+                item.tooltip = `Open ${basename(element.uri.fsPath)}`;
+                item.command = {
+                    title: 'Open',
+                    command: 'vscode.open',
+                    arguments: [element.uri],
+                };
+            }
             return item;
         }
 
-        if (element.kind === 'configParameter') {
+        if (element.kind === 'configOption') {
             const item = new TreeItem(element.name);
-            item.id = element.workspaceCharm.configUri.fsPath + "?option=" + element.name;
             item.description = element.type;
             item.iconPath = new ThemeIcon('gear');
             item.collapsibleState = TreeItemCollapsibleState.None;
-            item.tooltip = 'Go to definition in config.yaml';
-            item.command = {
-                title: 'Open',
-                command: 'vscode.open',
-                arguments: [
-                    element.workspaceCharm.configUri,
-                    ...(element.range ? [{ selection: rangeToVSCodeRange(element.range) }] : []),
-                ],
-            };
+            if (element.uri) {
+                item.tooltip = 'Go to definition';
+                item.command = {
+                    title: 'Open',
+                    command: 'vscode.open',
+                    arguments: [
+                        element.uri,
+                        ...(element.range ? [{ selection: rangeToVSCodeRange(element.range) }] : []),
+                    ],
+                };
+            }
             return item;
         }
 
         if (element.kind === 'actions') {
             const item = new TreeItem('Actions');
-            item.resourceUri = element.workspaceCharm.actionsUri;
-            item.id = item.resourceUri.fsPath;
+            item.resourceUri = element.uri;
             item.iconPath = new ThemeIcon('wrench');
             item.collapsibleState = TreeItemCollapsibleState.Collapsed;
             item.contextValue = 'actions';
-            item.tooltip = 'Open actions.yaml';
-            item.command = {
-                title: 'Open',
-                command: 'vscode.open',
-                arguments: [element.workspaceCharm.actionsUri],
-            };
+            if (element.uri) {
+                item.tooltip = `Open ${basename(element.uri.fsPath)}`;
+                item.command = {
+                    title: 'Open',
+                    command: 'vscode.open',
+                    arguments: [element.uri],
+                };
+            }
             return item;
         }
 
         if (element.kind === 'actionItem') {
             const item = new TreeItem(element.name);
-            item.id = element.workspaceCharm.actionsUri.fsPath + "?action=" + element.name;
             item.iconPath = new ThemeIcon('wrench');
             item.collapsibleState = TreeItemCollapsibleState.None;
-            item.tooltip = 'Go to definition in actions.yaml';
-            item.command = {
-                title: 'Open',
-                command: 'vscode.open',
-                arguments: [
-                    element.workspaceCharm.actionsUri,
-                    ...(element.range ? [{ selection: rangeToVSCodeRange(element.range) }] : []),
-                ],
-            };
+            if (element.uri) {
+                item.tooltip = 'Go to definition';
+                item.command = {
+                    title: 'Open',
+                    command: 'vscode.open',
+                    arguments: [
+                        element.uri,
+                        ...(element.range ? [{ selection: rangeToVSCodeRange(element.range) }] : []),
+                    ],
+                };
+            }
             return item;
         }
 
         if (element.kind === 'metadata') {
             const item = new TreeItem('Metadata');
             item.resourceUri = element.workspaceCharm.metadataUri;
-            item.id = item.resourceUri.fsPath;
             item.iconPath = new ThemeIcon('info');
             item.collapsibleState = TreeItemCollapsibleState.None;
             item.contextValue = 'metadata';
@@ -228,10 +242,24 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
             return item;
         }
 
+        if (element.kind === 'charmcraft') {
+            const item = new TreeItem('Charmcraft');
+            item.resourceUri = element.workspaceCharm.charmcraftUri;
+            item.iconPath = new ThemeIcon('info');
+            item.collapsibleState = TreeItemCollapsibleState.None;
+            item.contextValue = 'charmcraft';
+            item.tooltip = 'Open charmcraft.yaml';
+            item.command = {
+                title: 'Open',
+                command: 'vscode.open',
+                arguments: [element.workspaceCharm.charmcraftUri],
+            };
+            return item;
+        }
+
         if (element.kind === 'tox') {
             const item = new TreeItem('Tox');
             item.resourceUri = element.workspaceCharm.toxConfigUri;
-            item.id = item.resourceUri.fsPath;
             item.iconPath = new ThemeIcon('zap');
             item.collapsibleState = TreeItemCollapsibleState.Expanded;
             item.contextValue = 'tox';
@@ -265,7 +293,6 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
             }
 
             const item = new TreeItem(label);
-            item.id = element.workspaceCharm.toxConfigUri.fsPath + `?section=${element.section}`;
             item.tooltip = element.section;
             item.iconPath = iconPath;
             item.collapsibleState = TreeItemCollapsibleState.None;
@@ -298,36 +325,88 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
         const workspaceCharm = element.workspaceCharm;
 
         if (element.kind === 'charm') {
-            return [
+            const result: TreeItemModel[] = [
                 ...(!workspaceCharm.hasVirtualEnv ? [{ kind: 'noVirtualEnvWarning', workspaceCharm } as NoVirtualEnvWarningTreeItemModel] : []),
-                ...(workspaceCharm.hasActions ? [{ kind: 'actions', workspaceCharm } as ActionsTreeItemModel] : []),
-                ...(workspaceCharm.hasConfig ? [{ kind: 'config', workspaceCharm } as ConfigTreeItemModel] : []),
+                ...(workspaceCharm.hasCharmcraft ? [{ kind: 'charmcraft', workspaceCharm } as CharmcraftTreeItemModel] : []),
                 ...(workspaceCharm.hasMetadata ? [{ kind: 'metadata', workspaceCharm } as MetadataTreeItemModel] : []),
-                ...(workspaceCharm.hasToxConfig ? [{ kind: 'tox', workspaceCharm } as ToxConfigTreeItemModel] : []),
             ];
+
+            const configElement = { kind: 'config', workspaceCharm } as ConfigTreeItemModel;
+            if (workspaceCharm.model.configOptions.some(x => x.definition === 'charmcraft.yaml')) {
+                configElement.uri = workspaceCharm.charmcraftUri;
+                result.push(configElement);
+            } else if (workspaceCharm.model.configOptions.some(x => x.definition === 'config.yaml')) {
+                configElement.uri = workspaceCharm.configUri;
+                result.push(configElement);
+            }
+
+            const actionsElement = { kind: 'actions', workspaceCharm } as ActionsTreeItemModel;
+            if (workspaceCharm.model.actions.some(x => x.definition === 'charmcraft.yaml')) {
+                actionsElement.uri = workspaceCharm.charmcraftUri;
+                result.push(actionsElement);
+            } else if (workspaceCharm.model.actions.some(x => x.definition === 'actions.yaml')) {
+                actionsElement.uri = workspaceCharm.actionsUri;
+                result.push(actionsElement);
+            }
+
+            if(workspaceCharm.hasToxConfig) {
+                result.push({ kind: 'tox', workspaceCharm } as ToxConfigTreeItemModel);
+            }
+
+            return result;
         }
 
         if (element.kind === 'config') {
-            return Object.entries(workspaceCharm.model.config.parameters?.entries ?? {}).map(([k, v]) => ({
-                kind: 'configParameter',
+            return workspaceCharm.model.configOptions.map(x => ({
+                kind: 'configOption',
                 workspaceCharm,
-                name: k,
-                type: v.value?.type?.value,
-                range: v.node.range ?? v.node.pairKeyRange ?? v.node.pairValueRange,
-            } as ConfigParameterTreeItemModel));
+                name: x.name,
+                type: x.type,
+                range: getNodeRange(x),
+                uri: getURI(x),
+            } as ConfigOptionTreeItemModel)).sort((a,b)=> a.name.localeCompare(b.name));
+
+            function getNodeRange(option: CharmConfigOption) {
+                const node =
+                    option.definition === 'charmcraft.yaml' ? workspaceCharm.model.charmcraftYAML.config?.value?.options?.entries?.[option.name]?.node :
+                        option.definition === 'config.yaml' ? workspaceCharm.model.configYAML.parameters?.entries?.[option.name]?.node :
+                            undefined;
+                return node?.range ?? node?.pairKeyRange ?? node?.pairValueRange;
+            }
+
+            function getURI(option: CharmConfigOption) {
+                return option.definition === 'charmcraft.yaml' ? workspaceCharm.charmcraftUri :
+                    option.definition === 'config.yaml' ? workspaceCharm.configUri :
+                        undefined;
+            }
         }
 
         if (element.kind === 'actions') {
-            return Object.entries(workspaceCharm.model.actions.actions?.entries ?? {}).map(([k, v]) => ({
+            return workspaceCharm.model.actions.map(x => ({
                 kind: 'actionItem',
                 workspaceCharm,
-                name: k,
-                range: v.node.range ?? v.node.pairKeyRange ?? v.node.pairValueRange,
-            } as ActionItemTreeItemModel));
+                name: x.name,
+                uri: getURI(x),
+                range: getNodeRange(x),
+            } as ActionItemTreeItemModel)).sort((a,b)=> a.name.localeCompare(b.name));;
+
+            function getNodeRange(action: CharmAction) {
+                const node =
+                    action.definition === 'charmcraft.yaml' ? workspaceCharm.model.charmcraftYAML.actions?.entries?.[action.name]?.node :
+                        action.definition === 'actions.yaml' ? workspaceCharm.model.actionsYAML.actions?.entries?.[action.name]?.node :
+                            undefined;
+                return node?.range ?? node?.pairKeyRange ?? node?.pairValueRange;
+            }
+
+            function getURI(action: CharmAction) {
+                return action.definition === 'charmcraft.yaml' ? workspaceCharm.charmcraftUri :
+                    action.definition === 'actions.yaml' ? workspaceCharm.actionsUri :
+                        undefined;
+            }
         }
 
         if (element.kind === 'tox' && workspaceCharm.hasToxConfig) {
-            return filterAnsSortToxSections(Object.keys(workspaceCharm.model.toxConfig.sections))
+            return filterAnsSortToxSections(Object.keys(workspaceCharm.model.toxINI.sections))
                 .map(section => {
                     const components = section.split(':');
                     const group = components.slice(0, -1).join(':');
@@ -356,10 +435,14 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 }
 
 function getWorkspaceCharmLabel(workspaceCharm: WorkspaceCharm): string {
-    const name = workspaceCharm.model.metadata.name?.value;
-    const displayName = workspaceCharm.model.metadata.displayName?.value;
-    return name || displayName
-        ? `${name ?? '?'} (${displayName ?? '?'})`
+    const name =
+        workspaceCharm.model.charmcraftYAML.name?.value ??
+        workspaceCharm.model.metadataYAML.name?.value;
+    const title =
+        workspaceCharm.model.charmcraftYAML.title?.value ??
+        workspaceCharm.model.metadataYAML.displayName?.value;
+    return name || title
+        ? `${name ?? '?'} (${title ?? '?'})`
         : basename(workspaceCharm.home.path);
 }
 

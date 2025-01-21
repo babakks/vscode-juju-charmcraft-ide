@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.0.15
+
+- Improve charm directory detection criteria.
+- Add `charmcraft.yaml` schema and diagnostics.
+- Support charms with a single `charmcraft.yaml` manifest.
+
 ## 0.0.14
 
 - Allow for custom launch configuration fields when debugging tests.

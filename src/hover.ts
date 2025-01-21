@@ -8,7 +8,7 @@ import {
     TextDocument
 } from 'vscode';
 import { Registry } from './registry';
-import { getConfigParamDocumentation, getEventDocumentation } from './util';
+import { getConfigOptionDocumentation, getEventDocumentation } from './util';
 import TelemetryReporter from '@vscode/extension-telemetry';
 
 const REGEX_SELF_CONFIG_BRACKET = /self(?:\.model)?\.config\[(['"])(?<name>.*?)\1/;
@@ -38,14 +38,14 @@ export class CharmConfigHoverProvider implements HoverProvider {
         const matchText = document.getText(new Range(match.start, match.end));
         const name = matchText.match(matchRegex)!.groups!['name'];
 
-        const parameter = workspaceCharm.live.config.parameters?.entries?.[name];
-        if (!parameter?.value) {
+        const option = workspaceCharm.live.getConfigOptionByName(name);
+        if (!option) {
             return;
         }
 
         this.reporter.sendTelemetryEvent(CharmConfigHoverProvider._telemetryEvent);
 
-        return new Hover(getConfigParamDocumentation(parameter.value, true));
+        return new Hover(getConfigOptionDocumentation(option, true));
     }
 }
 

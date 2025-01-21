@@ -1,886 +1,94 @@
-import {
-    CHARM_DIR_SRC,
-    CHARM_DIR_SRC_MAIN,
-    CHARM_DIR_TESTS,
-    CHARM_SOURCE_CODE_CHARM_BASE_CLASS,
-    Position,
-    Range,
-    TextPositionMapper,
-    comparePositions,
-    escapeRegex,
-    toValidSymbol
-} from "./common";
+import * as actionsYAML from "./actions.yaml";
+import * as charmcraftYAML from "./charmcraft.yaml";
+import { toValidSymbol } from "./common";
+import * as configYAML from "./config.yaml";
+import * as metadataYAML from "./metadata.yaml";
+import { SourceCode } from "./source";
+import * as toxINI from "./tox.ini";
 
-export interface Problem {
-    message: string;
-    /**
-     * Should be used for further identification of a problem type (e.g., to provide fix suggestions).
-     */
-    id?: string;
-    key?: string;
-    index?: number;
-    /**
-     * Supplementary data for further usage (e.g., when providing fix suggestions).
-     */
-    [key: string]: any;
-}
-
-export const YAML_PROBLEMS = {
-    /**
-     * Generic YAML file problems.
-     */
-    generic: {
-        invalidYAML: { id: 'invalidYAML', message: "Invalid YAML file." },
-        missingField: (key: string) => ({ id: 'missingField', key, message: `Missing \`${key}\` field.` }),
-        unexpectedScalarType: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'unexpectedScalarType', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected}.` }),
-        expectedSequenceOfScalars: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'expectedSequenceOfScalars', expected, message: `Must be a sequence of ${expected} values.` }),
-        expectedScalarOrSequence: (expected: 'string' | 'integer' | 'number' | 'boolean') => ({ id: 'expectedScalarOrSequence', expected, message: `Must be ${expected === 'integer' ? 'an' : 'a'} ${expected} or a sequence of them.` }),
-        expectedMap: { id: 'expectedMap', message: `Must be a map.` },
-        expectedSequence: { id: 'expectedSequence', message: `Must be a sequence.` },
-        expectedEnumValue: (expected: string[]) => ({ id: 'expectedEnumValue', expected, message: `Must be one of the following: ${expected.join(', ')}.` }),
-        expectedNull: { id: 'expectedNull', message: 'Must be null' },
-    },
-    /**
-     * Problems specific to `config.yaml`.
-     */
-    config: {
-        /**
-        * Occurs when the `default` field is assigned with a wrong type of value (e.g., object or array) and also the `type`
-        * field (to pinpoint the type of the default value) is missing,
-         */
-        invalidDefault: { id: 'invalidDefault', message: `Default value must have a valid type; boolean, string, integer, or float.` },
-        wrongDefaultType: (expected: CharmConfigParameterType) => ({ id: 'wrongDefaultType', message: `Default value must match the parameter type; it must be ${expected === 'int' ? 'an integer' : 'a ' + expected}.` }),
-    },
-    /**
-     * Problems specific to `metadata.yaml`.
-     */
-    metadata: {
-        assumptionExpectedAnyOfOrAllOf: { id: 'assumptionExpectedAnyOfOrAllOf', message: `Must include only one of \`any-of\` or \`all-of\` keys.` },
-        assumptionExpected: { id: 'assumptionExpected', message: 'Expected a string entry or a map with only \`any-of\` or \`all-of\` keys.' },
-        resourceExpectedFilenameForFileResource: { id: 'resourceExpectedFilenameForFileResource', message: `Field \`filename\` is required since resource type is \`file\`.` },
-        resourceUnexpectedFilenameForNonFileResource: { id: 'resourceUnexpectedFilenameForNonFileResource', message: `Field \`filename\` must be assigned only if resource type is \`file\`.` },
-        storageMultipleInvalid: { id: 'storageMultipleInvalid', message: `Should be one of \`n\`, \`n+\`, \`n-\`, or \`n-m\`, where \`n\` and \`m\` are integers.` },
-        storageMinimumSizeInvalid: { id: 'storageMinimumSizeInvalid', message: `Should be either of \`n\` or \`nM\`, where \`n\` is an integer and M is a one of M, G, T, P, E, Z or Y.` },
-        containerExpectedResourceOrBases: { id: 'containerExpectedResourceOrBases', message: `One of \`resource\` or \`bases\` fields must be assigned.` },
-        containerExpectedOnlyResourceOrBases: { id: 'containerExpectedOnlyResourceOrBases', message: `Only one of \`resource\` or \`bases\` fields must be assigned.` },
-        containerResourceUndefined: (expectedResource: string) => ({ id: 'containerResourceUndefined', expectedResource, message: `Container resource \`${expectedResource}\` is not defined.` }),
-        containerResourceOCIImageExpected: (expectedResource: string) => ({ id: 'containerResourceOCIImageExpected', expectedResource, message: `Container resource \`${expectedResource}\` is not of type \`oci-image\`.` }),
-        containerMountStorageUndefined: (expectedStorage: string) => ({ id: 'containerMountStorageUndefined', expectedStorage, message: `Container mount storage \`${expectedStorage}\` is not defined.` }),
-    },
-} satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
-
-export const SOURCE_CODE_PROBLEMS = {
-    /**
-     * Problems specific to referencing charm belongings (e.g., configuration parameters or actions).
-     */
-    reference: {
-        undefinedConfigParameter: (name: string) => ({ id: 'undefinedConfigParameter', name, message: `Undefined configuration parameter \`${name}\`` }),
-        undefinedEvent: (symbol: string) => ({ id: 'undefinedEvent', name: symbol, message: `Undefined event \`${symbol}\`` }),
-    },
-} satisfies Record<string, Record<string, Problem | ((...args: any[]) => Problem)>>;
-
-export type CharmConfigParameterType = 'string' | 'int' | 'float' | 'boolean';
-export function isConfigParameterType(value: string): value is CharmConfigParameterType {
-    return value === 'string' || value === 'int' || value === 'float' || value === 'boolean';
-}
-
-export interface YAMLNode {
-    kind?: 'map' | 'sequence' | 'pair' | 'scalar';
-    range?: Range;
-    pairKeyRange?: Range;
-    pairValueRange?: Range;
-    problems: Problem[];
-    /**
-     * Raw node returned by the underlying YAML parser/tokenizer library.
-     */
-    raw?: any;
-    /**
-     * Raw text content, corresponding to the {@link range `range`} property.
-     */
-    text: string;
-    pairText?: string;
-}
-
-type AttachedNode = {
-    node: YAMLNode;
-};
-
-export type WithNode<T> = AttachedNode & {
-    value?: T;
-};
-
-export type SequenceWithNode<T> = AttachedNode & {
-    elements?: WithNode<T>[];
-};
-
-export type MapWithNode<T> = AttachedNode & {
-    entries?: { [key: string]: WithNode<T> };
-};
-
-export interface CharmConfigParameter {
+export interface CharmEventBase {
     name: string;
-    type?: WithNode<CharmConfigParameterType>;
-    description?: WithNode<string>;
-    default?: WithNode<string | number | boolean>;
-}
-
-export interface CharmConfig {
-    parameters?: MapWithNode<CharmConfigParameter>;
-    /**
-     * Root node.
-     */
-    node: YAMLNode;
-}
-
-export type CharmEndpointScope = 'global' | 'container';
-
-export interface CharmEndpoint {
-    name: string;
-    interface?: WithNode<string>;
-    limit?: WithNode<number>;
-    optional?: WithNode<boolean>;
-    scope?: WithNode<CharmEndpointScope>;
-}
-
-export type CharmResourceType = 'file' | 'oci-image';
-
-export interface CharmResource {
-    name: string;
-    type?: WithNode<CharmResourceType>;
-    description?: WithNode<string>;
-    filename?: WithNode<string>;
-}
-
-export type CharmDeviceType = 'gpu' | 'nvidia.com/gpu' | 'amd.com/gpu';
-
-export interface CharmDevice {
-    name: string;
-    type?: WithNode<CharmDeviceType>;
-    description?: WithNode<string>;
-    countMin?: WithNode<number>;
-    countMax?: WithNode<number>;
-}
-
-export type CharmStorageType = 'filesystem' | 'block';
-
-export type CharmStorageProperty = 'transient';
-
-export interface CharmStorage {
-    name: string;
-    type?: WithNode<CharmStorageType>;
-    description?: WithNode<string>;
-    location?: WithNode<string>;
-    shared?: WithNode<boolean>;
-    readOnly?: WithNode<boolean>;
-    multiple?: WithNode<string>;
-    minimumSize?: WithNode<string>;
-    properties?: SequenceWithNode<CharmStorageProperty>;
-}
-
-export interface CharmExtraBinding {
-    name: string;
-}
-
-export interface CharmContainerBase {
-    name?: WithNode<string>;
-    channel?: WithNode<string>;
-    architectures?: SequenceWithNode<string>;
-}
-
-export interface CharmContainerMount {
-    storage?: WithNode<string>;
-    location?: WithNode<string>;
-}
-
-export interface CharmContainer {
-    name: string;
-    resource?: WithNode<string>;
-    bases?: SequenceWithNode<CharmContainerBase>;
-    mounts?: SequenceWithNode<CharmContainerMount>;
-}
-
-export interface CharmAssumption {
-    single?: WithNode<string>;
-    allOf?: SequenceWithNode<string>;
-    anyOf?: SequenceWithNode<string>;
-}
-
-export interface CharmMetadata {
-    name?: WithNode<string>;
-    displayName?: WithNode<string>;
-    description?: WithNode<string>;
-    summary?: WithNode<string>;
-    source?: WithNode<string> | SequenceWithNode<string>;
-    issues?: WithNode<string> | SequenceWithNode<string>;
-    website?: WithNode<string> | SequenceWithNode<string>;
-    maintainers?: SequenceWithNode<string>;
-    terms?: SequenceWithNode<string>;
-    docs?: WithNode<string>;
-    subordinate?: WithNode<boolean>;
-    requires?: MapWithNode<CharmEndpoint>;
-    provides?: MapWithNode<CharmEndpoint>;
-    peers?: MapWithNode<CharmEndpoint>;
-    resources?: MapWithNode<CharmResource>;
-    devices?: MapWithNode<CharmDevice>;
-    storage?: MapWithNode<CharmStorage>;
-    extraBindings?: MapWithNode<CharmExtraBinding>;
-    containers?: MapWithNode<CharmContainer>;
-    assumes?: SequenceWithNode<CharmAssumption>;
-    customFields?: { [key: string]: any };
-    /**
-     * Root node.
-     */
-    node: YAMLNode;
-}
-
-export type CharmEventSource = 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides' | 'storage' | 'container' | 'action' | 'built-in';
-
-export interface CharmEvent {
-    name: string;
-    source: CharmEventSource;
-    /**
-     * Name of the action, if the source of this event is an action.
-     */
-    sourceActionName?: string;
     symbol: string;
     preferredHandlerSymbol: string;
     description?: string;
 }
 
+export interface CharmBuiltinEvent extends CharmEventBase {
+    source: 'built-in';
+}
+
+export type CharmSourcedEventDefinition = 'charmcraft.yaml' | 'metadata.yaml';
+
+export interface CharmSourcedEvent extends CharmEventBase {
+    source: 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides' | 'storage' | 'container';
+    definition: CharmSourcedEventDefinition;
+}
+
+export type CharmActionEventDefinition = 'charmcraft.yaml' | 'actions.yaml';
+
+export interface CharmActionEvent extends CharmEventBase {
+    source: 'action';
+    definition: CharmActionEventDefinition;
+    sourceActionName: string;
+}
+
+export type CharmEvent = CharmBuiltinEvent | CharmSourcedEvent | CharmActionEvent;
+
+export type CharmActionDefinition = 'charmcraft.yaml' | 'actions.yaml';
+
 export interface CharmAction {
     name: string;
-    symbol: string;
-    description?: WithNode<string>;
+    definition: CharmActionDefinition;
+    description?: string;
 }
 
-export interface CharmActions {
-    actions?: MapWithNode<CharmAction>;
-    /**
-     * Root node.
-     */
-    node: YAMLNode;
-}
+export type CharmConfigOptionDefinition = 'charmcraft.yaml' | 'config.yaml';
 
-/*
- * TODO
- * We have skipped AST-scope granularity (e.g., nodes or problems) for tox
- * configuration model, for now. Maybe at some point in future we decided to add
- * them to the type, after which point the type should look like others (e.g.,
- * actions or config ) where WithNode<T> has replaced primitive types.
- */
-export interface CharmToxConfig {
-    sections: { [key: string]: CharmToxConfigSection };
-}
-
-export interface CharmToxConfigSection {
-    /**
-     * Section name, e.g., `testenv:lint`.
-     */
+export interface CharmConfigOptionBase {
     name: string;
-
-    /**
-     * Environment name, e.g., `lint`.
-     */
-    env: string;
-
-    /**
-     * Environment parent name, e.g., `testenv`.
-     */
-    parent: string;
+    definition: CharmConfigOptionDefinition;
+    description?: string;
 }
 
-export class SourceCodeFile {
-    private _analyzer: SourceCodeFileAnalyzer | undefined;
-    private _tpm: TextPositionMapper | undefined;
-
-    constructor(public content: string, public ast: any, public healthy: boolean) { }
-
-    /**
-     * Returns the generic source code analyzer instance.
-     */
-    get analyzer() {
-        if (!this._analyzer) {
-            this._analyzer = new SourceCodeFileAnalyzer(this.content, this.ast);
-        }
-        return this._analyzer;
-    }
-
-    get tpm() {
-        if (!this._tpm) {
-            this._tpm = new TextPositionMapper(this.content);
-        }
-        return this._tpm;
-    }
+export interface CharmUntypedConfigOption extends CharmConfigOptionBase {
+    type: undefined;
+    default?: string | number | boolean;
 }
 
-export type SourceCodeTreeEntry = SourceCodeTreeDirectoryEntry | SourceCodeTreeFileEntry;
-
-export interface SourceCodeTree {
-    [key: string]: SourceCodeTreeEntry;
+export interface CharmStringConfigOption extends CharmConfigOptionBase {
+    type: 'string';
+    default?: string;
 }
 
-export interface SourceCodeTreeDirectoryEntry {
-    kind: 'directory';
-    data: SourceCodeTree;
+export interface CharmIntegerConfigOption extends CharmConfigOptionBase {
+    type: 'int';
+    default?: number;
 }
 
-export interface SourceCodeTreeFileEntry {
-    kind: 'file';
-    data: SourceCodeFile;
+export interface CharmFloatConfigOption extends CharmConfigOptionBase {
+    type: 'float';
+    default?: number;
 }
 
-export interface SourceCodeCharmClass extends SourceCodeClass {
-    subscribedEvents: SourceCodeCharmClassSubscribedEvent[];
+export interface CharmBooleanConfigOption extends CharmConfigOptionBase {
+    type: 'boolean';
+    default?: boolean;
 }
 
-export interface SourceCodeCharmClassSubscribedEvent {
-    event: string;
-    handler: string;
-};
-
-export type SourceCodeCharmTestClassDialect = 'unittest.TestCase' | 'pytest';
-
-export interface SourceCodeCharmTestClass extends SourceCodeClass {
-    dialect: SourceCodeCharmTestClassDialect;
-    testMethods: SourceCodeFunction[];
+export interface CharmSecretConfigOption extends CharmConfigOptionBase {
+    type: 'secret';
+    default?: string;
 }
 
-export interface SourceCodeClass {
-    /**
-     * Raw AST data.
-     */
-    raw: any;
-    range: Range;
-    /**
-     * Extended (greedy) range of the node that covers trailing whitespace or empty lines.
-     */
-    extendedRange: Range;
-    name: string;
-    bases: string[];
-    /**
-     * Class methods, ordered by their lexical position.
-     */
-    methods: SourceCodeFunction[];
-};
+export type CharmConfigOption =
+    CharmUntypedConfigOption
+    | CharmStringConfigOption
+    | CharmIntegerConfigOption
+    | CharmFloatConfigOption
+    | CharmBooleanConfigOption
+    | CharmSecretConfigOption;
 
-export type SourceCodeFunctionKind =
-    /**
-     * Functions defined at file-scope.
-     */
-    'function' |
-    /**
-     * Function definitions enclosed by a class.
-     */
-    'method' |
-    /**
-     * Class property getters.
-     */
-    'getter' |
-    /**
-     * Class property setters.
-     */
-    'setter';
-
-export interface SourceCodeFunction {
-    /**
-     * Raw AST data.
-     */
-    raw: any;
-    range: Range;
-    /**
-     * Extended (greedy) range of the node that covers trailing whitespace or empty lines.
-     */
-    extendedRange: Range;
-    kind: SourceCodeFunctionKind;
-    isStatic: boolean;
-    isAsync: boolean;
-    name: string;
-    positionalParameters: string[];
-};
-
-/**
- * Note that independent of the platform, relative paths referenced are separated
- * with `/` (forward slash).
- */
-export class SourceCode {
-    constructor(readonly tree: SourceCodeTree) { }
-
-    private _getEntryAt(relativePath: string): SourceCodeTreeFileEntry | SourceCodeTreeDirectoryEntry | undefined {
-        const components = relativePath.split('/');
-        let dir = this.tree;
-        for (let i = 0; i < components.length; i++) {
-            const current = dir[components[i]];
-            if (!current) {
-                return undefined;
-            }
-            const isLast = i === -1 + components.length;
-            if (isLast) {
-                return current;
-            }
-            if (current.kind !== 'directory') {
-                return undefined;
-            }
-            dir = current.data;
-        }
-        return undefined;
-    }
-
-    /**
-     * Returns a flat map of files and their relative path in the source code
-     * tree. Note that the results are not ordered in a specific manner.
-     *
-     * Note that independent of the platform, relative paths are separated with
-     * `/` (forward slash).
-     */
-    getFiles(): Map<string, SourceCodeFile> {
-        const result = new Map<string, SourceCodeFile>();
-
-        const stack: [string, SourceCodeTreeEntry][] = [];
-        function push(tree: SourceCodeTree, relativePath?: string) {
-            stack.push(...Object.entries(tree).map(([k, v]) =>
-                [relativePath !== undefined ? relativePath + '/' + k : k, v] as [string, SourceCodeTreeEntry]
-            ));
-        }
-
-        push(this.tree);
-        while (true) {
-            const element = stack.pop();
-            if (!element) {
-                break;
-            }
-            const [relativePath, entry] = element;
-            if (entry.kind === 'directory') {
-                push(entry.data, relativePath);
-                continue;
-            }
-            result.set(relativePath, entry.data);
-        }
-        return result;
-    }
-
-    /**
-     * Note that independent of the platform, relative paths are separated with
-     * `/` (forward slash).
-     */
-    getFile(relativePath: string): SourceCodeFile | undefined {
-        const entry = this._getEntryAt(relativePath);
-        return entry?.kind === 'file' ? entry.data : undefined;
-    }
-
-    /**
-     * Note that independent of the platform, relative paths are separated with
-     * `/` (forward slash).
-     */
-    updateFile(relativePath: string, file: SourceCodeFile) {
-        const entry = this._getEntryAt(relativePath);
-        if (entry?.kind === 'file') {
-            entry.data = file;
-        }
-    }
-
-    /**
-     * Note that independent of the platform, relative paths are separated with
-     * `/` (forward slash).
-     */
-    isMain(relativePath: string): boolean {
-        // TODO: This may not be the exact criteria for the main charm file.
-        return relativePath === `${CHARM_DIR_SRC}/${CHARM_DIR_SRC_MAIN}`;
-    }
-}
-
-const NODE_TYPE_NAME = 'Name';
-const NODE_TYPE_CLASS_DEF = 'ClassDef';
-const NODE_TYPE_FUNCTION_DEF = 'FunctionDef';
-const NODE_TYPE_ASYNC_FUNCTION_DEF = 'AsyncFunctionDef';
-const NODE_TYPE_ARGUMENTS = 'arguments';
-const NODE_TYPE_ARG = 'arg';
-const NODE_TYPE_ATTRIBUTE = 'Attribute';
-const NODE_TYPE_IF = 'If';
-const NODE_TYPE_COMPARE = 'If';
-const NODE_TYPE_EQ = 'Eq';
-const NODE_TYPE_CONSTANT = 'Constant';
-const NODE_NAME_FUNCTION_INIT = '__init__';
-
-const CONSTANT_VALUE_PROPERTY = 'property';
-const CONSTANT_VALUE_NAME = '__name__';
-const CONSTANT_VALUE_MAIN = '__main__';
-const CONSTANT_VALUE_SETTER = 'setter';
-const CONSTANT_VALUE_STATIC_METHOD = 'staticmethod';
-
-const TEST_UNITTEST_BASE_CLASS = 'TestCase';
-const TEST_PYTEST_CLASS_PREFIX = 'Test';
-const TEST_FUNCTION_PREFIX = 'test_';
-
-export class SourceCodeFileAnalyzer {
-    readonly tpm: TextPositionMapper;
-
-    private _classes: SourceCodeClass[] | undefined | null = null;
-    private _functions: SourceCodeFunction[] | undefined | null = null;
-    private _charmClasses: SourceCodeClass[] | undefined | null = null;
-    private _mainCharmClass: SourceCodeClass | undefined | null = null;
-    private _testClasses: SourceCodeCharmTestClass[] | undefined | null = null;
-    private _testFunctions: SourceCodeFunction[] | undefined | null = null;
-
-    constructor(readonly content: string, readonly ast: any | undefined) {
-        this.tpm = new TextPositionMapper(this.content);
-    }
-
-    /**
-     * Resets analyses' results.
-     */
-    reset() {
-        this._classes = null;
-        this._functions = null;
-        this._charmClasses = null;
-        this._mainCharmClass = null;
-        this._testClasses = null;
-        this._testFunctions = null;
-    }
-
-    /**
-     * Returns the list of classes defined in the file-scope. This also includes
-     * test and charm-based classes.
-     */
-    get classes(): SourceCodeClass[] | undefined {
-        if (this._classes !== null) {
-            return this._classes;
-        }
-        return this._classes = this._getClasses(this.ast, this.tpm.all());
-    }
-
-    /**
-     * Returns the list of functions defined in the file-scope. This also includes
-     * test functions.
-     */
-    get functions(): SourceCodeFunction[] | undefined {
-        if (this._functions !== null) {
-            return this._functions;
-        }
-        return this._functions = this._getFunctions(this.ast, this.tpm.all());
-    }
-
-    /**
-     * Returns the list of charm-based classes, ordered by their lexical
-     * position, in the file-scope.
-     */
-    get charmClasses(): SourceCodeClass[] | undefined {
-        if (this._charmClasses !== null) {
-            return this._charmClasses;
-        }
-        return this._charmClasses = this._getCharmClasses();
-    }
-
-    get mainCharmClass(): SourceCodeClass | undefined {
-        if (this._mainCharmClass !== null) {
-            return this._mainCharmClass;
-        }
-        return this._mainCharmClass = this._getMainCharmClass();
-    }
-
-    /**
-     * Returns the list of test classes defined in the file-scope.
-     */
-    get testClasses(): SourceCodeCharmTestClass[] | undefined {
-        if (this._testClasses !== null) {
-            return this._testClasses;
-        }
-        return this._testClasses = this._getTestClasses();
-    }
-
-    /**
-     * Returns the list of test functions defined in the file-scope.
-     */
-    get testFunctions(): SourceCodeFunction[] | undefined {
-        if (this._testFunctions !== null) {
-            return this._testFunctions;
-        }
-        return this._testFunctions = this._getTestFunctions();
-    }
-
-    private _getClasses(parent: any, parentExtendedRange: Range): SourceCodeClass[] | undefined {
-        if (!parent) {
-            return undefined;
-        }
-
-        const body = parent['body'];
-        if (!body || !Array.isArray(body)) {
-            return undefined;
-        }
-
-        const result: SourceCodeClass[] = [];
-        for (let i = 0; i < body.length; i++) {
-            const cls = body[i];
-            if (cls['$type'] !== NODE_TYPE_CLASS_DEF) {
-                continue;
-            }
-
-            const bases = cls['bases'];
-            if (!bases || !Array.isArray(bases)) {
-                continue;
-            }
-
-            const range = getNodeRange(cls);
-            const isLast = i === -1 + body.length;
-            const extendedRange = !isLast ? getNodeExtendedRange(cls, body[1 + i]) : { start: range.start, end: parentExtendedRange.end };
-
-            result.push({
-                raw: cls,
-                name: unquoteSymbol(cls['name'] as string),
-                bases: this._getBaseClasses(bases),
-                methods: this._getFunctions(cls, extendedRange, true) ?? [],
-                range,
-                extendedRange,
-            });
-        }
-        return result;
-    }
-
-    private _getBaseClasses(bases: any[]): string[] {
-        const result: string[] = [];
-        for (const b of bases) {
-            if (b['$type'] === NODE_TYPE_NAME && b['id']) {
-                // Cases: `class MyClass(MyBaseClass)`
-                const id = unquoteSymbol(b['id']);
-                result.push(id);
-            } else if (b['$type'] === NODE_TYPE_ATTRIBUTE && b['attr']) {
-                // Cases: `class MyClass(ops.MyBaseClass)`
-                const id = unquoteSymbol(b['attr']);
-                result.push(id);
-            }
-        }
-        return result;
-    }
-
-    private _getFunctions(parent: any, parentExtendedRange: Range, isParentAClass?: boolean): SourceCodeFunction[] | undefined {
-        if (!parent) {
-            return undefined;
-        }
-
-        const body = parent['body'];
-        if (!body || !Array.isArray(body)) {
-            return undefined;
-        }
-
-        const result: SourceCodeFunction[] = [];
-        for (let i = 0; i < body.length; i++) {
-            const method = body[i];
-            if (method['$type'] !== NODE_TYPE_FUNCTION_DEF
-                && method['$type'] !== NODE_TYPE_ASYNC_FUNCTION_DEF) {
-                continue;
-            }
-
-            const positionalParameters = (method['args']?.['args'] as Array<any> ?? []).filter(x => x['$type'] === NODE_TYPE_ARG && x['arg']).map(x => unquoteSymbol(x['arg']));
-            const range = getNodeRange(method);
-            const isLast = i === -1 + body.length;
-            const extendedRange = !isLast ? getNodeExtendedRange(method, body[1 + i]) : { start: range.start, end: parentExtendedRange.end };
-            result.push({
-                raw: method,
-                name: unquoteSymbol(method['name'] as string),
-                kind: isParentAClass ? this._getClassMethodKind(method) : 'function',
-                isStatic: isParentAClass ? this._isClassMethodStatic(method) : false,
-                isAsync: method['$type'] === NODE_TYPE_ASYNC_FUNCTION_DEF,
-                range,
-                extendedRange,
-                positionalParameters,
-            });
-        }
-        result.sort((a, b) => comparePositions(a.range.start, b.range.start));
-        return result;
-    }
-
-    private _getClassMethodKind(node: any): SourceCodeFunctionKind {
-        const decorators = node['decorator_list'] as Array<any> ?? [];
-        for (const d of decorators) {
-            if (d['$type'] === NODE_TYPE_NAME && d['id']) {
-                const id = unquoteSymbol(d['id']);
-                if (id === CONSTANT_VALUE_PROPERTY) {
-                    /*
-                     * Property getters:
-                     *
-                     *    @property
-                     *    def my_property(self):
-                     */
-                    return 'getter';
-                }
-            } else if (d['$type'] === NODE_TYPE_ATTRIBUTE && d['attr']) {
-                const attr = unquoteSymbol(d['attr']);
-                if (attr === CONSTANT_VALUE_SETTER) {
-                    /*
-                     * Property setters:
-                     *
-                     *    @my_property.setter
-                     *    def my_property(self, value):
-                     */
-                    return 'setter';
-                }
-            }
-        }
-        return 'method';
-    }
-
-    private _isClassMethodStatic(node: any): boolean {
-        if (node['args']?.['$type'] === NODE_TYPE_ARGUMENTS
-            && Array.isArray(node['args']['args'])
-            && node['args']['args'].length === 0) {
-            /*
-             * Class method with no parameters:
-             *
-             *    def my_method():
-             */
-            return true;
-        }
-
-        const decorators = node['decorator_list'] as Array<any> ?? [];
-        for (const d of decorators) {
-            if (d['$type'] === NODE_TYPE_NAME && d['id']) {
-                const id = unquoteSymbol(d['id']);
-                if (id === CONSTANT_VALUE_STATIC_METHOD) {
-                    /*
-                     * Static method:
-                     *
-                     *    @staticmethod
-                     *    def my_method(param):
-                     */
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private _getCharmClasses(): SourceCodeCharmClass[] | undefined {
-        return this.classes?.filter(x => x.bases.indexOf(CHARM_SOURCE_CODE_CHARM_BASE_CLASS) !== -1)
-            .map(x => ({
-                ...x,
-                // TODO `getClassSubscribedEvents` is not implemented yet.
-                subscribedEvents: this._getClassSubscribedEvents(x.raw),
-            }));
-    }
-
-    private _getMainCharmClass(): SourceCodeClass | undefined {
-        const classes = this.charmClasses;
-        if (!classes) {
-            return undefined;
-        }
-
-        const body = this.ast?.['body'];
-        if (!body || !Array.isArray(body)) {
-            return undefined;
-        }
-
-        const ifs = body.filter(x => x['$type'] === NODE_TYPE_IF).reverse();
-        for (const x of ifs) {
-            /*
-             * Looking for:
-             *
-             *     if __name__=="__main__":
-             */
-            const isEntrypointIf =
-                x['$type'] === NODE_TYPE_COMPARE
-                && x['test']?.['left']?.['$type'] === NODE_TYPE_NAME
-                && x['test']['left']['id'] && unquoteSymbol(x['test']['left']['id']) === CONSTANT_VALUE_NAME
-                && x['test']['ops'] && x['test']['ops'].length && x['test']['ops'][0]?.['$type'] === NODE_TYPE_EQ
-                && x['test']['comparators']?.[0]?.['$type'] === NODE_TYPE_CONSTANT
-                && x['test']['comparators'][0]['value']
-                && unquoteSymbol(x['test']['comparators'][0]['value']) === CONSTANT_VALUE_MAIN;
-            if (!isEntrypointIf) {
-                continue;
-            }
-
-            const nodeText = this.tpm.getTextOverRange(getNodeRange(x));
-            const charmClass = classes.find(x => nodeText.match(new RegExp(`(^\\s*|\\W)${escapeRegex(x.name)}(\\W|\\s*$)`)));
-            if (charmClass) {
-                return charmClass;
-            }
-        }
-        return undefined;
-    }
-
-    private _getClassSubscribedEvents(cls: any): SourceCodeCharmClassSubscribedEvent[] {
-        // const body = cls.body;
-        // if (!body || !Array.isArray(body)) {
-        //     return undefined;
-        // }
-
-        // const result: CharmClassMethod[] = [];
-        // const methods = body.filter(x => x.$type === NODE_TYPE_FUNCTION_DEF && unquoteSymbol(x.name) === NODE_NAME_FUNCTION_INIT);
-        // for (const method of methods) {
-        //     result.push({
-        //         name: unquoteSymbol(method.name as string),
-        //         range: getNodeRange(method),
-        //     });
-        // }
-        // return result;
-        return [];
-    }
-
-    private _getTestClasses(): SourceCodeCharmTestClass[] | undefined {
-        /**
-         * See the Pytest test discovery convention at:
-         *   https://docs.pytest.org/en/7.4.x/explanation/goodpractices.html#conventions-for-python-test-discovery
-         */
-        const isPytestTestClass = (cls: SourceCodeClass) =>
-            cls.name.startsWith(TEST_PYTEST_CLASS_PREFIX)
-            && !cls.methods.find(x => x.name === NODE_NAME_FUNCTION_INIT); // No init/constructor method.
-        const isUnittestTestClass = (cls: SourceCodeClass) =>
-            cls.bases.some(x => x === TEST_UNITTEST_BASE_CLASS);
-
-        return this.classes?.filter(x => isUnittestTestClass(x) || isPytestTestClass(x))
-            .map(x => ({
-                dialect: isUnittestTestClass(x) ? 'unittest.TestCase' : 'pytest',
-                testMethods: x.methods.filter(y => this._isTestFunction(y)),
-                ...x,
-            }));
-    }
-
-    private _isTestFunction(fn: SourceCodeFunction): boolean {
-        return fn.name.startsWith(TEST_FUNCTION_PREFIX);
-    }
-
-    private _getTestFunctions(): SourceCodeFunction[] | undefined {
-        return this.functions?.filter(y => this._isTestFunction(y));
-    }
-}
-
-export function getNodeRange(node: any): Range {
-    return {
-        start: { line: -1 + Number.parseInt(node.lineno), character: Number.parseInt(node.col_offset) },
-        end: { line: -1 + Number.parseInt(node.end_lineno), character: Number.parseInt(node.end_col_offset) },
-    };
-}
-
-export function getNodeExtendedRange(node: any, nextNode: any): Range {
-    const range = getNodeRange(node);
-    if (!nextNode) {
-        return getNodeRange(node);
-    }
-    const nextNodeRange = getNodeRange(nextNode);
-    const firstDecorator = nextNode['decorator_list']?.[0];
-    const nextNodeStart = firstDecorator ? getNodeRange(firstDecorator).start : nextNodeRange.start;
-    return nextNodeStart.line === range.end.line
-        ? { start: range.start, end: nextNodeStart }
-        : { start: range.start, end: { line: nextNodeStart.line, character: 0 } };
-}
-
-export function unquoteSymbol(s: string): string {
-    if (s.length < 2) {
-        return s;
-    }
-    const quote = s.charAt(0);
-    if (quote !== '"' && quote !== "'") {
-        return s;
-    }
-    if (s.charAt(-1 + s.length) !== quote) {
-        return s;
-    }
-    return s.substring(1, -1 + s.length);
-}
-
-function withReference(text: string, ...urls: string[]): string {
-    return `${text}\n\n*Reference(s):*\n${urls.map(x => `  - ${x}`).join('\n')}`;
-}
-
-const CHARM_LIFECYCLE_EVENTS: CharmEvent[] = [
+const CHARM_LIFECYCLE_EVENTS: CharmBuiltinEvent[] = [
     Object.freeze({ source: 'built-in', name: 'start', symbol: 'start', preferredHandlerSymbol: '_on_start', description: withReference('Fired as soon as the unit initialization is complete.', 'https://juju.is/docs/sdk/start-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
     Object.freeze({ source: 'built-in', name: 'config-changed', symbol: 'config_changed', preferredHandlerSymbol: '_on_config_changed', description: withReference('Fired whenever the cloud admin changes the charm configuration *.', 'https://juju.is/docs/sdk/config-changed-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
     Object.freeze({ source: 'built-in', name: 'install', symbol: 'install', preferredHandlerSymbol: '_on_install', description: withReference('Fired when juju is done provisioning the unit.', 'https://juju.is/docs/sdk/install-event', 'https://juju.is/docs/sdk/a-charms-life',) }),
@@ -902,7 +110,337 @@ const CHARM_SECRET_EVENTS: CharmEvent[] = [
     Object.freeze({ source: 'built-in', name: 'secret-rotate', symbol: 'secret_rotate', preferredHandlerSymbol: '_on_secret_rotate', description: withReference('The `secret-rotate` event is fired on the owner of a secret every time the rotation period elapses (and the event will keep firing until the owner rotates the secret).', 'https://juju.is/docs/sdk/event-secret-rotate', 'https://juju.is/docs/sdk/a-charms-life',) }),
 ];
 
-const CHARM_RELATION_EVENTS_TEMPLATE = (endpoint: CharmEndpoint, source: CharmEventSource): CharmEvent[] => {
+export class Charm {
+    private _charmcraftYAML: charmcraftYAML.CharmCharmcraft = charmcraftYAML.emptyCharmcraft();
+    private _configYAML: configYAML.CharmConfig = configYAML.emptyConfig();
+    private _actionsYAML: actionsYAML.CharmActions = actionsYAML.emptyActions();
+    private _metadataYAML: metadataYAML.CharmMetadata = metadataYAML.emptyMetadata();
+    private _toxINI: toxINI.CharmToxConfig = toxINI.emptyToxConfig();
+
+    private _events: CharmEvent[] = [];
+    private _eventMap = new Map<string, CharmEvent>();
+    private _eventSymbolMap = new Map<string, CharmEvent>();
+    private _actions: CharmAction[] = [];
+    private _actionMap = new Map<string, CharmAction>();
+    private _configOptions: CharmConfigOption[] = [];
+    private _configOptionMap = new Map<string, CharmConfigOption>();
+
+    private _sourceCode = new SourceCode({});
+
+    constructor() { }
+
+    /**
+     * Represents information stored in the charm's `config.yaml` file.
+     * 
+     * Note that the recommended reference for charm configurations is the
+     * `charmcraft.yaml` file.
+     */
+    get configYAML(): configYAML.CharmConfig {
+        return this._configYAML;
+    }
+
+    /**
+     * Represents information stored in the charm's `actions.yaml` file.
+     * 
+     * Note that the recommended reference for charm actions is the
+     * `charmcraft.yaml` file.
+     */
+    get actionsYAML(): actionsYAML.CharmActions {
+        return this._actionsYAML;
+    }
+
+    /**
+     * Array of charm events. Note that the array contains events sourced in
+     * both `charmcraft.yaml`, `metadata.yaml`, and `actions.yaml`, so duplicate
+     * events may exist.
+     * 
+     * To look for a specific event, {@link getEventBySymbol} or
+     * {@link getEventByName} should be used.
+     */
+    get events(): CharmEvent[] {
+        return this._events;
+    }
+
+    /**
+     * Returns the event with the given name, if any.
+     * 
+     * Note that, if there are two events with the same name but different
+     * definition sources (e.g., the same peers/requires/provides endpoint
+     * defined in both `charmcraft.yaml` and `metadata.yaml`) the one in
+     * `charmcraft.yaml` will be returned. Another example is the *action*
+     * events defined in both `charmcraft.yaml` and `actions.yaml`.
+     */
+    getEventByName(name: string): CharmEvent | undefined {
+        return this._eventMap.get(name);
+    }
+
+    /**
+     * Returns the event with the given symbol, if any.
+     * 
+     * Note that, if there are two events with the same name but different
+     * definition sources (e.g., the same peers/requires/provides endpoint
+     * defined in both `charmcraft.yaml` and `metadata.yaml`) the one in
+     * `charmcraft.yaml` will be returned. Another example is the *action*
+     * events defined in both `charmcraft.yaml` and `actions.yaml`.
+     */
+    getEventBySymbol(symbol: string): CharmEvent | undefined {
+        return this._eventSymbolMap.get(symbol);
+    }
+
+    /**
+     * Array of charm actions. Note that the array contains actions defined in
+     * both `charmcraft.yaml` and `actions.yaml`, so duplicate options may
+     * exist.
+     */
+    get actions(): CharmAction[] {
+        return this._actions;
+    }
+
+    /**
+     * Returns the action with the given name, if any.
+     * 
+     * Note that, if there are two actions with the same name but defined in
+     * both `charmcraft.yaml` and `actions.yaml`, the one in `charmcraft.yaml`
+     * will be returned.
+     */
+    getActionByName(name: string): CharmAction | undefined {
+        return this._actionMap.get(name);
+    }
+
+    /**
+     * Array of charm configuration options. Note that the array contains
+     * options defined in both `charmcraft.yaml` and `config.yaml`, so duplicate
+     * options may exist.
+     */
+    get configOptions(): CharmConfigOption[] {
+        return this._configOptions;
+    }
+
+    /**
+     * Returns the configuration option with the given name, if any.
+     * 
+     * Note that, if there are two configuration options with the same name but
+     * defined in both `charmcraft.yaml` and `config.yaml`, the one in
+     * `charmcraft.yaml` will be returned.
+     */
+    getConfigOptionByName(name: string): CharmConfigOption | undefined {
+        return this._configOptionMap.get(name);
+    }
+
+    /**
+     * Represents information stored in the charm's `metadata.yaml` file.
+     * 
+     * Note that the recommended reference for charm metadata is the
+     * `charmcraft.yaml`.
+     */
+    get metadataYAML(): metadataYAML.CharmMetadata {
+        return this._metadataYAML;
+    }
+
+    /**
+     * Represents information stored in the charm's `charmcraft.yaml` file.
+     */
+    get charmcraftYAML(): charmcraftYAML.CharmCharmcraft {
+        return this._charmcraftYAML;
+    }
+
+    /**
+     * Represents information stored in the charm's `tox.ini` file.
+     */
+    get toxINI(): toxINI.CharmToxConfig {
+        return this._toxINI;
+    }
+
+    get sourceCode(): SourceCode {
+        return this._sourceCode;
+    }
+
+    async updateActionsYAML(actions: actionsYAML.CharmActions) {
+        this._actionsYAML = actions;
+        this._repopulateEvents();
+        this._repopulateActions();
+    }
+
+    async updateConfigYAML(config: configYAML.CharmConfig) {
+        this._configYAML = config;
+        this._repopulateConfigOptions();
+    }
+
+    async updateMetadataYAML(metadata: metadataYAML.CharmMetadata) {
+        this._metadataYAML = metadata;
+        this._repopulateEvents();
+    }
+
+    async updateCharmcraftYAML(charmcraft: charmcraftYAML.CharmCharmcraft) {
+        this._charmcraftYAML = charmcraft;
+        this._repopulateEvents();
+        this._repopulateActions();
+        this._repopulateConfigOptions();
+    }
+
+    async updateToxINI(toxINI: toxINI.CharmToxConfig) {
+        this._toxINI = toxINI;
+    }
+
+    async updateSourceCode(sourceCode: SourceCode) {
+        this._sourceCode = sourceCode;
+    }
+
+    private _repopulateEvents() {
+        this._events = [
+            ...Array.from(CHARM_LIFECYCLE_EVENTS),
+            ...Array.from(CHARM_SECRET_EVENTS),
+
+            // From Charmcraft 3, a single `charmcraft.yaml` acts as a
+            // consolidated source of information, deprecating separate
+            // `actions.yaml`, `metadata.yaml`, and `config.yaml`.
+            //
+            // For backward compatibility, we have to keep supporting the old
+            // style. That is why below events are extracted from both
+            // `actions.yaml`/`metadata.yaml` and `charmcraft.yaml` information.
+
+            ...Object.entries(this._actionsYAML.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => renderCharmActionEvents(action.value!, 'actions.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => renderCharmStorageEvents(storage.value!, 'metadata.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => renderCharmContainerEvents(container.value!, 'metadata.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/peer', 'metadata.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/provides', 'metadata.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/requires', 'metadata.yaml')).flat(1),
+
+            // Events related to information in `charmcraft.yaml` are defined
+            // after all those related to `metadata.yaml` or `actions.yaml` in
+            // order to override duplicate names (see the map creation loop
+            // below).
+            ...Object.entries(this._charmcraftYAML.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => renderCharmActionEvents(action.value!, 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => renderCharmStorageEvents(storage.value!, 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => renderCharmContainerEvents(container.value!, 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/peer', 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/provides', 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/requires', 'charmcraft.yaml')).flat(1),
+        ];
+
+        this._eventSymbolMap.clear();
+        this._eventMap.clear();
+        for (const e of this._events) {
+            this._eventMap.set(e.name, e);
+            this._eventSymbolMap.set(e.symbol, e);
+        }
+    }
+
+    private _repopulateActions() {
+        this._actions = [
+            ...Object.entries(this.actionsYAML?.actions?.entries ?? {}).map(([, action]) => createAction(action.value, 'actions.yaml')).filter(x => !!x).map(x => x!),
+            // Actions defined in `charmcraft.yaml` are added after all those
+            // defined in `actions.yaml` in order to override duplicate names
+            // (see the map creation loop below).
+            ...Object.entries(this._charmcraftYAML?.actions?.entries ?? {}).map(([, action]) => createAction(action.value, 'charmcraft.yaml')).filter(x => !!x).map(x => x!),
+        ];
+
+        this._actionMap.clear();
+        for (const a of this._actions) {
+            this._actionMap.set(a.name, a);
+        }
+
+        function createAction(option: charmcraftYAML.CharmAction | actionsYAML.CharmAction | undefined, definition: CharmActionDefinition): CharmAction | undefined {
+            return option ? {
+                name: option.name,
+                definition,
+                description: option.description?.value,
+            } : undefined;
+        }
+    }
+
+    private _repopulateConfigOptions() {
+        this._configOptions = [
+            ...Object.entries(this._configYAML?.parameters?.entries ?? {}).map(([, option]) => createConfigOption(option.value, 'config.yaml')).filter(x => !!x).map(x => x!),
+            // Options related to information in `charmcraft.yaml` are added
+            // after all those related to `config.yaml` in order to override
+            // duplicate names (see the map creation loop below).
+            ...Object.entries(this._charmcraftYAML?.config?.value?.options?.entries ?? {}).map(([, option]) => createConfigOption(option.value, 'charmcraft.yaml')).filter(x => !!x).map(x => x!),
+        ];
+
+        this._configOptionMap.clear();
+        for (const o of this._configOptions) {
+            this._configOptionMap.set(o.name, o);
+        }
+
+        function createConfigOption(option: charmcraftYAML.CharmConfigOption | configYAML.CharmConfigParameter | undefined, definition: CharmConfigOptionDefinition): CharmConfigOption | undefined {
+            if (!option) {
+                return undefined;
+            }
+
+            const base: CharmConfigOptionBase = {
+                name: option.name,
+                definition,
+                description: option.description?.value,
+            };
+
+            if (option?.type?.value === undefined) {
+                return {
+                    ...base,
+                    type: undefined,
+                    default: option.default?.value,
+                };
+            }
+
+            switch (option.type.value) {
+                case 'string':
+                    return {
+                        ...base,
+                        type: 'string',
+                        default: stringOrUndefined(option.default?.value),
+                    };
+                case 'secret':
+                    return {
+                        ...base,
+                        type: 'secret',
+                        default: stringOrUndefined(option.default?.value),
+                    };
+                case 'boolean':
+                    return {
+                        ...base,
+                        type: 'boolean',
+                        default: booleanOrUndefined(option.default?.value),
+                    };
+                case 'int':
+                    return {
+                        ...base,
+                        type: 'int',
+                        default: integerOrUndefined(option.default?.value),
+                    };
+                case 'float':
+                    return {
+                        ...base,
+                        type: 'float',
+                        default: numberOrUndefined(option.default?.value),
+                    };
+                default:
+                    return undefined;
+            }
+        }
+
+        function stringOrUndefined<T>(v: any): string | undefined {
+            return typeof v === 'string' ? v : undefined;
+        }
+
+        function booleanOrUndefined<T>(v: any): boolean | undefined {
+            return typeof v === 'boolean' ? v : undefined;
+        }
+
+        function numberOrUndefined<T>(v: any): number | undefined {
+            return typeof v === 'number' ? v : undefined;
+        }
+
+        function integerOrUndefined<T>(v: any): number | undefined {
+            return typeof v === 'number' && Number.isInteger(v) ? v : undefined;
+        }
+    }
+}
+
+function withReference(text: string, ...urls: string[]): string {
+    return `${text}\n\n*Reference(s):*\n${urls.map(x => `  - ${x}`).join('\n')}`;
+}
+
+function renderCharmRelationEvents(endpoint: metadataYAML.CharmEndpoint | charmcraftYAML.CharmEndpoint, source: 'endpoints/peer' | 'endpoints/requires' | 'endpoints/provides', definition: CharmSourcedEventDefinition): CharmSourcedEvent[] {
     return [
         { suffix: '-relation-broken', description: withReference('`relation-broken` is a "teardown" event and is emitted when an existing relation between two applications is fully terminated.', 'https://juju.is/docs/sdk/relation-name-relation-broken-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
         { suffix: '-relation-changed', description: withReference('`relation-changed` is emitted when another unit involved in the relation (from either side) touches the relation data.', 'https://juju.is/docs/sdk/relation-name-relation-changed-event', 'https://juju.is/docs/sdk/integration', 'https://juju.is/docs/sdk/a-charms-life',) },
@@ -918,11 +456,12 @@ const CHARM_RELATION_EVENTS_TEMPLATE = (endpoint: CharmEndpoint, source: CharmEv
             symbol,
             preferredHandlerSymbol: '_on_' + symbol,
             description,
+            definition,
         };
     });
 };
 
-const CHARM_STORAGE_EVENTS_TEMPLATE = (storage: CharmStorage): CharmEvent[] => {
+function renderCharmStorageEvents(storage: metadataYAML.CharmStorage | charmcraftYAML.CharmStorage, definition: CharmSourcedEventDefinition): CharmSourcedEvent[] {
     return [
         { suffix: '-storage-attached', description: withReference('The event informs a charm that a storage volume has been attached, and is ready to interact with.', 'https://juju.is/docs/sdk/storage-name-storage-attached-event', 'https://juju.is/docs/sdk/a-charms-life',) },
         { suffix: '-storage-detaching', description: withReference('The event allows a charm to perform cleanup tasks on a storage volume before that storage is dismounted and possibly destroyed.', 'https://juju.is/docs/sdk/storage-name-storage-detaching-event', 'https://juju.is/docs/sdk/a-charms-life',) },
@@ -935,11 +474,12 @@ const CHARM_STORAGE_EVENTS_TEMPLATE = (storage: CharmStorage): CharmEvent[] => {
             symbol,
             preferredHandlerSymbol: '_on_' + symbol,
             description,
+            definition,
         };
     });
 };
 
-const CHARM_CONTAINER_EVENTS_TEMPLATE = (container: CharmContainer): CharmEvent[] => {
+function renderCharmContainerEvents(container: metadataYAML.CharmContainer | charmcraftYAML.CharmContainer, definition: CharmSourcedEventDefinition): CharmEvent[] {
     return [
         { suffix: '-pebble-ready', description: withReference('The event is emitted once the Pebble sidecar container has started and a socket is available.', 'https://juju.is/docs/sdk/container-name-pebble-ready-event', 'https://juju.is/docs/sdk/a-charms-life',) },
     ].map(({ suffix, description }) => {
@@ -951,11 +491,12 @@ const CHARM_CONTAINER_EVENTS_TEMPLATE = (container: CharmContainer): CharmEvent[
             symbol,
             preferredHandlerSymbol: '_on_' + symbol,
             description,
+            definition,
         };
     });
 };
 
-const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
+function renderCharmActionEvents(action: actionsYAML.CharmAction | charmcraftYAML.CharmAction, definition: CharmActionEventDefinition): CharmActionEvent[] {
     return [
         {
             source: 'action',
@@ -964,121 +505,7 @@ const CHARM_ACTION_EVENT_TEMPLATE = (action: CharmAction): CharmEvent[] => {
             sourceActionName: action.name,
             preferredHandlerSymbol: `_on_${action.symbol}_action`,
             description: (action.description?.value !== undefined ? action.description.value + '\n\n' : '') + `Fired when \`${action.name}\` action is called.`,
+            definition,
         }
     ];
 };
-
-export function emptyYAMLNode(): YAMLNode {
-    return {
-        text: '',
-        raw: {},
-        problems: [],
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-    };
-}
-
-export function emptyActions(): CharmActions {
-    return {
-        node: emptyYAMLNode(),
-    };
-}
-
-export function emptyConfig(): CharmConfig {
-    return {
-        node: emptyYAMLNode(),
-    };
-}
-
-export function emptyMetadata(): CharmMetadata {
-    return {
-        node: emptyYAMLNode(),
-    };
-}
-
-export function emptyToxConfig(): CharmToxConfig {
-    return {
-        sections: {},
-    };
-}
-
-export class Charm {
-    private _config: CharmConfig = emptyConfig();
-
-    private _eventSymbolMap = new Map<string, CharmEvent>();
-    private _actions: CharmActions = emptyActions();
-    private _metadata: CharmMetadata = emptyMetadata();
-    private _toxConfig: CharmToxConfig = emptyToxConfig();
-
-    private _events: CharmEvent[] = [];
-    private _sourceCode = new SourceCode({});
-
-    constructor() { }
-
-    get config(): CharmConfig {
-        return this._config;
-    }
-
-    get actions(): CharmActions {
-        return this._actions;
-    }
-
-    get events(): CharmEvent[] {
-        return this._events;
-    }
-
-    getEventBySymbol(symbol: string): CharmEvent | undefined {
-        return this._eventSymbolMap.get(symbol);
-    }
-
-    get metadata(): CharmMetadata {
-        return this._metadata;
-    }
-
-    get toxConfig(): CharmToxConfig {
-        return this._toxConfig;
-    }
-
-    get sourceCode(): SourceCode {
-        return this._sourceCode;
-    }
-
-    async updateActions(actions: CharmActions) {
-        this._actions = actions;
-        this._repopulateEvents();
-    }
-
-    async updateConfig(config: CharmConfig) {
-        this._config = config;
-    }
-
-    async updateMetadata(metadata: CharmMetadata) {
-        this._metadata = metadata;
-        this._repopulateEvents();
-    }
-
-    async updateToxConfig(toxConfig: CharmToxConfig) {
-        this._toxConfig = toxConfig;
-    }
-
-    async updateSourceCode(sourceCode: SourceCode) {
-        this._sourceCode = sourceCode;
-    }
-
-    private _repopulateEvents() {
-        this._events = [
-            ...Array.from(CHARM_LIFECYCLE_EVENTS),
-            ...Array.from(CHARM_SECRET_EVENTS),
-            ...Object.entries(this._actions.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => CHARM_ACTION_EVENT_TEMPLATE(action.value!)).flat(1),
-            ...Object.entries(this._metadata.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => CHARM_STORAGE_EVENTS_TEMPLATE(storage.value!)).flat(1),
-            ...Object.entries(this._metadata.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => CHARM_CONTAINER_EVENTS_TEMPLATE(container.value!)).flat(1),
-            ...Object.entries(this._metadata.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/peer')).flat(1),
-            ...Object.entries(this._metadata.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/provides')).flat(1),
-            ...Object.entries(this._metadata.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => CHARM_RELATION_EVENTS_TEMPLATE(endpoint.value!, 'endpoints/requires')).flat(1),
-        ];
-
-        this._eventSymbolMap.clear();
-        for (const e of this._events) {
-            this._eventSymbolMap.set(e.symbol, e);
-        }
-    }
-}
