@@ -1,4 +1,5 @@
 import TelemetryReporter from '@vscode/extension-telemetry';
+import { TextDecoder } from 'util';
 import {
     CancellationToken,
     DiagnosticCollection,
@@ -9,8 +10,15 @@ import {
     Uri,
     workspace,
 } from 'vscode';
+import * as yaml from 'yaml';
 import { ConfigManager, WorkspaceConfig } from './config';
-import { CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_METADATA_YAML, CHARM_FILE_TOX_INI } from './model/common';
+import {
+     CHARM_FILE_ACTIONS_YAML,
+     CHARM_FILE_CHARMCRAFT_YAML,
+     CHARM_FILE_CONFIG_YAML,
+     CHARM_FILE_METADATA_YAML,
+     CHARM_FILE_TOX_INI
+     } from './model/common';
 import { BackgroundWorkerManager } from './worker';
 import { WorkspaceCharm, WorkspaceCharmConfig } from './workspace';
 
@@ -259,6 +267,8 @@ async function isCharmDirectory(uri: Uri): Promise<boolean> {
     const files = {
         [CHARM_FILE_CHARMCRAFT_YAML]: false,
         [CHARM_FILE_METADATA_YAML]: false,
+        [CHARM_FILE_CONFIG_YAML]: false,
+        [CHARM_FILE_ACTIONS_YAML]: false,
         [CHARM_FILE_TOX_INI]: false,
     };
 
@@ -268,5 +278,29 @@ async function isCharmDirectory(uri: Uri): Promise<boolean> {
     };
 
     await Promise.allSettled((Object.keys(files) as (keyof typeof files)[]).map(x => checkFile(x)));
-    return files[CHARM_FILE_CHARMCRAFT_YAML] || files[CHARM_FILE_METADATA_YAML] && files[CHARM_FILE_TOX_INI];
+    const isCharm = files[CHARM_FILE_CHARMCRAFT_YAML]
+        || files[CHARM_FILE_METADATA_YAML] && files[CHARM_FILE_TOX_INI]
+        || files[CHARM_FILE_METADATA_YAML] && files[CHARM_FILE_CONFIG_YAML]
+        || files[CHARM_FILE_METADATA_YAML] && files[CHARM_FILE_ACTIONS_YAML];
+
+    if (isCharm) {
+        return true;
+    }
+
+    // Here, we cannot conclude it's a charm directory unless we check the
+    // content of the `metadata.yaml`, if exists.
+    return files[CHARM_FILE_METADATA_YAML]
+        ? await isCharmMetadataFile(Uri.joinPath(uri, CHARM_FILE_METADATA_YAML))
+        : false;
+}
+
+async function isCharmMetadataFile(uri: Uri): Promise<boolean> {
+    const raw = await workspace.fs.readFile(uri);
+    const content = new TextDecoder().decode(raw);
+    const parsed = yaml.parse(content);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return false;
+    }
+    // Checking if the file contains required `metadata.yaml` fields.
+    return 'name' in parsed && 'display-name' in parsed && 'summary' in parsed;
 }
