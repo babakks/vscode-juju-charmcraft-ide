@@ -482,7 +482,7 @@ export async function getPythonAST(content: string): Promise<any | undefined> {
     const tmp = await mkdtemp(path.join(tmpdir(), 'juju-charms-ide'));
     try {
         const tmpfile = path.join(tmp, 'temp.py');
-        const scriptPath = path.join(__dirname, '../resource/ast/python-ast-to-json.py');
+        const scriptPath = path.join(__dirname, '../../resource/ast/python-ast-to-json.py');
         await writeFile(tmpfile, content);
 
         const [exitCode, ast] = await new Promise<[number, string]>(function (resolve, reject) {

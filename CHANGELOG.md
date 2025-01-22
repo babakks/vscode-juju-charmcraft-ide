@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.18
+
+- Fix bug in analyzing source/test files.
+
 ## 0.0.17
 
 - Fix duplicate charms in the sidebar tree.
