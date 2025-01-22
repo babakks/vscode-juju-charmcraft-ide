@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.17
+
+- Fix duplicate charms in the sidebar tree.
+
 ## 0.0.16
 
 - Fix bug in detecting charm directories.
