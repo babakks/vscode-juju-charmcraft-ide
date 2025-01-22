@@ -243,12 +243,13 @@ const GLOB_METADATA = `**/{${CHARM_FILE_CHARMCRAFT_YAML},${CHARM_FILE_METADATA_Y
 
 export async function findCharms(token?: CancellationToken, ignorePattern?: string): Promise<Uri[]> {
     const matches = await workspace.findFiles(GLOB_METADATA, ignorePattern, undefined, token);
+    const uniqueMatches = Array.from(new Set(matches.map(x=> Uri.joinPath(x, '..').toString())));
     const result: Uri[] = [];
     await Promise.allSettled(
-        matches.map(async uri => {
-            const parent = Uri.joinPath(uri, '..');
-            if (await isCharmDirectory(parent)) {
-                result.push(parent);
+        uniqueMatches.map(async uri => {
+            const directory = Uri.parse(uri);
+            if (await isCharmDirectory(directory)) {
+                result.push(directory);
             }
         })
     );
