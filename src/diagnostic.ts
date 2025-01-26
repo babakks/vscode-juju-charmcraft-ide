@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as actionsYAML from "./model/actions.yaml";
 import type { Charm } from "./model/charm";
 import * as charmcraftYAML from "./model/charmcraft.yaml";
-import { Range, TextPositionMapper, isInRange, zeroRange, type Problem } from "./model/common";
+import { CHARM_FILE_ACTIONS_YAML, CHARM_FILE_CHARMCRAFT_YAML, CHARM_FILE_CONFIG_YAML, CHARM_FILE_METADATA_YAML, Range, TextPositionMapper, isInRange, zeroRange, type Problem } from "./model/common";
 import * as configYAML from "./model/config.yaml";
 import * as metadataYAML from "./model/metadata.yaml";
 import { SOURCE_CODE_PROBLEMS, type SourceCodeFile } from "./model/source";
@@ -21,7 +21,7 @@ export class ProblemBasedDiagnostic extends vscode.Diagnostic {
     }
 }
 
-export function getConfigYAMLDiagnostics(config: configYAML.CharmConfig): vscode.Diagnostic[] {
+function getConfigYAMLDiagnostics(config: configYAML.CharmConfig): vscode.Diagnostic[] {
     return [
         ...config.node.problems.map(p => ProblemBasedDiagnostic.fromProblem(p, config.node.range)),
         ...Object.values(config.parameters?.entries ?? {}).map(config => [
@@ -33,7 +33,7 @@ export function getConfigYAMLDiagnostics(config: configYAML.CharmConfig): vscode
     ];
 }
 
-export function getActionsYAMLDiagnostics(actions: actionsYAML.CharmActions): vscode.Diagnostic[] {
+function getActionsYAMLDiagnostics(actions: actionsYAML.CharmActions): vscode.Diagnostic[] {
     return [
         ...actions.node.problems.map(p => ProblemBasedDiagnostic.fromProblem(p, actions.node.range)),
         ...Object.values(actions.actions?.entries ?? {}).map(action => [
@@ -43,7 +43,7 @@ export function getActionsYAMLDiagnostics(actions: actionsYAML.CharmActions): vs
     ];
 }
 
-export function getMetadataYAMLDiagnostics(metadata: metadataYAML.CharmMetadata): vscode.Diagnostic[] {
+function getMetadataYAMLDiagnostics(metadata: metadataYAML.CharmMetadata): vscode.Diagnostic[] {
     return [
         ...metadata.node.problems.map(x => ProblemBasedDiagnostic.fromProblem(x, metadata.node.range)),
         ...fs(metadata.assumes, x => [
@@ -116,7 +116,7 @@ export function getMetadataYAMLDiagnostics(metadata: metadataYAML.CharmMetadata)
     ];
 }
 
-export function getCharmcraftYAMLDiagnostics(charmcraft: charmcraftYAML.CharmCharmcraft): vscode.Diagnostic[] {
+function getCharmcraftYAMLDiagnostics(charmcraft: charmcraftYAML.CharmCharmcraft): vscode.Diagnostic[] {
     return [
         ...charmcraft.node.problems.map(x => ProblemBasedDiagnostic.fromProblem(x, charmcraft.node.range)),
         ...fm(charmcraft.actions, x => [
@@ -293,6 +293,35 @@ function f(e: WithNode<any> | MapWithNode<any> | SequenceWithNode<any> | undefin
     return !e ? [] : [
         ...e.node.problems.map(p => ProblemBasedDiagnostic.fromProblem(p, e.node.range)),
     ];
+}
+
+export function getAllNonSourceCodeDiagnostics(charm: Charm): Map<string, vscode.Diagnostic[]> {
+    const result = new Map<string, vscode.Diagnostic[]>();
+    result.set(CHARM_FILE_CHARMCRAFT_YAML, charm.charmcraftYAML ? getCharmcraftYAMLDiagnostics(charm.charmcraftYAML) : []);
+    result.set(CHARM_FILE_METADATA_YAML, charm.metadataYAML ? getMetadataYAMLDiagnostics(charm.metadataYAML) : []);
+    result.set(CHARM_FILE_ACTIONS_YAML, charm.actionsYAML ? getActionsYAMLDiagnostics(charm.actionsYAML) : []);
+    result.set(CHARM_FILE_CONFIG_YAML, charm.configYAML ? getConfigYAMLDiagnostics(charm.configYAML) : []);
+
+    // Adding cross-file diagnostics.
+    if (charm.charmcraftYAML?.config && charm.configYAML) {
+        push(CHARM_FILE_CONFIG_YAML, ProblemBasedDiagnostic.fromProblem({
+            message: `Charm configuration options should be defined in \`${CHARM_FILE_CHARMCRAFT_YAML}\`.`,
+        }, charm.configYAML.node.range));
+    }
+    if (charm.charmcraftYAML?.actions && charm.actionsYAML) {
+        push(CHARM_FILE_ACTIONS_YAML, ProblemBasedDiagnostic.fromProblem({
+            message: `Charm actions should be defined in \`${CHARM_FILE_CHARMCRAFT_YAML}\`.`,
+        }, charm.actionsYAML.node.range));
+    }
+
+    return result;
+
+    function push(key: string, value: vscode.Diagnostic) {
+        if (!result.get(key)) {
+            result.set(key, []);
+        }
+        result.get(key)!.push(value);
+    }
 }
 
 export function getAllSourceCodeDiagnostics(charm: Charm): Map<string, vscode.Diagnostic[]> {
