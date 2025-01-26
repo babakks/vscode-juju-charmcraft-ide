@@ -1,5 +1,5 @@
 import { type Problem } from "./common";
-import { emptyYAMLNode, type MapWithNode, type WithNode, type YAMLNode } from "./yaml";
+import { type MapWithNode, type WithNode, type YAMLNode } from "./yaml";
 
 /**
  * Problems specific to `config.yaml`.
@@ -31,10 +31,4 @@ export interface CharmConfig {
      * Root node.
      */
     node: YAMLNode;
-}
-
-export function emptyConfig(): CharmConfig {
-    return {
-        node: emptyYAMLNode(),
-    };
 }

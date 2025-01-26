@@ -368,8 +368,8 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
             function getNodeRange(option: CharmConfigOption) {
                 const node =
-                    option.definition === 'charmcraft.yaml' ? workspaceCharm.model.charmcraftYAML.config?.value?.options?.entries?.[option.name]?.node :
-                        option.definition === 'config.yaml' ? workspaceCharm.model.configYAML.parameters?.entries?.[option.name]?.node :
+                    option.definition === 'charmcraft.yaml' ? workspaceCharm.model.charmcraftYAML?.config?.value?.options?.entries?.[option.name]?.node :
+                        option.definition === 'config.yaml' ? workspaceCharm.model.configYAML?.parameters?.entries?.[option.name]?.node :
                             undefined;
                 return node?.range ?? node?.pairKeyRange ?? node?.pairValueRange;
             }
@@ -392,8 +392,8 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
             function getNodeRange(action: CharmAction) {
                 const node =
-                    action.definition === 'charmcraft.yaml' ? workspaceCharm.model.charmcraftYAML.actions?.entries?.[action.name]?.node :
-                        action.definition === 'actions.yaml' ? workspaceCharm.model.actionsYAML.actions?.entries?.[action.name]?.node :
+                    action.definition === 'charmcraft.yaml' ? workspaceCharm.model.charmcraftYAML?.actions?.entries?.[action.name]?.node :
+                        action.definition === 'actions.yaml' ? workspaceCharm.model.actionsYAML?.actions?.entries?.[action.name]?.node :
                             undefined;
                 return node?.range ?? node?.pairKeyRange ?? node?.pairValueRange;
             }
@@ -406,7 +406,7 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
         }
 
         if (element.kind === 'tox' && workspaceCharm.hasToxConfig) {
-            return filterAnsSortToxSections(Object.keys(workspaceCharm.model.toxINI.sections))
+            return filterAnsSortToxSections(Object.keys(workspaceCharm.model.toxINI?.sections ?? {}))
                 .map(section => {
                     const components = section.split(':');
                     const group = components.slice(0, -1).join(':');
@@ -436,11 +436,11 @@ export class CharmcraftTreeDataProvider implements TreeDataProvider<TreeItemMode
 
 function getWorkspaceCharmLabel(workspaceCharm: WorkspaceCharm): string {
     const name =
-        workspaceCharm.model.charmcraftYAML.name?.value ??
-        workspaceCharm.model.metadataYAML.name?.value;
+        workspaceCharm.model.charmcraftYAML?.name?.value ??
+        workspaceCharm.model.metadataYAML?.name?.value;
     const title =
-        workspaceCharm.model.charmcraftYAML.title?.value ??
-        workspaceCharm.model.metadataYAML.displayName?.value;
+        workspaceCharm.model.charmcraftYAML?.title?.value ??
+        workspaceCharm.model.metadataYAML?.displayName?.value;
     return name || title
         ? `${name ?? '?'} (${title ?? '?'})`
         : basename(workspaceCharm.home.path);

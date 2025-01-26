@@ -68,12 +68,3 @@ export function isMapWithNode<T>(v: any): v is MapWithNode<T> {
         && typeof v['entries'] === 'object'
         && !Array.isArray(v['entries']);
 }
-
-export function emptyYAMLNode(): YAMLNode {
-    return {
-        text: '',
-        raw: {},
-        problems: [],
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-    };
-}
