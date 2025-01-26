@@ -2,7 +2,7 @@
     "name": "vscode-juju-charmcraft-ide",
     "displayName": "Charmcraft IDE",
     "description": "VS Code extension for Juju Charm development",
-    "version": "0.0.18",
+    "version": "0.0.19",
     "publisher": "babakks",
     "repository": {
         "type": "git",
