@@ -156,29 +156,13 @@ export function valueNodeFromPairNode(pairNode: YAMLNode, valueNode: YAMLNode): 
  * @returns `undefined` if the field was missing.
  */
 export function assignScalarFromPair<T>(map: WithNode<any>, key: string, t: SupportedType, required?: boolean, parentNodeProblems?: Problem[]): WithNode<T> | undefined {
-    if (required && parentNodeProblems === undefined) {
-        throw Error('`parentNodeProblems` cannot be `undefined` when `required` is `true`.');
+    const result = assignAnyFromPair(map, key, required, parentNodeProblems);
+    if (!result || result.value === undefined || result.node.problems.length) {
+        return result;
     }
-    if (!map.value || !(key in map.value)) {
-        if (required) {
-            parentNodeProblems!.push(GENERIC_YAML_PROBLEMS.missingField(key));
-        }
-        return undefined;
-    }
-
-    const pair: WithNode<any> = map.value[key];
-    if (pair.node.kind !== 'pair') {
-        return undefined;
-    }
-
-    const result: WithNode<T> = {
-        node: valueNodeFromPairNode(pair.node, pair.value.node)
-    };
-    const value = pair.value.value;
-
-    if (value !== undefined && (typeof value === t || t === 'integer' && typeof value === 'number' && Number.isInteger(value))) {
-        result.value = value;
-    } else {
+    const value = result.value;
+    if (value === undefined || !(typeof value === t || t === 'integer' && typeof value === 'number' && Number.isInteger(value))) {
+        result.value = undefined;
         result.node.problems.push(GENERIC_YAML_PROBLEMS.unexpectedScalarType(t));
     }
     return result;
@@ -200,7 +184,7 @@ export function assignAnyFromPair(map: WithNode<any>, key: string, required?: bo
     }
 
     const pair: WithNode<any> = map.value[key];
-    if (pair.node.kind !== 'pair') {
+    if (pair.node.kind !== 'pair' || !pair.value) {
         return undefined;
     }
 
