@@ -49,8 +49,8 @@ export class CharmConfigDefinitionProvider implements DefinitionProvider {
             return;
         }
 
-        const node = option.definition === 'charmcraft.yaml' ? workspaceCharm.live.charmcraftYAML.config?.value?.options?.entries?.[name]?.node :
-            option.definition === 'config.yaml' ? workspaceCharm.live.configYAML.parameters?.entries?.[name]?.node : undefined;
+        const node = option.definition === 'charmcraft.yaml' ? workspaceCharm.live.charmcraftYAML?.config?.value?.options?.entries?.[name]?.node :
+            option.definition === 'config.yaml' ? workspaceCharm.live.configYAML?.parameters?.entries?.[name]?.node : undefined;
         if (!node?.range) {
             return;
         }
@@ -99,8 +99,8 @@ export class CharmEventDefinitionProvider implements DefinitionProvider {
             return;
         }
 
-        const node = event.definition === 'charmcraft.yaml' ? workspaceCharm.live.charmcraftYAML.actions?.entries?.[event.sourceActionName]?.node :
-            event.definition === 'actions.yaml' ? workspaceCharm.live.actionsYAML.actions?.entries?.[event.sourceActionName]?.node : undefined;
+        const node = event.definition === 'charmcraft.yaml' ? workspaceCharm.live.charmcraftYAML?.actions?.entries?.[event.sourceActionName]?.node :
+            event.definition === 'actions.yaml' ? workspaceCharm.live.actionsYAML?.actions?.entries?.[event.sourceActionName]?.node : undefined;
         if (!node?.range) {
             return;
         }

@@ -1,5 +1,5 @@
 import { type Problem } from "./common";
-import { emptyYAMLNode, type MapWithNode, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
+import { type MapWithNode, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
 
 /**
  * Problems specific to `charmcraft.yaml`.
@@ -304,10 +304,4 @@ export interface CharmCharmcraft {
      * Root node.
      */
     node: YAMLNode;
-}
-
-export function emptyCharmcraft(): CharmCharmcraft {
-    return {
-        node: emptyYAMLNode(),
-    };
 }

@@ -26,8 +26,3 @@ export interface CharmToxConfigSection {
     parent: string;
 }
 
-export function emptyToxConfig(): CharmToxConfig {
-    return {
-        sections: {},
-    };
-}

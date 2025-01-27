@@ -111,11 +111,11 @@ const CHARM_SECRET_EVENTS: CharmEvent[] = [
 ];
 
 export class Charm {
-    private _charmcraftYAML: charmcraftYAML.CharmCharmcraft = charmcraftYAML.emptyCharmcraft();
-    private _configYAML: configYAML.CharmConfig = configYAML.emptyConfig();
-    private _actionsYAML: actionsYAML.CharmActions = actionsYAML.emptyActions();
-    private _metadataYAML: metadataYAML.CharmMetadata = metadataYAML.emptyMetadata();
-    private _toxINI: toxINI.CharmToxConfig = toxINI.emptyToxConfig();
+    private _charmcraftYAML: charmcraftYAML.CharmCharmcraft | undefined;
+    private _configYAML: configYAML.CharmConfig | undefined;
+    private _actionsYAML: actionsYAML.CharmActions | undefined;
+    private _metadataYAML: metadataYAML.CharmMetadata | undefined;
+    private _toxINI: toxINI.CharmToxConfig | undefined;
 
     private _events: CharmEvent[] = [];
     private _eventMap = new Map<string, CharmEvent>();
@@ -135,7 +135,7 @@ export class Charm {
      * Note that the recommended reference for charm configurations is the
      * `charmcraft.yaml` file.
      */
-    get configYAML(): configYAML.CharmConfig {
+    get configYAML(): configYAML.CharmConfig | undefined {
         return this._configYAML;
     }
 
@@ -145,7 +145,7 @@ export class Charm {
      * Note that the recommended reference for charm actions is the
      * `charmcraft.yaml` file.
      */
-    get actionsYAML(): actionsYAML.CharmActions {
+    get actionsYAML(): actionsYAML.CharmActions | undefined {
         return this._actionsYAML;
     }
 
@@ -233,21 +233,21 @@ export class Charm {
      * Note that the recommended reference for charm metadata is the
      * `charmcraft.yaml`.
      */
-    get metadataYAML(): metadataYAML.CharmMetadata {
+    get metadataYAML(): metadataYAML.CharmMetadata | undefined {
         return this._metadataYAML;
     }
 
     /**
      * Represents information stored in the charm's `charmcraft.yaml` file.
      */
-    get charmcraftYAML(): charmcraftYAML.CharmCharmcraft {
+    get charmcraftYAML(): charmcraftYAML.CharmCharmcraft | undefined {
         return this._charmcraftYAML;
     }
 
     /**
      * Represents information stored in the charm's `tox.ini` file.
      */
-    get toxINI(): toxINI.CharmToxConfig {
+    get toxINI(): toxINI.CharmToxConfig | undefined {
         return this._toxINI;
     }
 
@@ -255,30 +255,30 @@ export class Charm {
         return this._sourceCode;
     }
 
-    async updateActionsYAML(actions: actionsYAML.CharmActions) {
+    async updateActionsYAML(actions: actionsYAML.CharmActions | undefined) {
         this._actionsYAML = actions;
         this._repopulateEvents();
         this._repopulateActions();
     }
 
-    async updateConfigYAML(config: configYAML.CharmConfig) {
+    async updateConfigYAML(config: configYAML.CharmConfig | undefined) {
         this._configYAML = config;
         this._repopulateConfigOptions();
     }
 
-    async updateMetadataYAML(metadata: metadataYAML.CharmMetadata) {
+    async updateMetadataYAML(metadata: metadataYAML.CharmMetadata | undefined) {
         this._metadataYAML = metadata;
         this._repopulateEvents();
     }
 
-    async updateCharmcraftYAML(charmcraft: charmcraftYAML.CharmCharmcraft) {
+    async updateCharmcraftYAML(charmcraft: charmcraftYAML.CharmCharmcraft | undefined) {
         this._charmcraftYAML = charmcraft;
         this._repopulateEvents();
         this._repopulateActions();
         this._repopulateConfigOptions();
     }
 
-    async updateToxINI(toxINI: toxINI.CharmToxConfig) {
+    async updateToxINI(toxINI: toxINI.CharmToxConfig | undefined) {
         this._toxINI = toxINI;
     }
 
@@ -299,23 +299,23 @@ export class Charm {
             // style. That is why below events are extracted from both
             // `actions.yaml`/`metadata.yaml` and `charmcraft.yaml` information.
 
-            ...Object.entries(this._actionsYAML.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => renderCharmActionEvents(action.value!, 'actions.yaml')).flat(1),
-            ...Object.entries(this._metadataYAML.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => renderCharmStorageEvents(storage.value!, 'metadata.yaml')).flat(1),
-            ...Object.entries(this._metadataYAML.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => renderCharmContainerEvents(container.value!, 'metadata.yaml')).flat(1),
-            ...Object.entries(this._metadataYAML.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/peer', 'metadata.yaml')).flat(1),
-            ...Object.entries(this._metadataYAML.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/provides', 'metadata.yaml')).flat(1),
-            ...Object.entries(this._metadataYAML.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/requires', 'metadata.yaml')).flat(1),
+            ...Object.entries(this._actionsYAML?.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => renderCharmActionEvents(action.value!, 'actions.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML?.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => renderCharmStorageEvents(storage.value!, 'metadata.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML?.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => renderCharmContainerEvents(container.value!, 'metadata.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML?.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/peer', 'metadata.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML?.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/provides', 'metadata.yaml')).flat(1),
+            ...Object.entries(this._metadataYAML?.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/requires', 'metadata.yaml')).flat(1),
 
             // Events related to information in `charmcraft.yaml` are defined
             // after all those related to `metadata.yaml` or `actions.yaml` in
             // order to override duplicate names (see the map creation loop
             // below).
-            ...Object.entries(this._charmcraftYAML.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => renderCharmActionEvents(action.value!, 'charmcraft.yaml')).flat(1),
-            ...Object.entries(this._charmcraftYAML.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => renderCharmStorageEvents(storage.value!, 'charmcraft.yaml')).flat(1),
-            ...Object.entries(this._charmcraftYAML.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => renderCharmContainerEvents(container.value!, 'charmcraft.yaml')).flat(1),
-            ...Object.entries(this._charmcraftYAML.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/peer', 'charmcraft.yaml')).flat(1),
-            ...Object.entries(this._charmcraftYAML.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/provides', 'charmcraft.yaml')).flat(1),
-            ...Object.entries(this._charmcraftYAML.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/requires', 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML?.actions?.entries ?? {}).filter(([, action]) => action.value).map(([, action]) => renderCharmActionEvents(action.value!, 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML?.storage?.entries ?? {}).filter(([, storage]) => storage.value).map(([, storage]) => renderCharmStorageEvents(storage.value!, 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML?.containers?.entries ?? {}).filter(([, container]) => container.value).map(([, container]) => renderCharmContainerEvents(container.value!, 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML?.peers?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/peer', 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML?.provides?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/provides', 'charmcraft.yaml')).flat(1),
+            ...Object.entries(this._charmcraftYAML?.requires?.entries ?? {}).filter(([, endpoint]) => endpoint.value).map(([, endpoint]) => renderCharmRelationEvents(endpoint.value!, 'endpoints/requires', 'charmcraft.yaml')).flat(1),
         ];
 
         this._eventSymbolMap.clear();

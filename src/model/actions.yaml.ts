@@ -1,4 +1,4 @@
-import { emptyYAMLNode, type MapWithNode, type WithNode, type YAMLNode } from "./yaml";
+import { type MapWithNode, type WithNode, type YAMLNode } from "./yaml";
 
 export interface CharmAction {
     name: string;
@@ -12,10 +12,4 @@ export interface CharmActions {
      * Root node.
      */
     node: YAMLNode;
-}
-
-export function emptyActions(): CharmActions {
-    return {
-        node: emptyYAMLNode(),
-    };
 }

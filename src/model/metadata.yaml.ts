@@ -1,5 +1,5 @@
 import { type Problem } from "./common";
-import { emptyYAMLNode, type MapWithNode, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
+import { type MapWithNode, type SequenceWithNode, type WithNode, type YAMLNode } from "./yaml";
 
 /**
  * Problems specific to `metadata.yaml`.
@@ -117,10 +117,4 @@ export interface CharmMetadata {
      * Root node.
      */
     node: YAMLNode;
-}
-
-export function emptyMetadata(): CharmMetadata {
-    return {
-        node: emptyYAMLNode(),
-    };
 }

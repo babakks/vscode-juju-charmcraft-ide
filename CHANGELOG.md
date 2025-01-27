@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.0.19
+
+- Fix bug in parsing maps in YAML files.
+- Add cross-file diagnostics for `charmcraft.yaml`, `actions.yaml`, and `config.yaml`.
+
 ## 0.0.18
 
 - Fix bug in analyzing source/test files.
